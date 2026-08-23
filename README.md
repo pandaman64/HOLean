@@ -47,10 +47,14 @@ HOLean/
   Kernel.lean          ten HOL Light rules plus `Provable.ax`
   Derived.lean         SYM, GEN, CONJ, projections, MP, weakening
   Axiom.lean           η / SELECT / INFINITY; `holEnv` over `holLogic`
+  Model/Basic.lean     `zfBool`, graph application, `succ` on `omega`
+  Model/Ty.lean        `Ty.denote`, `INST_TYPE` commutation
 ```
 
-Mathlib is already a dependency so the later model can use `ZFSet.funs`,
-`ZFSet.omega`, and `ZFSet.choice`.  The files above do not import it.
+See `docs/MODEL.md` for the full standard-model plan.
+
+Syntax through `Axiom` do not import Mathlib.  `HOLean.Model` is the first
+module that does (`ZFSet.funs`, `omega`, `choice`).
 
 ## Design decisions
 
@@ -212,38 +216,31 @@ theorems *about* `Env.LE` — still ahead of the `ZFSet` model.
 
 ### Phase 3 — Standard model in `ZFSet`
 
+Plan: [`docs/MODEL.md`](docs/MODEL.md).  This slice starts the interpretation;
+soundness and `¬ ⊢ ⊥` come in follow-up PRs.
+
 Fix a type valuation `ρ : Name → ZFSet`.
 
 | Object type | Interpretation |
 | --- | --- |
 | `var x` | `ρ x` |
-| `bool` | `{∅, {∅}}` (or any two-element set) |
+| `bool` | `{∅, {∅}}` (`zfFalse` / `zfTrue`) |
 | `ind` | `ZFSet.omega` |
-| `α ↝ β` | `(⟦α⟧ ρ).funs (⟦β⟧ ρ)` |
+| `α ↝ β` | `ZFSet.funs ⟦α⟧ρ ⟦β⟧ρ` |
 
-Mathlib already provides the pieces:
+- [x] Type denotation and `⟦α.inst θ⟧ ρ = ⟦α⟧ (ρ.inst θ)`
+- [x] `zfBool`; graph application; `succ` injective / not surjective on `ω`
+- [ ] Term denotation (`HasType` → element of `⟦α⟧`)
+- [ ] `eq` / `select` as graphs; soundness of the ten rules
+- [ ] `addDef` preservation; model of `holLogic`
+- [ ] `holEnv` axioms; `⟦⊥⟧ = zfFalse`; `¬ [] ⊩[holEnv] ⊥`
 
-- `ZFSet.funs x y` — the set of functional graphs `x → y` (`IsFunc`)
-- `ZFSet.omega` — von Neumann ω
-- `ZFSet.choice` — for `SELECT`
-- `ZFSet.powerset`, `ZFSet.prod`, `ZFSet.pair`
+**Soundness.**  If `Γ ⊩[env] p` and a valuation satisfies every hypothesis,
+then `⟦p⟧ = zfTrue`.
 
-Term interpretation (for `HasType Γ t α`) is a function
-
-```
-⟦Γ⟧ρ → (Name × Ty → ZFSet) → ⟦α⟧ρ
-```
-
-that sends λ to the graph of a function (`ZFSet.map` / comprehension into
-`funs`) and `=` to the characteristic function of extensional equality.
-
-**Soundness.**  If `Γ ⊩ p` and a valuation satisfies every hypothesis, then
-`⟦p⟧ = true`.
-
-**Consistency.**  `⟦⊥⟧ = false`, so `¬ ([] ⊩ ⊥)`.  With axioms, the same
-model should satisfy η (functions *are* graphs), `SELECT` (via
-`ZFSet.choice` or a definable well-order on the well-founded universe), and
-infinity (`succ : ω → ω` is injective and not surjective).
+**Consistency.**  `⟦⊥⟧ = zfFalse`, so `¬ ([] ⊩[holEnv] ⊥)`.  The same model
+should satisfy η (functions *are* graphs), `SELECT` (`Classical.epsilon` /
+`Class.choice`), and infinity (`succ : ω → ω`).
 
 ### Phase 4 — What we are *not* doing yet
 
