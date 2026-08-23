@@ -4,8 +4,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 -/
 
 import Lean
-import HOLean.Connective
-import HOLean.Axiom
+import HOLean.Syntax.Logic
 
 /-!
 # Lean.Expr → HOL
@@ -36,6 +35,12 @@ namespace HOLean
 
 /-- Lean stand-in for the HOL type of individuals.  `Nat` is also accepted. -/
 opaque Ind : Type
+
+/-- Lean stand-in for HOL `ONE_ONE`. -/
+opaque oneOne {α β : Type} (f : α → β) : Prop
+
+/-- Lean stand-in for HOL `ONTO`. -/
+opaque onto {α β : Type} (f : α → β) : Prop
 
 deriving instance ToExpr for Ty
 deriving instance ToExpr for Tm
@@ -165,6 +170,20 @@ partial def translateConst (n : Lean.Name) (args : Array Expr) : MetaM (Option T
       return some (.lam α (.bvar 0))
     | #[_α, x] => some <$> exprToTm x
     | _ => return none
+  | ``HOLean.oneOne =>
+    match args with
+    | #[α, β, f] =>
+      return some (Tm.oneOne (← exprToTy α) (← exprToTy β) (← exprToTm f))
+    | #[α, β] =>
+      return some (.const oneOneName (((← exprToTy α) ↝ (← exprToTy β)) ↝ .bool))
+    | _ => return none
+  | ``HOLean.onto =>
+    match args with
+    | #[α, β, f] =>
+      return some (Tm.onto (← exprToTy α) (← exprToTy β) (← exprToTm f))
+    | #[α, β] =>
+      return some (.const ontoName (((← exprToTy α) ↝ (← exprToTy β)) ↝ .bool))
+    | _ => return none
   | _ => return none
 
 /-- Translate a Lean term or proposition to a HOL term. -/
@@ -243,9 +262,5 @@ partial def exprToTm (e : Expr) : MetaM Tm := do
     throwError "HOLean: structure projections are not HOL terms{indentExpr e}"
 
 end
-
-/-- Infer the HOL type of a translated term in `holEnv`. -/
-def inferHol (t : Tm) : Option Ty :=
-  t.infer holEnv []
 
 end HOLean.Elab

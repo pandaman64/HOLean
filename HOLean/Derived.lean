@@ -5,6 +5,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 
 import HOLean.Connective
 import HOLean.Kernel
+import HOLean.Syntax.Logic
 
 /-!
 # Derived rules
@@ -131,7 +132,7 @@ theorem Tm.allTy_inst (α : Ty) :
 theorem Tm.allDef_instTy (α : Ty) :
     allDef.instTy [(primTyVar, α)] =
       lam (α ↝ .bool) (allExpand α (bvar 0)) := by
-  simp [allDef, allExpand, mkEq, eqConst, tru, truTy, primTyVar,
+  simp [allDef_eq, allExpand, mkEq, eqConst, tru, truTy, primTyVar,
     instTy, Ty.inst, TySubst.lookup]
 
 theorem Tm.all_ax_instTy (α : Ty) :
@@ -228,7 +229,7 @@ theorem andDef_beta1 {p : Tm} (x : Name)
       HasType.andDef_inner hp (by
         simp [Tm.andExpand, Tm.mkEq, Tm.freeIn, Tm.shift, Tm.shift_of_LC0 Tm.tru_LC,
           Tm.tru_not_free])
-  simpa [Tm.andDef, Tm.open', Tm.openAt] using hβ
+  simpa [Tm.andDef_eq, Tm.open', Tm.openAt] using hβ
 
 theorem HasType.andExpand_open_fst {p : Tm}
     (hp : HasType env [] p .bool) :
@@ -293,7 +294,7 @@ theorem impDef_beta1 {p : Tm} (x : Name)
     beta_conv (t := Tm.lam .bool (Tm.impExpand (.bvar 1) (.bvar 0)))
       (u := p) (x := x) (α := .bool) (β := .bool ↝ .bool)
       HasType.impDef_inner hp (by simp [Tm.impExpand, Tm.and, Tm.mkEq, Tm.freeIn])
-  simpa [Tm.impDef, Tm.open', Tm.openAt] using hβ
+  simpa [Tm.impDef_eq, Tm.open', Tm.openAt] using hβ
 
 theorem HasType.impExpand_open_fst {p : Tm}
     (hp : HasType env [] p .bool) :

@@ -2,6 +2,7 @@
 import HOLean.Syntax.Ty
 import HOLean.Syntax.Const
 import HOLean.Syntax.Tm
+import HOLean.Syntax.Logic
 import HOLean.Env
 import HOLean.Typing
 import HOLean.Connective

@@ -4,6 +4,8 @@ Released under Apache 2.0 license as described in the file LICENSE.
 -/
 
 import HOLean.Elab.Term
+import HOLean.Elab.Command
+import HOLean.Axiom
 
 /-!
 Compile-time checks for the HOL elaborator.  Each `example` is `rfl` after
@@ -66,6 +68,12 @@ example : hol_tm(fun (p : Bool) => !p) =
 
 example : hol_tm(Classical.epsilon (fun _x : Nat => True)) =
     Tm.app (Tm.selectConst .ind) (Tm.lam .ind Tm.tru) := rfl
+
+example : hol_prop(∃ f : Nat → Nat, oneOne f ∧ ¬ onto f) =
+    Tm.ex (Ty.ind ↝ Ty.ind)
+      (.lam (Ty.ind ↝ Ty.ind)
+        ((Tm.oneOne .ind .ind (.bvar 0)).and
+          (Tm.onto .ind .ind (.bvar 0)).not)) := rfl
 
 /-! ## Sort dispatch (`hol(·)`) and the tight `%` form -/
 

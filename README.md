@@ -40,6 +40,7 @@ HOLean/
   Syntax/Ty.lean       simple types, substitution, `isInstanceOf` / `matchTy`
   Syntax/Const.lean    names and generic types of `eq`, `select`
   Syntax/Tm.lean       locally nameless terms, shift / LC / open–close
+  Syntax/Logic.lean    connective names / `Tm.and` formers (no elaborator)
   Env.lean             `Env` (constants × axioms), `addDef`, `holCore`
   Typing.lean          `HasType env`, `Env.WF`, inference, substitution lemmas
   Connective.lean      T, ∧, ⇒, ∀, ⊥, ¬, ∨, ∃, ONE_ONE, ONTO as `addDef`
@@ -47,7 +48,8 @@ HOLean/
   Derived.lean         SYM, GEN, CONJ, projections, MP, weakening
   Axiom.lean           η / SELECT / INFINITY; `holEnv` over `holLogic`
   Elab/Translate.lean  `Lean.Expr` → `Ty` / `Tm`, filtered by sort
-  Elab/Term.lean       `hol_ty(…)` / `hol_tm(…)` / `hol_prop(…)` / `hol(…)` / `#hol`
+  Elab/Term.lean       `hol_ty(…)` / `hol_tm(…)` / `hol_prop(…)` / `hol(…)`
+  Elab/Command.lean    `#hol` (needs `holEnv`, so it sits above `Axiom`)
   Model/Basic.lean     `zfBool`, graph application, `succ` on `omega`
   Model/Ty.lean        `Ty.denote`, `INST_TYPE` commutation
   Model/Const.lean     `eq` / `select` graphs
@@ -142,6 +144,13 @@ quantifier (or `p ⇒ q` when `α : Prop` and `q` ignores the proof).
 `Prop`/`Bool` stand for `bool`; `Nat`/`Ind` stand for `ind`.  Lean
 connectives (`∧`, `∨`, `¬`, `=`, `∀`, `∃`, `Classical.epsilon`) map to
 the `holLogic` constants.
+
+Closed defining right-hand sides (`Tm.andDef`, `infinityAxiom`, …) are
+themselves written with `hol_tm` / `hol_prop`.  That is not circular:
+names and formers live in `Syntax/Logic.lean` (no elaborator), the
+elaborator imports only that file, and `Connective` / `Axiom` import the
+elaborator.  Parameterized formers (`andExpand p q`, `etaAxiom α β f`)
+stay as functions on `Tm` — they would need antiquotation.
 
 ### Lists as hypothesis sets
 

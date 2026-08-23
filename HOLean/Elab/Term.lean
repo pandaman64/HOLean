@@ -20,7 +20,8 @@ hol(True)                    -- dispatch on the sort of the Lean type
 hol_ty% Prop                 -- tight `%` form (`term:max`)
 ```
 
-`#hol t` prints the translation and, for terms, `Tm.infer holEnv []`.
+`#hol` lives in `HOLean.Elab.Command` so this file does not import
+`Axiom` (that would cycle with `Connective`).
 -/
 
 open Lean Meta Elab
@@ -65,21 +66,6 @@ def elabBySort (stx : Syntax) : TermElabM Expr := do
   else
     toExpr <$> exprToTm e
 
-def holCommand (stx : Syntax) : TermElabM MessageData := do
-  let e ← elabLean stx
-  let type ← whnf (← inferType e)
-  if type.isProp then
-    let t ← exprToTm e
-    return m!"HOL proposition:{indentD (repr t)}\n\
-      infer: {repr (inferHol t)}"
-  else if type.isSort then
-    let ty ← exprToTy e
-    return m!"HOL type:{indentD (repr ty)}"
-  else
-    let t ← exprToTm e
-    return m!"HOL term:{indentD (repr t)}\n\
-      infer: {repr (inferHol t)}"
-
 end HOLean.Elab
 
 /-- Elaborate a Lean type into a HOL `Ty`. -/
@@ -110,8 +96,3 @@ elab:max "hol_prop%" t:term:max : term =>
 
 elab:max "hol%" t:term:max : term =>
   HOLean.Elab.elabBySort t
-
-/-- Print the HOL translation of a Lean4-like term, type, or proposition. -/
-elab "#hol " t:term : command => do
-  let msg ← Lean.Elab.Command.liftTermElabM (HOLean.Elab.holCommand t)
-  Lean.logInfo msg

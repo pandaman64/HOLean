@@ -5,6 +5,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 
 import HOLean.Connective
 import HOLean.Kernel
+import HOLean.Elab.Term
 
 /-!
 # HOL axiom schemas
@@ -48,10 +49,15 @@ def selectAxiom (α : Ty) (P x : Tm) : Tm :=
 
 /-- `∃ f : ind ↝ ind. ONE_ONE f ∧ ¬ ONTO f`. -/
 def infinityAxiom : Tm :=
-  Tm.ex (Ty.ind ↝ Ty.ind)
-    (.lam (Ty.ind ↝ Ty.ind)
-      ((Tm.oneOne .ind .ind (.bvar 0)).and
-        (Tm.onto .ind .ind (.bvar 0)).not))
+  hol_prop(∃ f : Nat → Nat, oneOne f ∧ ¬ onto f)
+
+theorem infinityAxiom_eq :
+    infinityAxiom =
+      Tm.ex (Ty.ind ↝ Ty.ind)
+        (.lam (Ty.ind ↝ Ty.ind)
+          ((Tm.oneOne .ind .ind (.bvar 0)).and
+            (Tm.onto .ind .ind (.bvar 0)).not)) :=
+  rfl
 
 /-- A (closed, boolean) formula is a HOL axiom instance, typed in `holLogic`. -/
 inductive HOLAxiom : Tm → Prop where

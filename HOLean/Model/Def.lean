@@ -267,7 +267,7 @@ noncomputable def EnvModel.envAll (ρ : TyVal) (hρ : ρ.Nonempty) :
   (EnvModel.envImp ρ hρ).addDef allName hρ allName_fresh_envImp (by decide)
     envImp_WF HasType.allDef_envImp Tm.not_free (by
       intro x hx
-      simp [Tm.allDef, Tm.allExpand, Tm.mkEq, Tm.eqConst, Tm.tru, Tm.tyvars,
+      simp [Tm.allDef_eq, Tm.allExpand, Tm.mkEq, Tm.eqConst, Tm.tru, Tm.tyvars,
         allTy, truTy, Ty.tyvars, primTyVar] at hx ⊢
       exact hx)
 
@@ -291,7 +291,7 @@ noncomputable def EnvModel.envEx (ρ : TyVal) (hρ : ρ.Nonempty) :
   (EnvModel.envOr ρ hρ).addDef exName hρ exName_fresh_envOr (by decide)
     envOr_WF HasType.exDef_envOr Tm.not_free (by
       intro x hx
-      simp [Tm.exDef, Tm.all, Tm.imp, Tm.tyvars, exTy, impTy, Ty.tyvars,
+      simp [Tm.exDef_eq, Tm.all, Tm.imp, Tm.tyvars, exTy, impTy, Ty.tyvars,
         primTyVar] at hx ⊢
       exact hx)
 
@@ -300,7 +300,7 @@ noncomputable def EnvModel.envOneOne (ρ : TyVal) (hρ : ρ.Nonempty) :
   (EnvModel.envEx ρ hρ).addDef oneOneName hρ oneOneName_fresh_envEx (by decide)
     envEx_WF HasType.oneOneDef_envEx Tm.not_free (by
       intro x hx
-      simp [Tm.oneOneDef, Tm.all, Tm.imp, Tm.mkEq, Tm.eqConst, Tm.tyvars,
+      simp [Tm.oneOneDef_eq, Tm.all, Tm.imp, Tm.mkEq, Tm.eqConst, Tm.tyvars,
         oneOneTy, impTy, Ty.tyvars, primTyVar, primTyVarB] at hx ⊢
       exact hx)
 
@@ -309,7 +309,7 @@ noncomputable def EnvModel.holLogic (ρ : TyVal) (hρ : ρ.Nonempty) :
   (EnvModel.envOneOne ρ hρ).addDef ontoName hρ ontoName_fresh_envOneOne (by decide)
     envOneOne_WF HasType.ontoDef_envOneOne Tm.not_free (by
       intro x hx
-      simp [Tm.ontoDef, Tm.all, Tm.ex, Tm.mkEq, Tm.eqConst, Tm.tyvars,
+      simp [Tm.ontoDef_eq, Tm.all, Tm.ex, Tm.mkEq, Tm.eqConst, Tm.tyvars,
         ontoTy, Ty.tyvars, primTyVar, primTyVarB] at hx ⊢
       exact hx)
 
