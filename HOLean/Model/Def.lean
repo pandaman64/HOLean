@@ -230,7 +230,7 @@ noncomputable def EnvModel.addDef [Env.HasEq env] (n : Name) {ty : Ty} {rhs : Tm
   interp := M.interp.addDef (n := n) (FVarVal.ofNonempty hρ) hrhs
   eq_ok :=
     EnvInterp.addDef_eq_ok n M.interp (FVarVal.ofNonempty hρ) hrhs hne_eq M.eq_ok
-  ax_ok := fun θ p hp ξ =>
+  ax_ok := fun θ _p hp ξ =>
     match hp with
     | Or.inl heq =>
       heq ▸ EnvModel.addDef_ax_new n M hρ hn hne_eq hrhs hclosed hvars θ ξ
