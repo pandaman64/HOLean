@@ -49,6 +49,8 @@ HOLean/
   Axiom.lean           η / SELECT / INFINITY; `holEnv` over `holLogic`
   Model/Basic.lean     `zfBool`, graph application, `succ` on `omega`
   Model/Ty.lean        `Ty.denote`, `INST_TYPE` commutation
+  Model/Const.lean     `eq` / `select` graphs
+  Model/Tm.lean        `Tm.denote`, `HasType.denote_mem`, `EnvInterp.holCore`
 ```
 
 See `docs/MODEL.md` for the full standard-model plan.
@@ -230,8 +232,9 @@ Fix a type valuation `ρ : Name → ZFSet`.
 
 - [x] Type denotation and `⟦α.inst θ⟧ ρ = ⟦α⟧ (ρ.inst θ)`
 - [x] `zfBool`; graph application; `succ` injective / not surjective on `ω`
-- [ ] Term denotation (`HasType` → element of `⟦α⟧`)
-- [ ] `eq` / `select` as graphs; soundness of the ten rules
+- [x] Term denotation (`HasType` → element of `⟦α⟧`)
+- [x] `eq` / `select` as graphs; `EnvInterp.holCore`
+- [ ] soundness of the ten rules
 - [ ] `addDef` preservation; model of `holLogic`
 - [ ] `holEnv` axioms; `⟦⊥⟧ = zfFalse`; `¬ [] ⊩[holEnv] ⊥`
 

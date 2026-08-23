@@ -37,15 +37,19 @@ Henkin subset.  η holds because every element of `funs` *is* a graph.
 
 ### Terms
 
-A typing `HasType env Γ t α` is interpreted by
+Interpretation is defined by recursion on the raw term (`Tm.denote`),
+because `HasType` is a `Prop` and cannot eliminate into `ZFSet`.
+`HasType.denote_mem` then shows the result inhabits `⟦α⟧`:
 
 ```
-denote : TyVal → CtxVal Γ → FVarVal → { x : ZFSet // x ∈ ⟦α⟧ }
+Tm.denote     : EnvInterp env ρ → FVarVal ρ → List ZFSet → Tm → ZFSet
+HasType.denote_mem : HasType env Γ t α → ⟦t⟧ ∈ ⟦α⟧
 ```
 
 * `TyVal` — `Name → ZFSet`, the `ρ` above.
 * `CtxVal Γ` — a list of sets, `vs[i] ∈ ⟦Γ[i]⟧`, for bound indices.
 * `FVarVal` — a map `Name × Ty → ZFSet` with `ξ (x, α) ∈ ⟦α⟧`.
+* `EnvInterp env ρ` — `I n inst ∈ ⟦inst⟧` whenever `inst` instantiates `env.constants n`.
 
 Constructors:
 
@@ -137,7 +141,7 @@ HOLean/Model/Sound.lean   soundness of Provable
 HOLean/Model/Axiom.lean   holEnv axioms; consistency
 ```
 
-This PR fills `Basic` and `Ty` and records the rest of the plan here.
+`Basic`, `Ty`, `Const`, and `Tm` are in this PR.  Soundness is next.
 
 ## PR series (after this one)
 
