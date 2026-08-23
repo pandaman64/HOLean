@@ -109,13 +109,13 @@ theorem Tm.denote_shift1 (t : Tm) (I : EnvInterp env ρ) (ξ : FVarVal ρ)
       t.denote I ξ (pre ++ post) := by
   induction t generalizing pre with
   | bvar i =>
+    have hidx := List.getElem?_insert_dummy pre post dummy i
     simp [Tm.shift, Tm.denote]
     by_cases hlt : i < pre.length
-    · simp [hlt, List.getElem?_append_left hlt]
-    · simp [hlt]
-      have := List.getElem?_insert_dummy pre post dummy i
-      simp [hlt] at this
-      exact congrArg (fun o => o.getD ∅) this
+    · simp [hlt] at hidx ⊢
+      exact congrArg (fun o => o.getD ∅) hidx
+    · simp [hlt] at hidx ⊢
+      exact congrArg (fun o => o.getD ∅) hidx
   | fvar y β =>
     rfl
   | const n β =>

@@ -131,6 +131,9 @@ theorem zfIsFunc_ext {A B f g : ZFSet}
   · intro ⟨x, hx, heq⟩
     exact ⟨x, hx, (h x hx).symm ▸ heq⟩
 
+noncomputable instance (b : ZFSet) : Definable₁ (fun _ : ZFSet => b) :=
+  Classical.allZFSetDefinable _
+
 /-- Constant graph `A → {b}`. -/
 noncomputable def zfConst (A b : ZFSet) : ZFSet :=
   map (fun _ => b) A
@@ -138,28 +141,30 @@ noncomputable def zfConst (A b : ZFSet) : ZFSet :=
 noncomputable instance (A : ZFSet) : Definable₁ (fun b => zfConst A b) :=
   Classical.allZFSetDefinable _
 
-noncomputable instance (b : ZFSet) : Definable₁ (fun A => zfConst A b) :=
-  Classical.allZFSetDefinable _
-
 theorem zfConst_isFunc {A B b : ZFSet} (hb : b ∈ B) :
     IsFunc A B (zfConst A b) :=
-  (map_isFunc (f := fun _ => b) (x := A) (y := B)).mpr fun _ _ => hb
+  (map_isFunc (f := fun _ : ZFSet => b) (x := A) (y := B)).mpr fun _ _ => hb
 
 theorem zfConst_mem {A B b : ZFSet} (hb : b ∈ B) :
     zfConst A b ∈ funs A B :=
   mem_funs.2 (zfConst_isFunc hb)
 
 theorem zfConst_app {A b x : ZFSet} (hx : x ∈ A) :
-    zfApp (zfConst A b) x = b :=
-  zfApp_unique (zfConst_isFunc (A := A) (B := {b}) (mem_singleton.2 rfl)) hx
-    (mem_map.2 ⟨x, hx, rfl⟩)
+    zfApp (zfConst A b) x = b := by
+  have hpair : pair x b ∈ zfConst A b :=
+    mem_map.2 ⟨x, hx, rfl⟩
+  have hb : b ∈ ({b} : ZFSet) := mem_singleton.2 rfl
+  exact zfApp_unique (zfConst_isFunc hb) hx hpair
+
+noncomputable instance : Definable₁ (fun x : ZFSet => x) :=
+  Classical.allZFSetDefinable _
 
 /-- Identity graph on `A`. -/
 noncomputable def zfId (A : ZFSet) : ZFSet :=
   map (fun x => x) A
 
 theorem zfId_isFunc (A : ZFSet) : IsFunc A A (zfId A) :=
-  (map_isFunc (f := fun x => x) (x := A) (y := A)).mpr fun _ hx => hx
+  (map_isFunc (f := fun x : ZFSet => x) (x := A) (y := A)).mpr fun _ hx => hx
 
 theorem zfId_mem (A : ZFSet) : zfId A ∈ funs A A :=
   mem_funs.2 (zfId_isFunc A)
@@ -173,7 +178,7 @@ noncomputable def zfFst (A B : ZFSet) : ZFSet :=
 
 theorem zfFst_isFunc (A B : ZFSet) : IsFunc A (funs B A) (zfFst A B) :=
   (map_isFunc (f := fun x => zfConst B x) (x := A) (y := funs B A)).mpr
-    fun x hx => zfConst_mem hx
+    fun _ hx => zfConst_mem hx
 
 theorem zfFst_mem (A B : ZFSet) : zfFst A B ∈ funs A (funs B A) :=
   mem_funs.2 (zfFst_isFunc A B)
@@ -185,12 +190,15 @@ theorem zfFst_app {A B x y : ZFSet} (hx : x ∈ A) (hy : y ∈ B) :
   rw [hx']
   exact zfConst_app hy
 
+noncomputable instance (B : ZFSet) : Definable₁ (fun _ : ZFSet => zfId B) :=
+  Classical.allZFSetDefinable _
+
 /-- Second projection `λ x y. y` as an element of `funs A (funs B B)`. -/
 noncomputable def zfSnd (A B : ZFSet) : ZFSet :=
   map (fun _ => zfId B) A
 
 theorem zfSnd_isFunc (A B : ZFSet) : IsFunc A (funs B B) (zfSnd A B) :=
-  (map_isFunc (f := fun _ => zfId B) (x := A) (y := funs B B)).mpr
+  (map_isFunc (f := fun _ : ZFSet => zfId B) (x := A) (y := funs B B)).mpr
     fun _ _ => zfId_mem B
 
 theorem zfSnd_mem (A B : ZFSet) : zfSnd A B ∈ funs A (funs B B) :=
@@ -246,5 +254,20 @@ theorem zfBool_imp_from_and {p q r : ZFSet}
         have hpT := (hand.1 hrT).1
         zfFalse_ne_zfTrue (hpF ▸ hpT)
       exact (zfBool_eq_false_of_ne_true hr hne).trans hpF.symm
+
+/-- Second-order encoding of existence: `∀ q. (∀ x. P x ⇒ q) ⇒ q`. -/
+theorem zfBool_exists_iff {A P : ZFSet} :
+    (∀ q ∈ zfBool, (∀ x ∈ A, zfApp P x = zfTrue → q = zfTrue) → q = zfTrue) ↔
+      ∃ x ∈ A, zfApp P x = zfTrue := by
+  constructor
+  · intro h
+    by_contra hex
+    have hnone : ∀ x ∈ A, zfApp P x ≠ zfTrue :=
+      fun x hx hpT => hex ⟨x, hx, hpT⟩
+    have : zfFalse = zfTrue :=
+      h zfFalse zfFalse_mem_zfBool fun x hx hpT => (hnone x hx hpT).elim
+    exact zfFalse_ne_zfTrue this
+  · intro ⟨x, hx, hpT⟩ q _hq hall
+    exact hall x hx hpT
 
 end HOLean

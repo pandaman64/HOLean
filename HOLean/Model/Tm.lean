@@ -156,6 +156,29 @@ theorem HasType.denote_lam_app {env : Env} {ρ : TyVal} {Γ} {γ β : Ty} {t : T
   simpa [HasType.denote, Tm.denote, CtxVal.cons, hfx] using
     zfApp_unique hf hx hpair
 
+/-- Same fact, stated on raw terms so later truth-table proofs avoid
+unfolding the opaque `HasType.denote`. -/
+theorem Tm.denote_of_lam_app {env : Env} {ρ : TyVal} {Γ} {γ β : Ty} {t : Tm}
+    (ht : HasType env (γ :: Γ) t β) (I : EnvInterp env ρ) (ξ : FVarVal ρ)
+    (vs : CtxVal ρ Γ) {x : ZFSet} (hx : x ∈ γ.denote ρ) :
+    zfApp ((Tm.lam γ t).denote I ξ vs.vals) x = t.denote I ξ (x :: vs.vals) :=
+  HasType.denote_lam_app ht I ξ vs hx
+
+@[simp] theorem Tm.denote_bvar_zero {env : Env} {ρ : TyVal}
+    (I : EnvInterp env ρ) (ξ : FVarVal ρ) (x : ZFSet) (vs : List ZFSet) :
+    (Tm.bvar 0).denote I ξ (x :: vs) = x :=
+  rfl
+
+@[simp] theorem Tm.denote_bvar_one {env : Env} {ρ : TyVal}
+    (I : EnvInterp env ρ) (ξ : FVarVal ρ) (x y : ZFSet) (vs : List ZFSet) :
+    (Tm.bvar 1).denote I ξ (x :: y :: vs) = y :=
+  rfl
+
+@[simp] theorem Tm.denote_bvar_two {env : Env} {ρ : TyVal}
+    (I : EnvInterp env ρ) (ξ : FVarVal ρ) (x y z : ZFSet) (vs : List ZFSet) :
+    (Tm.bvar 2).denote I ξ (x :: y :: z :: vs) = z :=
+  rfl
+
 /-- Interpretation of `eq` at an instantiated type. -/
 noncomputable def interpEq (ρ : TyVal) (inst : Ty) : ZFSet :=
   match inst with
