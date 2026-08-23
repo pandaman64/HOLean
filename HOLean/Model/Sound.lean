@@ -68,6 +68,10 @@ noncomputable def EnvModel.inst {ρ : TyVal} (M : EnvModel env ρ) (θ : TySubst
     simp [Ty.denote_inst]
   ax_ok := fun _ p hp _ => (hnone p hp).elim
 
+@[simp] theorem EnvModel.inst_interp {ρ : TyVal} (M : EnvModel env ρ)
+    (θ : TySubst) (hnone : ∀ p, env.axioms p → False) :
+    (M.inst θ hnone).interp = M.interp.inst θ := rfl
+
 /-- `holCore` has a standard model at every nonempty type valuation. -/
 noncomputable def EnvModel.holCore (ρ : TyVal) (hρ : ρ.Nonempty) :
     EnvModel holCore ρ where
@@ -88,36 +92,36 @@ theorem Provable.sound [Env.HasEq env]
   induction h with
   | refl ht =>
     intro ρ M ξ _hΓ
-    exact (Tm.denote_mkEq_true_iff M.interp M.eq_ok ξ ht ht (CtxVal.nil ρ)).2 rfl
+    exact (Tm.denote_mkEq_true_iff_nil M.interp M.eq_ok ξ ht ht).2 rfl
   | trans h1 h2 ih1 ih2 =>
     intro ρ M ξ hΓ
     obtain ⟨hΓ1, hΓ2⟩ := HypsTrue.append hΓ
     obtain ⟨_, hs, ht⟩ := HasType.dest_mkEq (bool_typed h1).2
     obtain ⟨_, _ht', hu⟩ := HasType.dest_mkEq (bool_typed h2).2
-    have hst := (Tm.denote_mkEq_true_iff M.interp M.eq_ok ξ hs ht (CtxVal.nil ρ)).1
+    have hst := (Tm.denote_mkEq_true_iff_nil M.interp M.eq_ok ξ hs ht).1
       (ih1 M ξ hΓ1)
-    have htu := (Tm.denote_mkEq_true_iff M.interp M.eq_ok ξ ht hu (CtxVal.nil ρ)).1
+    have htu := (Tm.denote_mkEq_true_iff_nil M.interp M.eq_ok ξ ht hu).1
       (ih2 M ξ hΓ2)
-    exact (Tm.denote_mkEq_true_iff M.interp M.eq_ok ξ hs hu (CtxVal.nil ρ)).2
+    exact (Tm.denote_mkEq_true_iff_nil M.interp M.eq_ok ξ hs hu).2
       (hst.trans htu)
   | mkComb h1 h2 ih1 ih2 =>
     intro ρ M ξ hΓ
     obtain ⟨hΓ1, hΓ2⟩ := HypsTrue.append hΓ
     obtain ⟨_, hf, hg⟩ := HasType.dest_mkEq (bool_typed h1).2
     obtain ⟨_, hx, hy⟩ := HasType.dest_mkEq (bool_typed h2).2
-    have hfg := (Tm.denote_mkEq_true_iff M.interp M.eq_ok ξ hf hg (CtxVal.nil ρ)).1
+    have hfg := (Tm.denote_mkEq_true_iff_nil M.interp M.eq_ok ξ hf hg).1
       (ih1 M ξ hΓ1)
-    have hxy := (Tm.denote_mkEq_true_iff M.interp M.eq_ok ξ hx hy (CtxVal.nil ρ)).1
+    have hxy := (Tm.denote_mkEq_true_iff_nil M.interp M.eq_ok ξ hx hy).1
       (ih2 M ξ hΓ2)
-    exact (Tm.denote_mkEq_true_iff M.interp M.eq_ok ξ
-      (HasType.app hf hx) (HasType.app hg hy) (CtxVal.nil ρ)).2
+    exact (Tm.denote_mkEq_true_iff_nil M.interp M.eq_ok ξ
+      (HasType.app hf hx) (HasType.app hg hy)).2
       (by simp [Tm.denote, hfg, hxy])
   | abs h hfresh ih =>
     intro ρ M ξ hΓ
     rename_i Γ s t x α _β
     obtain ⟨_, hs, ht'⟩ := HasType.dest_mkEq (bool_typed h).2
-    apply (Tm.denote_mkEq_true_iff M.interp M.eq_ok ξ
-      hs.abstract ht'.abstract (CtxVal.nil ρ)).2
+    apply (Tm.denote_mkEq_true_iff_nil M.interp M.eq_ok ξ
+      hs.abstract ht'.abstract).2
     apply ext
     intro z
     simp [Tm.abstract, Tm.denote, mem_map]
@@ -129,8 +133,8 @@ theorem Provable.sound [Env.HasEq env]
         intro q hq
         rw [Tm.denote_fresh q M.interp ξ [] hv (hfresh q hq)]
         exact hΓ q hq
-      have hst := (Tm.denote_mkEq_true_iff M.interp M.eq_ok
-        (ξ.update x α v hv) hs ht' (CtxVal.nil ρ)).1
+      have hst := (Tm.denote_mkEq_true_iff_nil M.interp M.eq_ok
+        (ξ.update x α v hv) hs ht').1
         (ih M (ξ.update x α v hv) hΓ')
       change v.pair (s.close x α |>.denote M.interp ξ [v]) = z at heq
       change v.pair (t.close x α |>.denote M.interp ξ [v]) = z
@@ -144,8 +148,8 @@ theorem Provable.sound [Env.HasEq env]
         intro q hq
         rw [Tm.denote_fresh q M.interp ξ [] hv (hfresh q hq)]
         exact hΓ q hq
-      have hst := (Tm.denote_mkEq_true_iff M.interp M.eq_ok
-        (ξ.update x α v hv) hs ht' (CtxVal.nil ρ)).1
+      have hst := (Tm.denote_mkEq_true_iff_nil M.interp M.eq_ok
+        (ξ.update x α v hv) hs ht').1
         (ih M (ξ.update x α v hv) hΓ')
       change v.pair (s.close x α |>.denote M.interp ξ [v]) = z
       change v.pair (t.close x α |>.denote M.interp ξ [v]) = z at heq
@@ -156,15 +160,17 @@ theorem Provable.sound [Env.HasEq env]
     intro ρ M ξ _hΓ
     rename_i t x α _β
     have hfvar : HasType env [] (.fvar x α) α := HasType.fvar x α
-    apply (Tm.denote_mkEq_true_iff M.interp M.eq_ok ξ
-      (HasType.app (HasType.lam ht) hfvar) (ht.open' hfvar) (CtxVal.nil ρ)).2
+    apply (Tm.denote_mkEq_true_iff_nil M.interp M.eq_ok ξ
+      (HasType.app (HasType.lam ht) hfvar) (ht.open' hfvar)).2
     have hmem := hfvar.denote_mem M.interp ξ (CtxVal.nil ρ)
     simp [HasType.denote, Tm.denote] at hmem
     have happ := HasType.denote_lam_app ht M.interp ξ (CtxVal.nil ρ) hmem
     simp [HasType.denote, Tm.denote, CtxVal.nil, CtxVal.cons] at happ
-    simp [Tm.denote, CtxVal.nil]
-    rw [happ, Tm.denote_open' t M.interp ξ hfvar]
     simp [Tm.denote]
+    rw [happ]
+    have hopen := Tm.denote_openAt t M.interp ξ hfvar []
+    simp [Tm.denote] at hopen
+    exact hopen.symm
   | assume hp =>
     intro ρ M ξ hΓ
     exact hΓ _ (List.mem_singleton.2 rfl)
@@ -172,7 +178,7 @@ theorem Provable.sound [Env.HasEq env]
     intro ρ M ξ hΓ
     obtain ⟨hΓ1, hΓ2⟩ := HypsTrue.append hΓ
     obtain ⟨_, hp, hq⟩ := HasType.dest_mkEq (bool_typed h1).2
-    have hpq := (Tm.denote_mkEq_true_iff M.interp M.eq_ok ξ hp hq (CtxVal.nil ρ)).1
+    have hpq := (Tm.denote_mkEq_true_iff_nil M.interp M.eq_ok ξ hp hq).1
       (ih1 M ξ hΓ1)
     exact hpq ▸ ih2 M ξ hΓ2
   | deductAntisym h1 h2 ih1 ih2 =>
@@ -199,8 +205,7 @@ theorem Provable.sound [Env.HasEq env]
       by_cases hrp : r = p
       · exact hrp ▸ hp
       · exact HypsTrue.erase (HypsTrue.append hΓ).2 hr hrp
-    apply (Tm.denote_mkEq_true_iff M.interp M.eq_ok ξ hpT hqT (CtxVal.nil ρ)).2
-    simp [CtxVal.nil]
+    apply (Tm.denote_mkEq_true_iff_nil M.interp M.eq_ok ξ hpT hqT).2
     match mem_zfBool.1 hpB, mem_zfBool.1 hqB with
     | Or.inl hpF, Or.inl hqF =>
       rw [hpF, hqF]
@@ -217,26 +222,23 @@ theorem Provable.sound [Env.HasEq env]
   | instType θ _h ih =>
     intro ρ M ξ hΓ
     rename_i Γ p
-    let M' : EnvModel env (ρ.inst θ) := M.inst θ hnone
-    have hΓ' : HypsTrue M'.interp (ξ.pull θ) Γ := by
+    have hΓ' : HypsTrue (M.interp.inst θ) (ξ.pull θ) Γ := by
       intro q hq
       have := hΓ (q.instTy θ) (List.mem_map.2 ⟨q, hq, rfl⟩)
-      -- `let` makes `M'.interp` defeq to `M.interp.inst θ`.
-      rwa [← Tm.denote_instTy]
-    have := ih M' (ξ.pull θ) hΓ'
-    rwa [Tm.denote_instTy]
+      rwa [Tm.denote_instTy] at this
+    have := ih (M.inst θ hnone) (ξ.pull θ) (by simpa using hΓ')
+    simpa [Tm.denote_instTy] using this
   | inst hσ h ih =>
     intro ρ M ξ hΓ
     rename_i Γ p σ
-    have hξ := ξ.apply M.interp σ hσ
-    have hΓ' : HypsTrue M.interp hξ Γ := by
+    have hΓ' : HypsTrue M.interp (ξ.apply M.interp σ hσ) Γ := by
       intro q hq
       have hqT := (bool_typed h).1 q hq
       have := hΓ (q.applySubst σ) (List.mem_map.2 ⟨q, hq, rfl⟩)
       have heq := HasType.denote_applySubst hqT hσ M.interp ξ (CtxVal.nil ρ)
       simp [CtxVal.nil] at heq this
       rwa [← heq]
-    have := ih M hξ hΓ'
+    have := ih M (ξ.apply M.interp σ hσ) hΓ'
     have hpT := (bool_typed h).2
     have heq := HasType.denote_applySubst hpT hσ M.interp ξ (CtxVal.nil ρ)
     simp [CtxVal.nil] at heq this

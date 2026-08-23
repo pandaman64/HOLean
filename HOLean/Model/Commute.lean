@@ -44,6 +44,13 @@ theorem Tm.denote_mkEq_true_iff [Env.HasEq env] (I : EnvInterp env ρ)
       s.denote I ξ vs.vals = t.denote I ξ vs.vals := by
   rw [Tm.denote_mkEq I heq ξ hs ht vs, zfBoolOfEq_true_iff]
 
+theorem Tm.denote_mkEq_true_iff_nil [Env.HasEq env] (I : EnvInterp env ρ)
+    (heq : ∀ α, I.interp eqName (α ↝ α ↝ .bool) = zfEq (α.denote ρ))
+    (ξ : FVarVal ρ) {s t α} (hs : HasType env [] s α) (ht : HasType env [] t α) :
+    (Tm.mkEq α s t).denote I ξ [] = zfTrue ↔
+      s.denote I ξ [] = t.denote I ξ [] := by
+  simpa [CtxVal.nil] using Tm.denote_mkEq_true_iff I heq ξ hs ht (CtxVal.nil ρ)
+
 /-- A locally closed term does not read bound values past its cutoff. -/
 theorem Tm.denote_LC_drop (t : Tm) (I : EnvInterp env ρ) (ξ : FVarVal ρ)
     (vs extra : List ZFSet) (h : t.LC vs.length = true) :
