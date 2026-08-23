@@ -19,14 +19,14 @@ Env  ≔  constants : Name → Option Ty     -- generic types
 ```
 
 `HasType` reads only `constants`, never `axioms`.  That breaks the cycle
-between typing the primitive axioms and installing them in the initial
-environment: `holCore` has the primitive constants and no axioms;
-`HOLAxiom` is typed against `holCore`; `holEnv` is `holCore` plus those
-axioms.
+between typing axioms and installing them: `holCore` has the primitive
+constants and no axioms; `holLogic` is the definitional chain of
+connectives; `HOLAxiom` is typed against `holLogic`; `holEnv` is `holLogic`
+plus those schemas.
 
 User definitions grow the environment (`addConst` / `addAxiom` / `addDef`).
-Connectives stay as Lean term formers in this slice; type-level
-`new_basic_type_definition` is later.
+Logical connectives are definitional extensions of `holCore` (`holLogic`).
+Type-level `new_basic_type_definition` is later.
 -/
 
 namespace HOLean
@@ -136,10 +136,33 @@ theorem HasEq.addDef {env : Env} [HasEq env] {n : Name} {ty : Ty} {rhs : Tm}
   haveI := HasEq.addConst (env := env) (n := n) (ty := ty) hn
   HasEq.addAxiom _ _
 
+theorem HasSelect.addDef {env : Env} [HasSelect env] {n : Name} {ty : Ty} {rhs : Tm}
+    (hn : n ≠ selectName) : HasSelect (env.addDef n ty rhs) :=
+  haveI := HasSelect.addConst (env := env) (n := n) (ty := ty) hn
+  HasSelect.addAxiom _ _
+
+@[simp] theorem addDef_constants_self (env : Env) (n : Name) (ty : Ty) (rhs : Tm) :
+    (env.addDef n ty rhs).constants n = some ty := by
+  simp [addDef, addConst]
+
+theorem addDef_constants_of_ne (env : Env) {n m : Name} (ty : Ty) (rhs : Tm)
+    (h : m ≠ n) :
+    (env.addDef n ty rhs).constants m = env.constants m := by
+  simp [addDef, addConst, h]
+
+theorem addDef_axioms_self (env : Env) (n : Name) (ty : Ty) (rhs : Tm) :
+    (env.addDef n ty rhs).axioms (Tm.mkEq ty (.const n ty) rhs) :=
+  addAxiom_self _ _
+
+theorem addDef_axioms_of {env : Env} {n : Name} {ty : Ty} {rhs ax : Tm}
+    (h : env.axioms ax) :
+    (env.addDef n ty rhs).axioms ax :=
+  Or.inr h
+
 end Env
 
-/-- Primitive constants, no axioms.  Used to type the HOL axiom schemas
-without referring to `holEnv` itself. -/
+/-- Primitive constants, no axioms.  The connective chain (`holLogic`) and
+the HOL axiom schemas (`HOLAxiom`) are layered on top of this. -/
 def holCore : Env where
   constants := holConstants
   axioms := fun _ => False

@@ -94,6 +94,10 @@ inductive Provable (env : Env) : List Tm → Tm → Prop where
   /-- `INST` (simultaneous, type-preserving substitution of free variables). -/
   | inst {Γ p σ} (hσ : σ.Ok env) (h : Provable env Γ p) :
       Provable env (Γ.map (·.applySubst σ)) (p.applySubst σ)
+  /-- An environment axiom (a closed boolean).  Definitions are axioms
+  `⊢ c = t`; the HOL schemas are the remaining axioms of `holEnv`. -/
+  | ax {p} (hp : env.axioms p) (hty : HasType env [] p .bool) :
+      Provable env [] p
 
 scoped notation:50 Γ:51 " ⊩[" env:0 "] " p:50 => Provable env Γ p
 
@@ -125,6 +129,7 @@ theorem weakenEnv {env env' : Env} {Γ p}
   | deductAntisym _ _ ih1 ih2 => exact deductAntisym ih1 ih2
   | instType θ _ ih => exact instType θ ih
   | inst hσ _ ih => exact inst (hσ.weakenEnv hle) ih
+  | ax hp hty => exact ax (hle.axioms _ hp) (hty.weakenEnv hle)
 
 /-- Every hypothesis and the conclusion of a kernel theorem is a closed
 boolean.  This is the first sanity theorem for the inference system. -/
@@ -187,6 +192,10 @@ theorem bool_typed [Env.HasEq env] {Γ p} (h : Γ ⊩[env] p) :
       obtain ⟨q', hq', rfl⟩ := List.mem_map.1 hq
       exact (ih.1 q' hq').applySubst hσ
     · exact ih.2.applySubst hσ
+  | ax _ hty =>
+    constructor
+    · intro q hq; cases hq
+    · exact hty
 
 theorem concl_bool [Env.HasEq env] {Γ p} (h : Γ ⊩[env] p) : HasType env [] p .bool :=
   (bool_typed h).2

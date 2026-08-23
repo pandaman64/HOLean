@@ -26,8 +26,11 @@ def eqName : Name := "eq"
 /-- Name of Hilbert ε / `@`. -/
 def selectName : Name := "select"
 
-/-- The schematic parameter of `eq` and `select`. -/
+/-- Schematic type parameters of the primitive and defined constants. -/
 def primTyVar : Name := "A"
+
+/-- Second schematic parameter, used by `ONE_ONE` / `ONTO`. -/
+def primTyVarB : Name := "B"
 
 /-- Generic type of equality: `A ↝ A ↝ bool`. -/
 def eqTy : Ty :=
@@ -59,5 +62,9 @@ theorem eqTy_isInstanceOf (α : Ty) :
 theorem selectTy_isInstanceOf (α : Ty) :
     selectTy.isInstanceOf ((α ↝ .bool) ↝ α) :=
   ⟨[(primTyVar, α)], by simp [selectTy, primTyVar, Ty.inst, TySubst.lookup]⟩
+
+theorem holConstants_of_ne {n : Name} (heq : n ≠ eqName) (hsel : n ≠ selectName) :
+    holConstants n = none := by
+  simp [holConstants, heq, hsel]
 
 end HOLean

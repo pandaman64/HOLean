@@ -43,10 +43,10 @@ HOLean/
   Syntax/Tm.lean       locally nameless terms, shift / LC / open–close
   Env.lean             `Env` (constants × axioms), `addDef`, `holCore`
   Typing.lean          `HasType env`, inference, substitution lemmas
-  Connective.lean      T, ∧, ⇒, ∀, ⊥, ¬, ∨, ∃, ONE_ONE, ONTO
-  Kernel.lean          ten HOL Light rules (`Provable env`)
+  Connective.lean      T, ∧, ⇒, ∀, ⊥, ¬, ∨, ∃, ONE_ONE, ONTO as `addDef`
+  Kernel.lean          ten HOL Light rules plus `Provable.ax`
   Derived.lean         SYM, GEN, CONJ, projections, MP, weakening
-  Axiom.lean           η / SELECT / INFINITY; `holEnv`; `Proves env`
+  Axiom.lean           η / SELECT / INFINITY; `holEnv` over `holLogic`
 ```
 
 Mathlib is already a dependency so the later model can use `ZFSet.funs`,
@@ -93,14 +93,15 @@ or rewriting.
 
 A term `const n inst` stores the *instantiated* type.  It is well-typed
 when `env.constants n = some gen` and `gen.isInstanceOf inst`.
-`HasType` reads only `constants`, never `axioms`.  That lets us type the
-primitive schemas against `holCore` (constants, no axioms) and install
-them in `holEnv` without a cycle.
+`HasType` reads only `constants`, never `axioms`.  That lets us layer
+environments without a cycle: `holCore` is `{eq, select}` with no axioms;
+`holLogic` is the definitional chain of connectives; `HOLAxiom` is typed
+against `holLogic`; `holEnv` is `holLogic` plus η / SELECT / INFINITY.
 
 `eq` and `select` are the initial constants.  User constants are
-`Env.addConst` / `Env.addAxiom` / `Env.addDef`.  Connectives remain Lean
-term formers in this slice.  Type-level `new_basic_type_definition` is
-later.
+`Env.addConst` / `Env.addAxiom` / `Env.addDef`.  Connectives are
+definitional extensions (`addDef`), not Lean term formers.
+Type-level `new_basic_type_definition` is later.
 
 ### Lists as hypothesis sets
 
@@ -125,7 +126,9 @@ INST σ               Γ ⊢ p                           ⇒  Γ[σ] ⊢ p[σ]
 
 `Provable.bool_typed` shows every derivable sequent has closed boolean
 hypotheses and a closed boolean conclusion.  Rules that form equations
-need `Env.HasEq`.  The notation is `Γ ⊩[env] p` for `Provable env Γ p`.
+need `Env.HasEq`.  `Provable.ax` admits a closed environment axiom
+(`⊢ c = t` for definitions; the HOL schemas in `holEnv`).  The notation
+is `Γ ⊩[env] p` for `Provable env Γ p`.
 
 `ABS` still requires `x ∉ FV(Γ)`: locally nameless syntax removes binder
 clash, not hypothesis freshness.  Bound contexts are ordinary lists
@@ -134,10 +137,9 @@ clash, not hypothesis freshness.  Bound contexts are ordinary lists
 Derived rules that go through `DEDUCT_ANTISYM` against `⊢ T` ask for
 `T ∉ Γ` so the hypothesis list stays `Γ` rather than `Γ \ {T}`.
 
-Defined connectives are **Lean term formers**, not object-language constants
-(see “Environments vs definitional extensions” below).  Arguments placed
-under a binder are `shift`ed, so the formers are capture-avoiding on open
-terms:
+Defined connectives are **object-language constants** installed by
+`Env.addDef` (`⊢ c = t`; unfolding is `EQ_MP`, there is no δ).  The
+Harrison / Andrews expansions are the defining right-hand sides:
 
 ```
 T          ≔  (λp. p) = (λp. p)
@@ -176,9 +178,9 @@ variable (HOL free variables are `(name, type)` pairs).
 - [x] Derived rules: SYM, `|- T`, `EQT_INTRO`, GEN, general β via `INST`,
       CONJ, both projections, MP
 - [x] Hypothesis weakening (`add_assum`) from CONJ + projection
-- [x] `∃`, `¬`, `∨`, `ONE_ONE`, `ONTO` as defined terms
+- [x] `∃`, `¬`, `∨`, `ONE_ONE`, `ONTO` as `addDef` constants on `holLogic`
 - [x] Infinity axiom: `∃ f : ind ↝ ind. ONE_ONE f ∧ ¬ ONTO f`
-- [x] Environments: named constants with generic types; `holEnv`; `addDef`
+- [x] Environments: named constants with generic types; `holCore` / `holLogic` / `holEnv`; `addDef`
 - [ ] Type definitional extensions (`new_basic_type_definition`) —
       **deferred** (see below)
 
@@ -191,7 +193,7 @@ model are taken seriously.
 | Approach | What changes | Language | Cost |
 | --- | --- | --- | --- |
 | **Named witness** (`indSuc : ind ↝ ind` + injectivity / non-surjectivity axioms) | Grow the constant table (an *environment*) | `{eq, select, indSuc}` | Every later lemma about terms, substitution, and the model must case-split on the new constant.  This is the same mechanism as `new_constant`. |
-| **Existential axiom** (what we do) | Add one closed sentence | still `{eq, select}` | The model only has to *satisfy* that `ω` is Dedekind-infinite (`succ` is a witness in the meta-theory).  No new object-level name. |
+| **Existential axiom** (what we do) | Add one closed sentence | still `{eq, select}` plus defined connectives | The model only has to *satisfy* that `ω` is Dedekind-infinite (`succ` is a witness in the meta-theory).  No new primitive name. |
 | **Definitional extension** (`new_basic_definition` / `new_basic_type_definition`) | Extend the signature by a constant *equal* to an existing closed term, or carve out a new type from a predicate | grows, but conservatively | Needs a conservation theorem relating *two* signatures, two environments, and two `INST`/`INST_TYPE` regimes.  Infinity has no closed witness term unless we already built one, so this does not replace the axiom. |
 
 The environment is now explicit, so “add a constant” is `addConst` /
