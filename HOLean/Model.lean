@@ -6,3 +6,5 @@ import HOLean.Model.Tm
 import HOLean.Model.Commute
 import HOLean.Model.Sound
 import HOLean.Model.Def
+import HOLean.Model.Logic
+import HOLean.Model.Axiom

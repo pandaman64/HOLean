@@ -140,11 +140,11 @@ HOLean/Model/Tm.lean      denote on raw terms; HasType.denote_mem
 HOLean/Model/Commute.lean open / close / instTy / subst commute with denote
 HOLean/Model/Sound.lean   EnvModel; Provable.sound; sound_holCore
 HOLean/Model/Def.lean     addDef transport; EnvModel.holLogic
+HOLean/Model/Logic.lean   connective truth tables
 HOLean/Model/Axiom.lean   holEnv axioms; consistency
 ```
 
-`Basic` through `Def` (including `holLogic` as a model) are in this PR.
-The `holEnv` consistency argument is next.
+`Basic` through `Axiom` (including `holEnv` and `¬ ⊢ ⊥`) are in this PR.
 
 ## PR series (after this one)
 
@@ -157,7 +157,7 @@ Each slice should `lake build HOLean` and add theorems, not scaffolding alone.
    `HasType env [] rhs ty`, the extension models `env.addDef n ty rhs`.
    Then `holLogic` is a model.  **Done in this PR.**
 4. **Axioms and consistency** — η, SELECT, INFINITY in `holEnv`;
-   `⟦falsum⟧ = zfFalse`; `¬ [] ⊩[holEnv] ⊥`.
+   `⟦falsum⟧ = zfFalse`; `¬ [] ⊩[holEnv] ⊥`.  **Done in this PR.**
 
 Type-level `new_basic_type_definition` remains deferred: it needs a
 conservation theorem about two signatures, not just one model.

@@ -319,4 +319,51 @@ theorem Provable.sound_holLogic {ρ : TyVal} {Γ p} (h : Γ ⊩[holLogic] p)
     p.denote (EnvModel.holLogic ρ hρ).interp ξ [] = zfTrue :=
   Provable.sound h (EnvModel.holLogic ρ hρ) ξ hΓ
 
+/-- `addDef` does not change the interpretation of a different name. -/
+theorem EnvModel.addDef_interp_ne [Env.HasEq env] (n : Name) {ty : Ty} {rhs : Tm}
+    (M : EnvModel env ρ) (hρ : ρ.Nonempty)
+    (hn : env.constants n = none) (hne_eq : n ≠ eqName)
+    (hwf : env.WF) (hrhs : HasType env [] rhs ty)
+    (hclosed : ∀ x α, rhs.freeIn x α = false)
+    (hvars : ∀ x ∈ rhs.tyvars, x ∈ ty.tyvars)
+    {m : Name} (hm : m ≠ n) (inst : Ty) :
+    (M.addDef n hρ hn hne_eq hwf hrhs hclosed hvars).interp.interp m inst =
+      M.interp.interp m inst :=
+  EnvInterp.addDef_interp_of_ne n M.interp (FVarVal.ofNonempty hρ) hrhs hm inst
+
+/-- Primitive graphs survive the `addDef` chain. -/
+theorem EnvModel.holLogic_interp_prim (ρ : TyVal) (hρ : ρ.Nonempty)
+    {n : Name} (hn : n = eqName ∨ n = selectName) (inst : Ty) :
+    (EnvModel.holLogic ρ hρ).interp.interp n inst =
+      (EnvInterp.holCore ρ hρ).interp n inst := by
+  have hne : ∀ (c : Name), c ≠ eqName → c ≠ selectName → n ≠ c := by
+    intro c he hs
+    cases hn with
+    | inl heq =>
+      subst heq
+      exact he.symm
+    | inr hsel =>
+      subst hsel
+      exact hs.symm
+  simp [EnvModel.holLogic, EnvModel.envOneOne, EnvModel.envEx, EnvModel.envOr,
+    EnvModel.envNot, EnvModel.envFalsum, EnvModel.envAll, EnvModel.envImp,
+    EnvModel.envAnd, EnvModel.envTru, EnvModel.addDef, EnvInterp.addDef,
+    EnvModel.holCore,
+    hne ontoName (by decide) (by decide),
+    hne oneOneName (by decide) (by decide),
+    hne exName (by decide) (by decide),
+    hne orName (by decide) (by decide),
+    hne notName (by decide) (by decide),
+    hne falsumName (by decide) (by decide),
+    hne allName (by decide) (by decide),
+    hne impName (by decide) (by decide),
+    hne andName (by decide) (by decide),
+    hne truName (by decide) (by decide)]
+
+theorem EnvModel.holLogic_interp_select (ρ : TyVal) (hρ : ρ.Nonempty) (α : Ty) :
+    (EnvModel.holLogic ρ hρ).interp.interp selectName ((α ↝ .bool) ↝ α) =
+      zfSelect (α.denote ρ) (Ty.denote_nonempty hρ α) :=
+  (EnvModel.holLogic_interp_prim ρ hρ (Or.inr rfl) _).trans
+    (EnvInterp.holCore_interp_select ρ hρ α)
+
 end HOLean

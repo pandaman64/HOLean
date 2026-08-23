@@ -20,6 +20,7 @@ clients; nothing here is an inference rule.
 * `denote_applySubst` — INST
 * `denote_reindex` / `denote_interp_eq` — transport `ax_ok` along `TyVal.inst`
 * `denote_no_fvars` / `denote_interp_except` — `addDef` (closed RHS, fresh name)
+* `denote_shift1` — push a closed-at-cutoff term under one extra binder (η, expansions)
 -/
 
 open ZFSet Classical
@@ -88,6 +89,50 @@ theorem Tm.denote_LC0 (t : Tm) (I : EnvInterp env ρ) (ξ : FVarVal ρ)
     (vs : List ZFSet) (h : t.LC 0 = true) :
     t.denote I ξ vs = t.denote I ξ [] :=
   Tm.denote_LC_drop t I ξ [] vs h
+
+theorem List.getElem?_insert_dummy (pre post : List ZFSet) (dummy : ZFSet)
+    (i : Nat) :
+    (pre ++ dummy :: post)[if i < pre.length then i else i + 1]? =
+      (pre ++ post)[i]? := by
+  by_cases hlt : i < pre.length
+  · simp [hlt, List.getElem?_append_left hlt]
+  · have hge : pre.length ≤ i := Nat.le_of_not_gt hlt
+    have hi1 : pre.length ≤ i + 1 := Nat.le_succ_of_le hge
+    have hsucc : i + 1 - pre.length = i - pre.length + 1 := by omega
+    simp [hlt, List.getElem?_append_right (l₁ := pre) hi1,
+      List.getElem?_append_right (l₁ := pre) hge, hsucc]
+
+/-- Inserting a dummy at cutoff `pre.length` does not change denotation. -/
+theorem Tm.denote_shift1 (t : Tm) (I : EnvInterp env ρ) (ξ : FVarVal ρ)
+    (pre : List ZFSet) (dummy : ZFSet) (post : List ZFSet) :
+    (t.shift 1 pre.length).denote I ξ (pre ++ dummy :: post) =
+      t.denote I ξ (pre ++ post) := by
+  induction t generalizing pre with
+  | bvar i =>
+    simp [Tm.shift, Tm.denote]
+    by_cases hlt : i < pre.length
+    · simp [hlt, List.getElem?_append_left hlt]
+    · simp [hlt]
+      have := List.getElem?_insert_dummy pre post dummy i
+      simp [hlt] at this
+      exact congrArg (fun o => o.getD ∅) this
+  | fvar y β =>
+    rfl
+  | const n β =>
+    rfl
+  | app f a ihf iha =>
+    simp [Tm.shift, Tm.denote, ihf pre, iha pre]
+  | lam β t ih =>
+    simp [Tm.shift, Tm.denote]
+    apply map_congr
+    intro x hx
+    simp [lamFn, hx]
+    simpa [List.length, List.cons_append] using ih (x :: pre)
+
+theorem Tm.denote_shift1_cons (t : Tm) (I : EnvInterp env ρ) (ξ : FVarVal ρ)
+    (dummy : ZFSet) (vs : List ZFSet) :
+    (t.shift 1 0).denote I ξ (dummy :: vs) = t.denote I ξ vs :=
+  Tm.denote_shift1 t I ξ [] dummy vs
 
 /-- Denotation ignores a free variable that does not occur. -/
 theorem Tm.denote_fresh (t : Tm) (I : EnvInterp env ρ) (ξ : FVarVal ρ)

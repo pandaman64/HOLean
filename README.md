@@ -8,7 +8,7 @@ and conclude `⊬ ⊥`.
 
 This repository currently defines the syntax, the type theory, and the
 inference system, interprets them in Mathlib's `ZFSet`, and proves that
-every `holCore` theorem denotes `zfTrue`.
+every `holEnv` theorem denotes `zfTrue`, so `⊬ ⊥`.
 
 ## Why this dialect
 
@@ -53,6 +53,8 @@ HOLean/
   Model/Commute.lean   denotation commutes with open / close / `instTy` / subst
   Model/Sound.lean     `EnvModel`, `Provable.sound`, `Provable.sound_holCore`
   Model/Def.lean       `EnvModel.addDef`, `EnvModel.holLogic`
+  Model/Logic.lean     connective truth tables in a `HasConnectives` model
+  Model/Axiom.lean     `EnvModel.holEnv`, `¬ [] ⊩[holEnv] ⊥`
 ```
 
 See `docs/MODEL.md` for the full standard-model plan.
@@ -220,9 +222,9 @@ theorems *about* `Env.LE` — still ahead of the `ZFSet` model.
 
 ### Phase 3 — Standard model in `ZFSet`
 
-Plan: [`docs/MODEL.md`](docs/MODEL.md).  Types, terms, kernel soundness, and
-`addDef` transport through `holLogic` are in; `holEnv` axioms and
-`¬ ⊢ ⊥` come next.
+Plan: [`docs/MODEL.md`](docs/MODEL.md).  Types, terms, kernel soundness,
+`addDef` transport through `holLogic`, the `holEnv` axioms, and `¬ ⊢ ⊥`
+are in.
 
 Fix a type valuation `ρ : Name → ZFSet`.
 
@@ -239,7 +241,7 @@ Fix a type valuation `ρ : Name → ZFSet`.
 - [x] `eq` / `select` as graphs; `EnvInterp.holCore`
 - [x] soundness of the ten rules (`Provable.sound` / `sound_holCore`)
 - [x] `addDef` preservation; model of `holLogic`
-- [ ] `holEnv` axioms; `⟦⊥⟧ = zfFalse`; `¬ [] ⊩[holEnv] ⊥`
+- [x] `holEnv` axioms; `⟦⊥⟧ = zfFalse`; `¬ [] ⊩[holEnv] ⊥`
 
 **Soundness.**  If `Γ ⊩[env] p` and a valuation satisfies every hypothesis,
 then `⟦p⟧ = zfTrue`.
