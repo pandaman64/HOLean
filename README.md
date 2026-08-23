@@ -48,8 +48,11 @@ HOLean/
   Derived.lean         SYM, GEN, CONJ, projections, MP, weakening
   Axiom.lean           η / SELECT / INFINITY; `holEnv` over `holLogic`
   Elab/Translate.lean  `Lean.Expr` → `Ty` / `Tm`, filtered by sort
+  Elab/State.lean      `EnvExtension` for user `hdef` / `htheorem`
   Elab/Term.lean       `hol_ty(…)` / `hol_tm(…)` / `hol_prop(…)` / `hol(…)`
-  Elab/Command.lean    `#hol` (needs `holEnv`, so it sits above `Axiom`)
+  Elab/Kernel.lean     executable LCF layer (`Thm`, `Hol.refl`, …)
+  Elab/Decl.lean       `hdef` / `htheorem` / `#hol_env`
+  Elab/Command.lean    `#hol` (infers in the current HOL environment)
   Model/Basic.lean     `zfBool`, graph application, `succ` on `omega`
   Model/Ty.lean        `Ty.denote`, `INST_TYPE` commutation
   Model/Const.lean     `eq` / `select` graphs
@@ -151,6 +154,24 @@ names and formers live in `Syntax/Logic.lean` (no elaborator), the
 elaborator imports only that file, and `Connective` / `Axiom` import the
 elaborator.  Parameterized formers (`andExpand p q`, `etaAxiom α β f`)
 stay as functions on `Tm` — they would need antiquotation.
+
+User declarations grow a Lean `EnvExtension` stacked on `holEnv`:
+
+```lean
+hdef myId : {A : Type} → A → A := fun (x : A) => x
+
+htheorem true_eq_true : True = True :=
+  Hol.refl (hol_tm(True))
+
+htheorem tru_intro : True := Hol.truth
+```
+
+`hdef` type-checks the RHS and calls `Env.addDef`.  The type and RHS are
+elaborated separately, so write binders on the RHS (`fun {A} (x : A) => x`)
+rather than mentioning them only in the ascription.  `htheorem` runs a
+`HolM Thm` script — the ten kernel rules plus a few derived combinators,
+as Lean functions — and installs the closed boolean as an axiom.  That
+is a Lean metaprogram, not a tactic language; tactics can come later.
 
 ### Lists as hypothesis sets
 
@@ -287,16 +308,16 @@ should satisfy η (functions *are* graphs), `SELECT` (`Classical.epsilon` /
 - [x] Reuse Lean's elaborator; translate `Lean.Expr` → `Ty` / `Tm`
 - [x] Reject dependent types by the sort of the Π-body
 - [x] `hol_ty(…)` / `hol_tm(…)` / `hol_prop(…)` / `hol(…)` / `#hol`
+- [x] `hdef` / `htheorem` over an `EnvExtension`; `HolM` kernel scripts
 
 ### Phase 5 — What we are *not* doing yet
 
 - **Henkin completeness.**  Completeness needs general (Henkin) models,
   where `⟦α ↝ β⟧` may be a *subset* of the full function set.  Consistency
   only needs one sound model; the standard model is enough.
-- **A verified checker / Candle-style kernel.**  `Provable` is a
-  metatheoretic predicate, not an executable LCF kernel.  An executable
-  `typeCheck` / `rule` layer can be added later and proved sound w.r.t.
-  `Provable`.
+- **A verified checker / Candle-style kernel.**  `Provable` is still the
+  metatheoretic predicate.  `Thm` / `Hol.*` is an executable LCF layer
+  used by `htheorem`; it is not yet proved sound w.r.t. `Provable`.
 - **Isabelle locales, HOL4 type operators, higher-rank polymorphism.**
   User type constructors (`Ty.app name args`) are the natural extension
   once the core model works — they become extra `ρ`-data in the signature.

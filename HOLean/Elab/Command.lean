@@ -5,19 +5,20 @@ Released under Apache 2.0 license as described in the file LICENSE.
 
 import Lean
 import HOLean.Elab.Term
-import HOLean.Axiom
+import HOLean.Elab.Decl
 
 /-!
-`#hol t` prints the HOL translation.  This module imports `Axiom` for
-`holEnv` inference, so `Connective` must not import it.
+`#hol t` prints the HOL translation and infers in the current HOL
+environment (`holEnv` plus `hdef` / `htheorem`).  `Connective` must not
+import this file.
 -/
 
 open Lean Meta Elab
 
 namespace HOLean.Elab
 
-def inferHol (t : Tm) : Option Ty :=
-  t.infer holEnv []
+def inferHol (t : Tm) : MetaM (Option Ty) := do
+  return t.infer (← currentHolEnv) []
 
 def holCommand (stx : Syntax) : TermElabM MessageData := do
   let e ← elabLean stx
@@ -25,14 +26,14 @@ def holCommand (stx : Syntax) : TermElabM MessageData := do
   if type.isProp then
     let t ← exprToTm e
     return m!"HOL proposition:{indentD (repr t)}\n\
-      infer: {repr (inferHol t)}"
+      infer: {repr (← inferHol t)}"
   else if type.isSort then
     let ty ← exprToTy e
     return m!"HOL type:{indentD (repr ty)}"
   else
     let t ← exprToTm e
     return m!"HOL term:{indentD (repr t)}\n\
-      infer: {repr (inferHol t)}"
+      infer: {repr (← inferHol t)}"
 
 end HOLean.Elab
 

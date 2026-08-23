@@ -5,6 +5,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 
 import Lean
 import HOLean.Syntax.Logic
+import HOLean.Elab.State
 
 /-!
 # Lean.Expr → HOL
@@ -184,7 +185,42 @@ partial def translateConst (n : Lean.Name) (args : Array Expr) : MetaM (Option T
     | #[α, β] =>
       return some (.const ontoName (((← exprToTy α) ↝ (← exprToTy β)) ↝ .bool))
     | _ => return none
-  | _ => return none
+  | n =>
+    if let some (holName, gen) := findUserDef? (← getEnv) n then
+      some <$> applyUserConst holName gen args
+    else
+      return none
+
+/-- Apply a user `hdef` constant, instantiating schematic type variables
+from Lean type arguments and from the types of term arguments. -/
+partial def applyUserConst (holName : HOLean.Name) (gen : Ty) (args : Array Expr) :
+    MetaM Tm := do
+  let mut θ : TySubst := []
+  let mut targs : Array Expr := #[]
+  for a in args do
+    let aTy ← whnf (← inferType a)
+    if aTy.isSort && !aTy.isProp then
+      let tvs := gen.tyvars.filter fun x => (θ.lookup x).isNone
+      if tvs.isEmpty then
+        throwError "HOLean: extra type argument{indentExpr a}"
+      let τ ← exprToTy a
+      θ := θ ++ [(tvs[0]!, τ)]
+    else
+      targs := targs.push a
+  let mut rest := gen.inst θ
+  for a in targs do
+    match rest with
+    | .arrow α β =>
+      let aTy ← exprToTy (← inferType a)
+      match α.matchTy aTy θ with
+      | some θ' =>
+        θ := θ'
+        rest := β.inst θ
+      | none =>
+        throwError "HOLean: cannot instantiate `{holName}` at argument{indentExpr a}"
+    | _ =>
+      throwError "HOLean: too many arguments to `{holName}`"
+  apps (.const holName (gen.inst θ)) targs
 
 /-- Translate a Lean term or proposition to a HOL term. -/
 partial def exprToTm (e : Expr) : MetaM Tm := do

@@ -140,4 +140,52 @@ infer: some (HOLean.Ty.bool)
 #guard_msgs in
 #hol True
 
+/-! ## `hdef` / `htheorem` -/
+
+section HDef
+open HOLean.Elab
+open Hol
+
+hdef myId := fun {A : Type} (x : A) => x
+
+hdef myNot : Prop → Prop := fun (p : Prop) => p → False
+
+variable (n : Nat)
+
+example : hol_tm(myId n) =
+    Tm.app (Tm.const "myId" (Ty.ind ↝ Ty.ind)) (Tm.fvar "n" .ind) := rfl
+
+example : hol_tm(myNot) = Tm.const "myNot" (.bool ↝ .bool) := rfl
+
+example : hol_prop(myNot True) =
+    Tm.app (Tm.const "myNot" (.bool ↝ .bool)) Tm.tru := rfl
+
+/--
+info: HOL term:
+  HOLean.Tm.const "myNot" (HOLean.Ty.arrow (HOLean.Ty.bool) (HOLean.Ty.bool))
+infer: some (HOLean.Ty.arrow (HOLean.Ty.bool) (HOLean.Ty.bool))
+-/
+#guard_msgs in
+#hol myNot
+
+/--
+error: HOLean: constant `eq` is already declared
+-/
+#guard_msgs in
+hdef eq : Prop → Prop → Prop := fun (p q : Prop) => p = q
+
+htheorem true_eq_true : True = True :=
+  Hol.refl (hol_tm(True))
+
+htheorem tru_intro : True :=
+  Hol.truth
+
+example : true_eq_true.concl = Tm.mkEq .bool Tm.tru Tm.tru := rfl
+example : tru_intro.concl = Tm.tru := rfl
+
+htheorem tru_intro_again : True :=
+  Hol.thm "tru_intro"
+
+end HDef
+
 end HOLean.Elab.Tests
