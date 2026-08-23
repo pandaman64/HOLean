@@ -9,7 +9,17 @@ import HOLean.Kernel
 /-!
 # Denotation commutes with the kernel operations
 
-Opening, closing, type instantiation, and term substitution.
+These lemmas are the semantic counterparts of the operations the ten
+rules actually perform.  `Provable.sound` and `EnvModel.addDef` are the
+clients; nothing here is an inference rule.
+
+* `denote_mkEq_true_iff` — REFL, TRANS, MK_COMB, EQ_MP, DEDUCT_ANTISYM, ABS
+* `denote_fresh` / `denote_close` — ABS (`x ∉ FV(Γ)`, then close the fvar)
+* `denote_beta` / `denote_open'` — BETA
+* `denote_instTy` — INST_TYPE
+* `denote_applySubst` — INST
+* `denote_reindex` / `denote_interp_eq` — transport `ax_ok` along `TyVal.inst`
+* `denote_no_fvars` / `denote_interp_except` — `addDef` (closed RHS, fresh name)
 -/
 
 open ZFSet Classical
