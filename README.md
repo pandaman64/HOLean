@@ -273,7 +273,13 @@ then `⟦p⟧ = zfTrue`.
 should satisfy η (functions *are* graphs), `SELECT` (`Classical.epsilon` /
 `Class.choice`), and infinity (`succ : ω → ω`).
 
-### Phase 4 — What we are *not* doing yet
+### Phase 4 — Lean frontend (this slice)
+
+- [x] Reuse Lean's elaborator; translate `Lean.Expr` → `Ty` / `Tm`
+- [x] Reject dependent types by the sort of the Π-body
+- [x] `hol_ty%` / `hol_tm%` / `hol_prop%` / `hol%` / `#hol`
+
+### Phase 5 — What we are *not* doing yet
 
 - **Henkin completeness.**  Completeness needs general (Henkin) models,
   where `⟦α ↝ β⟧` may be a *subset* of the full function set.  Consistency
