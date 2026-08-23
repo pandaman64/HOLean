@@ -39,12 +39,13 @@ are no type lambdas in terms.
 ```
 HOLean/
   Syntax/Ty.lean       simple types, type substitution
-  Syntax/Const.lean    primitive constants `eq`, `select`
-  Syntax/Tm.lean       locally nameless terms
+  Syntax/Const.lean    primitive constants `eq`, `select` (no `indSuc`)
+  Syntax/Tm.lean       locally nameless terms, shift / LC / open–close
   Typing.lean          `HasType`, inference, substitution lemmas
-  Connective.lean      T, ∧, ⇒, ∀ defined from equality
+  Connective.lean      T, ∧, ⇒, ∀, ⊥, ¬, ∨, ∃, ONE_ONE, ONTO
   Kernel.lean          ten HOL Light rules (`Provable`)
-  Axiom.lean           η / SELECT schemas; `Proves`
+  Derived.lean         SYM, GEN, CONJ, projections, MP, weakening
+  Axiom.lean           η / SELECT / INFINITY schemas; `Proves`
 ```
 
 Mathlib is already a dependency so the later model can use `ZFSet.funs`,
@@ -71,6 +72,10 @@ This eliminates HOL Light's `Clash` during type instantiation: instantiating
 `A ↦ bool` cannot capture a free `x:bool` by a binder that used to be
 `x:A`, because the binder is an index.
 
+α-equivalent named terms are **identical** as `Tm` values.  There is no
+separate α-equivalence relation: `open (close x t) = t` when `t` is locally
+closed, and `close (open x t) = t` when `x` is fresh.
+
 ### Lists as hypothesis sets
 
 `Provable` stores hypotheses as `List Tm`.  The rules use `++` and
@@ -95,14 +100,27 @@ INST σ               Γ ⊢ p                           ⇒  Γ[σ] ⊢ p[σ]
 `Provable.bool_typed` shows every derivable sequent has closed boolean
 hypotheses and a closed boolean conclusion.
 
-Defined connectives (not kernel primitives):
+Defined connectives are **Lean term formers**, not object-language constants
+(see “Environments vs definitional extensions” below).  Arguments placed
+under a binder are `shift`ed, so the formers are capture-avoiding on open
+terms:
 
 ```
-T      ≔  (λp. p) = (λp. p)
-p ∧ q  ≔  (λf. f p q) = (λf. f T T)
-p ⇒ q  ≔  (p ∧ q) = p
-∀ P    ≔  P = (λx. T)
+T          ≔  (λp. p) = (λp. p)
+p ∧ q      ≔  (λf. f p q) = (λf. f T T)
+p ⇒ q      ≔  (p ∧ q) = p
+∀ P        ≔  P = (λx. T)
+⊥          ≔  ∀ p. p
+¬ p        ≔  p ⇒ ⊥
+p ∨ q      ≔  ∀ r. (p ⇒ r) ⇒ (q ⇒ r) ⇒ r
+∃ P        ≔  ∀ q. (∀ x. P x ⇒ q) ⇒ q
+ONE_ONE f  ≔  ∀ x y. f x = f y ⇒ x = y
+ONTO f     ≔  ∀ y. ∃ x. y = f x
 ```
+
+The kernel has no structural weakening.  `Derived.add_assum` recovers it
+from `CONJ` + right projection, using a fresh name for the combinator
+variable (HOL free variables are `(name, type)` pairs).
 
 ## Roadmap
 
@@ -116,17 +134,43 @@ p ⇒ q  ≔  (p ∧ q) = p
 - [x] Kernel theorems are closed booleans
 - [x] Equality-only connectives and axiom schemas
 
-### Phase 2 — Deeper metatheory
+### Phase 2 — Deeper metatheory (this slice, up through infinity)
 
-- Open/close cancellation (`open (close x t) = t` when `x` is fresh, etc.)
-- α-equivalence is identity on locally nameless terms (document this)
-- Weakening / contraction / permutation of hypotheses for `Provable`
-- Derived rules: symmetry and transitivity of `=`, congruence, deduction
-  theorem, generalization
-- `∃`, `¬`, `∨`, `ONE_ONE`, `ONTO` as defined terms
-- Infinity axiom: `ind` admits an injective, non-surjective endofunction
-- Optional: definitional extensions (`new_basic_definition`,
-  `new_basic_type_definition`) as conservative over the kernel
+- [x] Open/close cancellation (`open (close x t) = t` when `t` is closed;
+      `close (open x t) = t` when `x` is fresh)
+- [x] α-equivalence is identity on locally nameless terms
+- [x] Derived rules: SYM, `|- T`, `EQT_INTRO`, GEN, general β via `INST`,
+      CONJ, both projections, MP
+- [x] Hypothesis weakening (`add_assum`) from CONJ + projection
+- [x] `∃`, `¬`, `∨`, `ONE_ONE`, `ONTO` as defined terms
+- [x] Infinity axiom: `∃ f : ind ↝ ind. ONE_ONE f ∧ ¬ ONTO f`
+- [ ] Definitional extensions (`new_basic_definition`,
+      `new_basic_type_definition`) — **deferred** (see below)
+
+### Environments vs definitional extensions
+
+Infinity can be added in three different ways.  They are *not* interchangeable
+once the object language, `INST` / `INST_TYPE`, and the eventual `ZFSet`
+model are taken seriously.
+
+| Approach | What changes | Language | Cost |
+| --- | --- | --- | --- |
+| **Named witness** (`indSuc : ind ↝ ind` + injectivity / non-surjectivity axioms) | Grow the constant table (an *environment*) | `{eq, select, indSuc}` | Every later lemma about terms, substitution, and the model must case-split on the new constant.  This is the same mechanism as `new_constant`. |
+| **Existential axiom** (what we do) | Add one closed sentence | still `{eq, select}` | The model only has to *satisfy* that `ω` is Dedekind-infinite (`succ` is a witness in the meta-theory).  No new object-level name. |
+| **Definitional extension** (`new_basic_definition` / `new_basic_type_definition`) | Extend the signature by a constant *equal* to an existing closed term, or carve out a new type from a predicate | grows, but conservatively | Needs a conservation theorem relating *two* signatures, two environments, and two `INST`/`INST_TYPE` regimes.  Infinity has no closed witness term unless we already built one, so this does not replace the axiom. |
+
+We take the existential form so Phase 3 can interpret a **fixed** two-constant
+language.  An environment (map from constants to types, later to denotations)
+is the right place to host `indSuc` *or* defined constants — but then
+`HasType`, `Provable`, and the model all become relative to that map.
+`new_basic_definition` is a *theorem about* such extensions (the new constant
+is conservative).  Mixing “add a constant” with “prove conservation” before
+the environment is explicit makes the two mechanisms hard to compare.
+
+That is why definitional extension is *not* in this slice: the tradeoff is
+exactly whether infinity (and later definitions) should grow an environment
+or stay as sentences in a fixed language.  We want that choice visible
+before encoding `new_basic_definition`.
 
 ### Phase 3 — Standard model in `ZFSet`
 

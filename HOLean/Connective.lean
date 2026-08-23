@@ -8,19 +8,25 @@ import HOLean.Typing
 /-!
 # Defined logical connectives
 
-HOL Light defines the propositional connectives from equality alone
-(Harrison / Andrews).  These are *term formers* in the object language, not
-Lean connectives.
+HOL Light defines the remaining connectives from equality (Harrison / Andrews).
+These are *term formers* in Lean, not object-language constants — we are not
+yet doing definitional extension of a signature.
+
+When a former places an argument under a binder it `shift`s that argument, so
+the formers are capture-avoiding on open terms.
 
 ```
-T      ≔  (λ p. p) = (λ p. p)
-p ∧ q  ≔  (λ f. f p q) = (λ f. f T T)
-p ⇒ q  ≔  (p ∧ q) = p
-∀ P    ≔  P = (λ x. T)
+T          ≔  (λ p. p) = (λ p. p)
+p ∧ q      ≔  (λ f. f p q) = (λ f. f T T)
+p ⇒ q      ≔  (p ∧ q) = p
+∀ P        ≔  P = (λ x. T)
+⊥          ≔  ∀ p. p
+¬ p        ≔  p ⇒ ⊥
+p ∨ q      ≔  ∀ r. (p ⇒ r) ⇒ (q ⇒ r) ⇒ r
+∃ P        ≔  ∀ q. (∀ x. P x ⇒ q) ⇒ q
+ONE_ONE f  ≔  ∀ x y. f x = f y ⇒ x = y
+ONTO f     ≔  ∀ y. ∃ x. y = f x
 ```
-
-Arguments of the binary connectives are required to be locally closed, matching
-the kernel's convention that hypotheses are closed booleans.
 -/
 
 namespace HOLean
@@ -34,19 +40,63 @@ def tru : Tm :=
 def boolCombTy : Ty :=
   .bool ↝ .bool ↝ .bool
 
-/-- Object-logic conjunction of two closed boolean terms. -/
+theorem boolCombTy_eq : boolCombTy = (.bool ↝ .bool ↝ .bool) := rfl
+
+/-- Object-logic conjunction. -/
 def and (p q : Tm) : Tm :=
   mkEq (boolCombTy ↝ .bool)
-    (.lam boolCombTy (.app (.app (.bvar 0) p) q))
-    (.lam boolCombTy (.app (.app (.bvar 0) tru) tru))
+    (.lam boolCombTy (.app (.app (.bvar 0) (p.shift 1 0)) (q.shift 1 0)))
+    (.lam boolCombTy (.app (.app (.bvar 0) (tru.shift 1 0)) (tru.shift 1 0)))
 
 /-- Object-logic implication `p ⇒ q`, defined as `(p ∧ q) = p`. -/
 def imp (p q : Tm) : Tm :=
   mkEq .bool (p.and q) p
 
-/-- Universal quantification: `∀ P` means `P = (λ x. T)`. -/
+/-- Universal quantification of a predicate `P : α ↝ bool`. -/
 def all (α : Ty) (P : Tm) : Tm :=
   mkEq (α ↝ .bool) P (.lam α tru)
+
+/-- `∀ p. p`. -/
+def falsum : Tm :=
+  all .bool (.lam .bool (.bvar 0))
+
+/-- Negation. -/
+def not (p : Tm) : Tm :=
+  p.imp falsum
+
+/-- Disjunction via the second-order encoding. -/
+def or (p q : Tm) : Tm :=
+  all .bool
+    (.lam .bool
+      ((p.shift 1 0).imp (.bvar 0) |>.imp ((q.shift 1 0).imp (.bvar 0) |>.imp (.bvar 0))))
+
+/-- Existential quantification of a predicate `P : α ↝ bool`. -/
+def ex (α : Ty) (P : Tm) : Tm :=
+  all .bool
+    (.lam .bool
+      ((all α (.lam α
+        (((P.shift 1 0).shift 1 0).app (.bvar 0) |>.imp (.bvar 1)))).imp (.bvar 0)))
+
+/-- Injectivity of `f : α ↝ β`. -/
+def oneOne (α β : Ty) (f : Tm) : Tm :=
+  all α
+    (.lam α
+      (all α
+        (.lam α
+          ((mkEq β (((f.shift 1 0).shift 1 0).app (.bvar 1))
+              (((f.shift 1 0).shift 1 0).app (.bvar 0))).imp
+            (mkEq α (.bvar 1) (.bvar 0))))))
+
+/-- Surjectivity of `f : α ↝ β`. -/
+def onto (α β : Ty) (f : Tm) : Tm :=
+  all β
+    (.lam β
+      (ex α
+        (.lam α (mkEq β (.bvar 1) (((f.shift 1 0).shift 1 0).app (.bvar 0))))))
+
+theorem tru_LC : tru.LC 0 = true := rfl
+
+theorem tru_not_free (x : Name) (α : Ty) : tru.freeIn x α = false := rfl
 
 end Tm
 
@@ -55,27 +105,78 @@ theorem HasType.tru {Γ} : HasType Γ Tm.tru .bool :=
     (HasType.lam (HasType.bvar (by simp [Ctx.get])))
     (HasType.lam (HasType.bvar (by simp [Ctx.get])))
 
-theorem HasType.and {p q}
-    (hp : HasType [] p .bool) (hq : HasType [] q .bool) :
-    HasType [] (p.and q) .bool := by
+theorem HasType.and {Γ p q}
+    (hp : HasType Γ p .bool) (hq : HasType Γ q .bool) :
+    HasType Γ (p.and q) .bool := by
   unfold Tm.and Tm.boolCombTy
   apply HasType.mkEq
   · apply HasType.lam
     exact HasType.app
-      (HasType.app (HasType.bvar (by simp [Ctx.get])) hp.of_closed)
-      hq.of_closed
+      (HasType.app (HasType.bvar (by simp [Ctx.get])) (hp.shift0 _))
+      (hq.shift0 _)
   · apply HasType.lam
     exact HasType.app
-      (HasType.app (HasType.bvar (by simp [Ctx.get])) HasType.tru)
-      HasType.tru
+      (HasType.app (HasType.bvar (by simp [Ctx.get])) (HasType.tru.shift0 _))
+      (HasType.tru.shift0 _)
 
-theorem HasType.imp {p q}
-    (hp : HasType [] p .bool) (hq : HasType [] q .bool) :
-    HasType [] (p.imp q) .bool :=
+theorem HasType.imp {Γ p q}
+    (hp : HasType Γ p .bool) (hq : HasType Γ q .bool) :
+    HasType Γ (p.imp q) .bool :=
   HasType.mkEq (HasType.and hp hq) hp
 
-theorem HasType.all {α P} (hP : HasType [] P (α ↝ .bool)) :
-    HasType [] (Tm.all α P) .bool :=
+theorem HasType.all {Γ α P} (hP : HasType Γ P (α ↝ .bool)) :
+    HasType Γ (Tm.all α P) .bool :=
   HasType.mkEq hP (HasType.lam HasType.tru)
+
+theorem HasType.falsum {Γ} : HasType Γ Tm.falsum .bool :=
+  HasType.all (HasType.lam (HasType.bvar (by simp [Ctx.get])))
+
+theorem HasType.not {Γ p} (hp : HasType Γ p .bool) :
+    HasType Γ p.not .bool :=
+  HasType.imp hp HasType.falsum
+
+theorem HasType.or {Γ p q}
+    (hp : HasType Γ p .bool) (hq : HasType Γ q .bool) :
+    HasType Γ (p.or q) .bool := by
+  unfold Tm.or
+  apply HasType.all
+  apply HasType.lam
+  refine HasType.imp (HasType.imp (hp.shift0 _) (HasType.bvar (by simp [Ctx.get]))) ?_
+  refine HasType.imp (HasType.imp (hq.shift0 _) (HasType.bvar (by simp [Ctx.get]))) ?_
+  exact HasType.bvar (by simp [Ctx.get])
+
+theorem HasType.ex {Γ α P} (hP : HasType Γ P (α ↝ .bool)) :
+    HasType Γ (Tm.ex α P) .bool := by
+  unfold Tm.ex
+  apply HasType.all
+  apply HasType.lam
+  refine HasType.imp ?_ (HasType.bvar (by simp [Ctx.get]))
+  apply HasType.all
+  apply HasType.lam
+  refine HasType.imp ?_ (HasType.bvar (by simp [Ctx.get]))
+  exact HasType.app (hP.shift_at .bool 0 |>.shift_at α 0) (HasType.bvar (by simp [Ctx.get]))
+
+theorem HasType.oneOne {Γ α β f} (hf : HasType Γ f (α ↝ β)) :
+    HasType Γ (Tm.oneOne α β f) .bool := by
+  unfold Tm.oneOne
+  apply HasType.all
+  apply HasType.lam
+  apply HasType.all
+  apply HasType.lam
+  refine HasType.imp ?_ (HasType.mkEq (HasType.bvar (by simp [Ctx.get]))
+    (HasType.bvar (by simp [Ctx.get])))
+  refine HasType.mkEq ?_ ?_
+  · exact HasType.app (hf.shift_at α 0 |>.shift_at α 0) (HasType.bvar (by simp [Ctx.get]))
+  · exact HasType.app (hf.shift_at α 0 |>.shift_at α 0) (HasType.bvar (by simp [Ctx.get]))
+
+theorem HasType.onto {Γ α β f} (hf : HasType Γ f (α ↝ β)) :
+    HasType Γ (Tm.onto α β f) .bool := by
+  unfold Tm.onto
+  apply HasType.all
+  apply HasType.lam
+  apply HasType.ex
+  apply HasType.lam
+  refine HasType.mkEq (HasType.bvar (by simp [Ctx.get])) ?_
+  exact HasType.app (hf.shift_at β 0 |>.shift_at α 0) (HasType.bvar (by simp [Ctx.get]))
 
 end HOLean

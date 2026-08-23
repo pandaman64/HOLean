@@ -155,6 +155,43 @@ theorem HasType.weaken {Γ Δ t α} (h : HasType Γ t α) :
 theorem HasType.of_closed {Γ t α} (h : HasType [] t α) : HasType Γ t α := by
   simpa using (HasType.weaken (Γ := []) (Δ := Γ) h)
 
+/-- Drop unused *outer* binders when the term does not mention them. -/
+theorem HasType.strengthen :
+    ∀ {t : Tm} {Δ Γ : List Ty} {α},
+      HasType (Δ ++ Γ) t α → t.LC Δ.length = true → HasType Δ t α := by
+  intro t
+  induction t with
+  | bvar i =>
+    intro Δ Γ α h hLC
+    simp [Tm.LC] at hLC
+    cases h with
+    | bvar hi =>
+      exact HasType.bvar ((Ctx.get_append_prefix hLC).symm.trans hi)
+  | fvar x β =>
+    intro Δ Γ α h hLC
+    cases h
+    exact HasType.fvar x β
+  | const c β =>
+    intro Δ Γ α h hLC
+    cases h
+    exact HasType.const c β
+  | app f a ihf iha =>
+    intro Δ Γ α h hLC
+    simp [Tm.LC] at hLC
+    cases h with
+    | app hf ha =>
+      exact HasType.app (ihf hf hLC.1) (iha ha hLC.2)
+  | lam β t ih =>
+    intro Δ Γ α h hLC
+    simp [Tm.LC] at hLC
+    cases h with
+    | lam ht =>
+      exact HasType.lam (ih (Δ := β :: Δ) (Γ := Γ) ht (by simpa [List.length] using hLC))
+
+theorem HasType.strengthen_nil {Γ t α} (h : HasType Γ t α) (hLC : t.LC 0 = true) :
+    HasType [] t α :=
+  HasType.strengthen (Δ := []) (Γ := Γ) (by simpa using h) hLC
+
 /-- Type instantiation preserves typing. -/
 theorem HasType.instTy {Γ t α} (h : HasType Γ t α) (θ : TySubst) :
     HasType (Γ.map (Ty.inst θ)) (t.instTy θ) (α.inst θ) := by
@@ -304,6 +341,72 @@ theorem HasType.openAt {Γ t β α u} (ht : HasType (Γ ++ [α]) t β)
 theorem HasType.open' {t β α u} (ht : HasType [α] t β) (hu : HasType [] u α) :
     HasType [] (t.open' u) β := by
   simpa [Tm.open'] using ht.openAt (Γ := []) (α := α) hu
+
+theorem Ctx.get_lt_length {Γ : List Ty} {i : Nat} {α : Ty}
+    (h : Ctx.get Γ i = some α) : i < Γ.length := by
+  induction Γ generalizing i with
+  | nil =>
+    cases h
+  | cons γ Γ ih =>
+    cases i with
+    | zero =>
+      simp [List.length]
+    | succ n =>
+      simp [Ctx.get] at h
+      simpa [List.length] using ih h
+
+/-- A well-typed term mentions only in-scope bound indices. -/
+theorem HasType.lc {Γ t α} (h : HasType Γ t α) : t.LC Γ.length = true := by
+  induction h with
+  | bvar hi =>
+    simp [Tm.LC, Ctx.get_lt_length hi]
+  | fvar x α =>
+    simp [Tm.LC]
+  | const c α =>
+    simp [Tm.LC]
+  | app _ _ ihf iha =>
+    simp [Tm.LC, ihf, iha]
+  | lam _ ih =>
+    simpa [Tm.LC, List.length] using ih
+
+theorem HasType.lc0 {t α} (h : HasType [] t α) : t.LC 0 = true :=
+  h.lc
+
+/-- Place a term under one extra binder at de Bruijn index `c`. -/
+theorem HasType.shift_at {Γ t α} (h : HasType Γ t α) (γ : Ty) :
+    ∀ c, HasType (insertTy c γ Γ) (t.shift 1 c) α := by
+  induction h with
+  | bvar hi =>
+    rename_i i
+    intro c
+    by_cases hlt : i < c
+    · have hs : (Tm.bvar i).shift 1 c = Tm.bvar i := by simp [Tm.shift, hlt]
+      rw [hs]
+      exact HasType.bvar (Ctx.get_insertTy_lt hi hlt)
+    · have hle : c ≤ i := Nat.le_of_not_gt hlt
+      have hs : (Tm.bvar i).shift 1 c = Tm.bvar (i + 1) := by
+        simp [Tm.shift, hlt]
+      rw [hs]
+      exact HasType.bvar (Ctx.get_insertTy_ge hi hle)
+  | fvar x α =>
+    intro c
+    simp [Tm.shift]
+    exact HasType.fvar x α
+  | const k α =>
+    intro c
+    simp [Tm.shift]
+    exact HasType.const k α
+  | app _ _ ihf iha =>
+    intro c
+    simpa [Tm.shift] using HasType.app (ihf c) (iha c)
+  | lam _ ih =>
+    intro c
+    simpa [Tm.shift, insertTy] using HasType.lam (ih (c + 1))
+
+/-- Place a term under one extra innermost binder. -/
+theorem HasType.shift0 {Γ t α} (γ : Ty) (h : HasType Γ t α) :
+    HasType (γ :: Γ) (t.shift 1 0) α := by
+  simpa [insertTy] using h.shift_at γ 0
 
 /-- Equations are booleans when both sides share a type. -/
 theorem HasType.mkEq {Γ s t α} (hs : HasType Γ s α) (ht : HasType Γ t α) :

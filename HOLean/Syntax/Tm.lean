@@ -166,6 +166,160 @@ def tyvars : Tm → List Name
   | app f a => f.tyvars ++ a.tyvars.filter (· ∉ f.tyvars)
   | lam α t => α.tyvars ++ t.tyvars.filter (· ∉ α.tyvars)
 
+/-- Increment every bound index `≥ c` by `d`.  Used when a term is placed
+under additional λ-binders (so connectives do not capture). -/
+def shift (t : Tm) (d c : Nat) : Tm :=
+  match t with
+  | bvar i => if i < c then bvar i else bvar (i + d)
+  | fvar x α => fvar x α
+  | const k α => const k α
+  | app f a => app (f.shift d c) (a.shift d c)
+  | lam α t => lam α (t.shift d (c + 1))
+
+/-- Locally closed at cutoff `n`: every bound index is `< n`.
+`LC t 0` means `t` has no dangling `bvar`s.  α-equivalent named terms
+are *identical* once written this way — binders carry no names. -/
+def LC (t : Tm) (n : Nat) : Bool :=
+  match t with
+  | bvar i => decide (i < n)
+  | fvar _ _ => true
+  | const _ _ => true
+  | app f a => f.LC n && a.LC n
+  | lam _ t => t.LC (n + 1)
+
+@[simp] theorem LC_bvar (i n : Nat) : (bvar i).LC n = decide (i < n) := rfl
+@[simp] theorem LC_fvar (x : Name) (α : Ty) (n : Nat) : (fvar x α).LC n = true := rfl
+@[simp] theorem LC_const (c : Const) (α : Ty) (n : Nat) : (const c α).LC n = true := rfl
+@[simp] theorem LC_app (f a : Tm) (n : Nat) : (app f a).LC n = (f.LC n && a.LC n) := rfl
+@[simp] theorem LC_lam (α : Ty) (t : Tm) (n : Nat) : (lam α t).LC n = t.LC (n + 1) := rfl
+
+theorem freeIn_bvar (i : Nat) (x : Name) (α : Ty) : (bvar i).freeIn x α = false := rfl
+
+theorem closeAt_fresh {t : Tm} {x : Name} {α : Ty} {k : Nat}
+    (h : t.freeIn x α = false) : t.closeAt k x α = t := by
+  induction t generalizing k with
+  | bvar i =>
+    simp [closeAt]
+  | fvar y β =>
+    simp [freeIn] at h
+    by_cases hy : y = x ∧ β = α
+    · exact (h hy.1 hy.2).elim
+    · simp [closeAt, hy]
+  | const c β =>
+    simp [closeAt]
+  | app f a ihf iha =>
+    simp [freeIn] at h
+    simp [closeAt, ihf h.1, iha h.2]
+  | lam β t ih =>
+    simp [freeIn] at h
+    simp [closeAt, ih h]
+
+theorem LC_le {t : Tm} {n m : Nat} (hn : t.LC n = true) (hle : n ≤ m) :
+    t.LC m = true := by
+  induction t generalizing n m with
+  | bvar i =>
+    simp [LC] at hn ⊢
+    exact Nat.lt_of_lt_of_le hn hle
+  | fvar _ _ => simp [LC]
+  | const _ _ => simp [LC]
+  | app f a ihf iha =>
+    simp [LC] at hn ⊢
+    exact ⟨ihf hn.1 hle, iha hn.2 hle⟩
+  | lam α t ih =>
+    simp [LC] at hn ⊢
+    exact ih hn (Nat.succ_le_succ hle)
+
+theorem shift_of_LC {t : Tm} {d c : Nat} (h : t.LC c = true) : t.shift d c = t := by
+  induction t generalizing c with
+  | bvar i =>
+    simp [LC] at h
+    simp [shift, Nat.not_le_of_gt h]
+  | fvar x α =>
+    simp [shift]
+  | const k α =>
+    simp [shift]
+  | app f a ihf iha =>
+    simp [LC] at h
+    simp [shift, ihf h.1, iha h.2]
+  | lam α t ih =>
+    simp [LC] at h
+    simp [shift, ih h]
+
+theorem shift_of_LC0 {t : Tm} {d c : Nat} (h : t.LC 0 = true) : t.shift d c = t :=
+  shift_of_LC (LC_le h (Nat.zero_le c))
+
+theorem openAt_of_LC {t u : Tm} {k : Nat} (h : t.LC k = true) : t.openAt k u = t := by
+  induction t generalizing k with
+  | bvar i =>
+    simp [LC] at h
+    simp [openAt, Nat.ne_of_lt h]
+  | fvar x α =>
+    simp [openAt]
+  | const k' α =>
+    simp [openAt]
+  | app f a ihf iha =>
+    simp [LC] at h
+    simp [openAt, ihf h.1, iha h.2]
+  | lam α t ih =>
+    simp [LC] at h
+    simp [openAt, ih h]
+
+/-- Closing a free variable and immediately opening it is the identity on
+terms that do not mention bound index `k`. -/
+theorem openAt_closeAt {t : Tm} {x : Name} {α : Ty} {k : Nat}
+    (h : t.LC k = true) :
+    (t.closeAt k x α).openAt k (.fvar x α) = t := by
+  induction t generalizing k with
+  | bvar i =>
+    simp [LC] at h
+    simp [closeAt, openAt, Nat.ne_of_lt h]
+  | fvar y β =>
+    by_cases hy : y = x ∧ β = α
+    · simp [closeAt, openAt, hy]
+    · simp [closeAt, openAt, hy]
+  | const c β =>
+    simp [closeAt, openAt]
+  | app f a ihf iha =>
+    simp [LC] at h
+    simp [closeAt, openAt, ihf h.1, iha h.2]
+  | lam β t ih =>
+    simp [LC] at h
+    simp [closeAt, openAt, ih h]
+
+/-- Opening a dangling index as a *fresh* free variable, then closing it,
+restores the original term. -/
+theorem closeAt_openAt {t : Tm} {x : Name} {α : Ty} {k : Nat}
+    (hLC : t.LC (k + 1) = true) (hf : t.freeIn x α = false) :
+    (t.openAt k (.fvar x α)).closeAt k x α = t := by
+  induction t generalizing k with
+  | bvar i =>
+    simp [LC] at hLC
+    by_cases hi : i = k
+    · simp [openAt, closeAt, hi]
+    · simp [openAt, closeAt, hi]
+  | fvar y β =>
+    simp [freeIn] at hf
+    by_cases hy : y = x ∧ β = α
+    · exact (hf hy.1 hy.2).elim
+    · simp [openAt, closeAt, hy]
+  | const c β =>
+    simp [openAt, closeAt]
+  | app f a ihf iha =>
+    simp [LC, freeIn] at hLC hf
+    simp [openAt, closeAt, ihf hLC.1 hf.1, iha hLC.2 hf.2]
+  | lam β t ih =>
+    simp [LC, freeIn] at hLC hf
+    simp [openAt, closeAt, ih hLC hf]
+
+@[simp] theorem open_close {t : Tm} {x : Name} {α : Ty} (h : t.LC 0 = true) :
+    (t.close x α).open' (.fvar x α) = t :=
+  openAt_closeAt h
+
+@[simp] theorem close_open {t : Tm} {x : Name} {α : Ty}
+    (hLC : t.LC 1 = true) (hf : t.freeIn x α = false) :
+    (t.open' (.fvar x α)).close x α = t :=
+  closeAt_openAt hLC hf
+
 end Tm
 
 end HOLean

@@ -108,6 +108,15 @@ theorem Ctx.get_map (f : Ty → Ty) :
   | _ :: _, 0 => rfl
   | _ :: Γ, n + 1 => Ctx.get_map f Γ n
 
+theorem Ctx.get_append_prefix :
+    ∀ {Δ Γ : List Ty} {i : Nat},
+      i < Δ.length → Ctx.get (Δ ++ Γ) i = Ctx.get Δ i
+  | [], Γ, i, h => by cases h
+  | β :: Δ, Γ, 0, _ => by simp [Ctx.get]
+  | β :: Δ, Γ, n + 1, h => by
+    have : n < Δ.length := Nat.lt_of_succ_lt_succ h
+    simpa [Ctx.get] using Ctx.get_append_prefix (Δ := Δ) (Γ := Γ) this
+
 theorem Ctx.get_append_left {α : Ty} :
     ∀ {Γ Δ : List Ty} {i : Nat}, Ctx.get Γ i = some α → Ctx.get (Γ ++ Δ) i = some α
   | [], _, _, h => by cases h
@@ -122,6 +131,44 @@ theorem Ctx.get_eq_some_unique {Γ : List Ty} {i : Nat} {α β : Ty}
     (hα : Ctx.get Γ i = some α) (hβ : Ctx.get Γ i = some β) : α = β := by
   rw [hα] at hβ
   injection hβ
+
+/-- Insert `γ` so that it becomes de Bruijn index `c` (outer binders stay
+at indices `> c`). -/
+def insertTy : Nat → Ty → List Ty → List Ty
+  | 0, γ, Γ => γ :: Γ
+  | _n + 1, γ, [] => [γ]
+  | n + 1, γ, β :: Γ => β :: insertTy n γ Γ
+
+theorem Ctx.get_insertTy_lt {γ α : Ty} :
+    ∀ {c i : Nat} {Γ : List Ty},
+      Ctx.get Γ i = some α → i < c → Ctx.get (insertTy c γ Γ) i = some α
+  | 0, i, Γ, hi, hlt => by cases hlt
+  | n + 1, i, [], hi, _ => by cases hi
+  | n + 1, i, β :: Γ, hi, hlt => by
+    cases i with
+    | zero =>
+      simpa [insertTy, Ctx.get] using hi
+    | succ i =>
+      have : i < n := Nat.lt_of_succ_lt_succ hlt
+      simp [Ctx.get] at hi
+      simpa [insertTy, Ctx.get] using
+        Ctx.get_insertTy_lt (γ := γ) (α := α) (c := n) (i := i) (Γ := Γ) hi this
+
+theorem Ctx.get_insertTy_ge {γ α : Ty} :
+    ∀ {c i : Nat} {Γ : List Ty},
+      Ctx.get Γ i = some α → c ≤ i → Ctx.get (insertTy c γ Γ) (i + 1) = some α
+  | 0, i, Γ, hi, _ => by
+    simpa [insertTy, Ctx.get] using hi
+  | n + 1, i, [], hi, _ => by cases hi
+  | n + 1, i, β :: Γ, hi, hle => by
+    cases i with
+    | zero =>
+      exact (Nat.not_succ_le_zero n hle).elim
+    | succ i =>
+      have : n ≤ i := Nat.le_of_succ_le_succ hle
+      simp [Ctx.get] at hi
+      simpa [insertTy, Ctx.get] using
+        Ctx.get_insertTy_ge (γ := γ) (α := α) (c := n) (i := i) (Γ := Γ) hi this
 
 /-- Lookup in a snoc-context: the last index is the extra binder. -/
 theorem Ctx.get_snoc (Δ : List Ty) (α : Ty) (i : Nat) :

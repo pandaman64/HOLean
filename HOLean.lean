@@ -5,4 +5,5 @@ import HOLean.Syntax.Tm
 import HOLean.Typing
 import HOLean.Connective
 import HOLean.Kernel
+import HOLean.Derived
 import HOLean.Axiom
