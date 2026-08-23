@@ -20,7 +20,13 @@ namespace HOLean
 
 /-- A model of an environment at a type valuation: constants land in the
 right universes, `eq` is extensional equality, and every axiom (at every
-type instance) denotes `zfTrue`. -/
+type instance) denotes `zfTrue`.
+
+The kernel treats `eq` specially (REFL / TRANS / MK_COMB / EQ_MP), so a
+model must interpret it as graph-level extensional equality.  `select` is
+an ordinary constant: `interp` only has to land in `⟦(α ↝ bool) ↝ α⟧`,
+and Hilbert choice is the SELECT *axiom*, checked by `ax_ok` (see
+`EnvModel.holEnv`). -/
 structure EnvModel (env : Env) (ρ : TyVal) where
   interp : EnvInterp env ρ
   eq_ok : ∀ α, interp.interp eqName (α ↝ α ↝ .bool) = zfEq (α.denote ρ)

@@ -264,7 +264,7 @@ theorem EnvModel.denote_and [Env.HasConnectives env]
     (CtxVal.nil ρ) hpB
   have happ2 := Tm.denote_of_lam_app (htAndExpandBvars (Γ := [])) M.interp ξ
     ((CtxVal.nil ρ).cons (α := .bool) (p.denote M.interp ξ vs.vals) hpB) hqB
-  simp [CtxVal.nil, CtxVal.cons, Tm.andDef] at happ1 happ2
+  simp [CtxVal.nil, CtxVal.cons] at happ1 happ2
   have hval :
       zfApp (zfApp (Tm.andDef.denote M.interp ξ [])
           (p.denote M.interp ξ vs.vals))
@@ -324,7 +324,7 @@ theorem EnvModel.denote_imp [Env.HasConnectives env]
     (CtxVal.nil ρ) hpB
   have happ2 := Tm.denote_of_lam_app (htImpExpandBvars (Γ := [])) M.interp ξ
     ((CtxVal.nil ρ).cons (α := .bool) (p.denote M.interp ξ vs.vals) hpB) hqB
-  simp [CtxVal.nil, CtxVal.cons, Tm.impDef] at happ1 happ2
+  simp [CtxVal.nil, CtxVal.cons] at happ1 happ2
   have hval :
       zfApp (zfApp (Tm.impDef.denote M.interp ξ [])
           (p.denote M.interp ξ vs.vals))
@@ -351,7 +351,7 @@ theorem EnvModel.denote_imp [Env.HasConnectives env]
   have hand := EnvModel.denote_and hp' hq' M ξ vs'
   have handB := (HasType.and hp' hq').denote_bool_mem M.interp ξ vs'
   rw [hvs] at hiff hand handB
-  simp [Tm.impExpand, Tm.denote] at hiff hand handB
+  simp [Tm.denote] at hiff hand handB
   have hpq :
       (Tm.impExpand (Tm.bvar 1) (Tm.bvar 0)).denote M.interp ξ
           [q.denote M.interp ξ vs.vals, p.denote M.interp ξ vs.vals] = zfTrue ↔
@@ -381,7 +381,7 @@ theorem Tm.exDef_instTy (α : Ty) :
           (Tm.imp (Tm.all α (.lam α (Tm.imp (Tm.app (Tm.bvar 2) (Tm.bvar 0)) (.bvar 1))))
             (.bvar 0)))) := by
   simp [Tm.exDef, Tm.all, Tm.imp, Tm.instTy, Ty.inst, TySubst.lookup, primTyVar,
-    allTy, impTy]
+    impTy]
 
 theorem Tm.oneOneDef_instTy (α β : Ty) :
     Tm.oneOneDef.instTy [(primTyVar, α), (primTyVarB, β)] =
@@ -391,7 +391,7 @@ theorem Tm.oneOneDef_instTy (α β : Ty) :
             (Tm.imp (Tm.mkEq β (Tm.app (Tm.bvar 2) (Tm.bvar 1)) (Tm.app (Tm.bvar 2) (Tm.bvar 0)))
               (Tm.mkEq α (.bvar 1) (.bvar 0))))))) := by
   simp [Tm.oneOneDef, Tm.all, Tm.imp, Tm.mkEq, Tm.eqConst, Tm.instTy, Ty.inst,
-    TySubst.lookup, primTyVar, primTyVarB, allTy, impTy]
+    TySubst.lookup, primTyVar, primTyVarB, impTy]
 
 theorem Tm.ontoDef_instTy (α β : Ty) :
     Tm.ontoDef.instTy [(primTyVar, α), (primTyVarB, β)] =
@@ -400,7 +400,7 @@ theorem Tm.ontoDef_instTy (α β : Ty) :
           (Tm.ex α (.lam α
             (Tm.mkEq β (.bvar 1) (Tm.app (Tm.bvar 2) (Tm.bvar 0))))))) := by
   simp [Tm.ontoDef, Tm.all, Tm.ex, Tm.mkEq, Tm.eqConst, Tm.instTy, Ty.inst,
-    TySubst.lookup, primTyVar, primTyVarB, allTy, exTy]
+    TySubst.lookup, primTyVar, primTyVarB]
 
 theorem EnvModel.denote_lam_tru [Env.HasConnectives env]
     {Γ} (α : Ty) (M : EnvModel env ρ) (ξ : FVarVal ρ) (vs : CtxVal ρ Γ) :
@@ -433,13 +433,13 @@ theorem EnvModel.allExpand_true_iff [Env.HasConnectives env]
   constructor
   · intro heq x hx
     have := congrArg (fun f => zfApp f x) heq
-    simp [HasType.denote, EnvModel.denote_lam_tru, zfConst_app hx] at this
+    simp [EnvModel.denote_lam_tru, zfConst_app hx] at this
     exact this
   · intro hall
     rw [EnvModel.denote_lam_tru]
     apply zfIsFunc_ext hPmem hTmem
     intro x hx
-    simp [HasType.denote, zfConst_app hx, hall x hx]
+    simp [zfConst_app hx, hall x hx]
 
 theorem EnvModel.denote_all_const [Env.HasConnectives env]
     (α : Ty) (M : EnvModel env ρ) (ξ : FVarVal ρ) (vs : List ZFSet) :
@@ -509,7 +509,7 @@ theorem EnvModel.denote_falsum [Env.HasConnectives env]
     intro hT
     exact zfFalse_ne_zfTrue (hF ▸ (hiff.1 hT) zfFalse zfFalse_mem_zfBool)
   have hB := HasType.falsumDef.denote_bool_mem M.interp ξ (CtxVal.nil ρ)
-  simp [HasType.denote, CtxVal.nil, Tm.falsumDef] at hB
+  simp [CtxVal.nil, Tm.falsumDef] at hB
   have : (Tm.all .bool (Tm.lam .bool (Tm.bvar 0))).denote M.interp ξ [] =
       zfFalse :=
     zfBool_eq_false_of_ne_true hB hne
