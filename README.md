@@ -46,6 +46,8 @@ HOLean/
   Kernel.lean          ten HOL Light rules plus `Provable.ax`
   Derived.lean         SYM, GEN, CONJ, projections, MP, weakening
   Axiom.lean           η / SELECT / INFINITY; `holEnv` over `holLogic`
+  Elab/Translate.lean  `Lean.Expr` → `Ty` / `Tm`, filtered by sort
+  Elab/Term.lean       `hol_ty%` / `hol_tm%` / `hol_prop%` / `hol%` / `#hol`
   Model/Basic.lean     `zfBool`, graph application, `succ` on `omega`
   Model/Ty.lean        `Ty.denote`, `INST_TYPE` commutation
   Model/Const.lean     `eq` / `select` graphs
@@ -59,8 +61,9 @@ HOLean/
 
 See `docs/MODEL.md` for the full standard-model plan.
 
-Syntax through `Axiom` do not import Mathlib.  `HOLean.Model` is the first
-module that does (`ZFSet.funs`, `omega`, `choice`).
+Syntax through `Axiom` do not import Mathlib.  `HOLean.Elab` imports the Lean
+compiler library (not Mathlib).  `HOLean.Model` is the first module that
+imports Mathlib (`ZFSet.funs`, `omega`, `choice`).
 
 ## Design decisions
 
@@ -119,6 +122,26 @@ constants, no dangling `bvar`s, type `bool`.  The constant table has no
 extra check — every `Ty` is a valid generic type.  `holCore` is WF (no
 axioms); `addDef` preserves WF; `holLogic` and `holEnv` are proved WF.
 `Provable.of_axiom` turns `env.WF` plus `env.axioms p` into `[] ⊩[env] p`.
+
+### Lean frontend
+
+`hol_ty%`, `hol_tm%`, `hol_prop%`, and `hol%` reuse Lean's elaborator.
+The resulting `Lean.Expr` is classified by the sort of its type and then
+walked into `Ty` / `Tm`:
+
+| Lean sort of `e` | HOL |
+| --- | --- |
+| `e : Type u` | type (`Ty`), if it is simple |
+| `e : Prop` | proposition (`Tm` of type `bool`) |
+| otherwise | term (`Tm`) |
+
+Dependent types are rejected: a `Π (x : α), β` whose *type* body mentions
+`x` is not a HOL type.  A `∀ (x : α), p` whose body is a proposition is a
+quantifier (or `p ⇒ q` when `α : Prop` and `q` ignores the proof).
+`Type`-binders become schematic type variables, not type lambdas.
+`Prop`/`Bool` stand for `bool`; `Nat`/`Ind` stand for `ind`.  Lean
+connectives (`∧`, `∨`, `¬`, `=`, `∀`, `∃`, `Classical.epsilon`) map to
+the `holLogic` constants.
 
 ### Lists as hypothesis sets
 
