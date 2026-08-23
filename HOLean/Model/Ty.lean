@@ -71,4 +71,19 @@ theorem Ty.denote_inst_nil (ρ : TyVal) (α : Ty) :
     (α.inst []).denote ρ = α.denote ρ := by
   rw [Ty.inst_nil]
 
+theorem TyVal.inst_nil (ρ : TyVal) : ρ.inst [] = ρ := by
+  funext x
+  simp [TyVal.inst]
+
+/-- Denotation after composing type substitutions, used to reindex
+`FVarVal` when lifting a model along `INST_TYPE`. -/
+theorem Ty.denote_inst_comp (ρ : TyVal) (σ θ : TySubst) (α : Ty) :
+    α.denote ((ρ.inst σ).inst θ) = α.denote (ρ.inst (θ.comp σ)) := by
+  calc
+    α.denote ((ρ.inst σ).inst θ)
+        = (α.inst θ).denote (ρ.inst σ) := (Ty.denote_inst (ρ.inst σ) θ α).symm
+    _   = ((α.inst θ).inst σ).denote ρ := (Ty.denote_inst ρ σ (α.inst θ)).symm
+    _   = (α.inst (θ.comp σ)).denote ρ := by rw [Ty.inst_comp]
+    _   = α.denote (ρ.inst (θ.comp σ)) := Ty.denote_inst ρ (θ.comp σ) α
+
 end HOLean

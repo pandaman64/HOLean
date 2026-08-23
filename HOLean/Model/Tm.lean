@@ -29,6 +29,8 @@ structure CtxVal (ρ : TyVal) (Γ : List Ty) where
 def CtxVal.nil (ρ : TyVal) : CtxVal ρ [] :=
   ⟨[], rfl, fun _i hi => nomatch hi⟩
 
+@[simp] theorem CtxVal.nil_vals (ρ : TyVal) : (CtxVal.nil ρ).vals = [] := rfl
+
 def CtxVal.cons {ρ : TyVal} {α : Ty} {Γ : List Ty}
     (vs : CtxVal ρ Γ) (x : ZFSet) (hx : x ∈ α.denote ρ) :
     CtxVal ρ (α :: Γ) where
@@ -214,5 +216,51 @@ theorem EnvInterp.holCore_interp_select (ρ : TyVal) (hρ : ρ.Nonempty) (α : T
     (EnvInterp.holCore ρ hρ).interp selectName ((α ↝ .bool) ↝ α) =
       zfSelect (α.denote ρ) (Ty.denote_nonempty hρ α) := by
   simp [EnvInterp.holCore, interpSelect, eqName_ne_selectName.symm]
+
+/-- Update one HOL free variable. -/
+noncomputable def FVarVal.update {ρ : TyVal} (ξ : FVarVal ρ)
+    (x : Name) (α : Ty) (v : ZFSet) (hv : v ∈ α.denote ρ) : FVarVal ρ where
+  val y β := if y = x ∧ β = α then v else ξ.val y β
+  mem y β := by
+    by_cases h : y = x ∧ β = α
+    · simp [h]
+      exact h.2 ▸ hv
+    · simp [h]
+      exact ξ.mem y β
+
+theorem FVarVal.update_self {ρ : TyVal} (ξ : FVarVal ρ)
+    {x α v} (hv : v ∈ α.denote ρ) :
+    (ξ.update x α v hv).val x α = v := by
+  simp [FVarVal.update]
+
+theorem FVarVal.update_of_ne {ρ : TyVal} (ξ : FVarVal ρ)
+    {x α v} (hv : v ∈ α.denote ρ) {y β}
+    (h : ¬ (y = x ∧ β = α)) :
+    (ξ.update x α v hv).val y β = ξ.val y β := by
+  simp [FVarVal.update, h]
+
+/-- Reindex a free-variable assignment along a type substitution. -/
+noncomputable def FVarVal.pull {ρ : TyVal} (ξ : FVarVal ρ) (θ : TySubst) :
+    FVarVal (ρ.inst θ) where
+  val x α := ξ.val x (α.inst θ)
+  mem x α := by
+    simpa [Ty.denote_inst] using ξ.mem x (α.inst θ)
+
+/-- Push an environment interpretation through a type substitution. -/
+noncomputable def EnvInterp.inst {env : Env} {ρ : TyVal}
+    (I : EnvInterp env ρ) (θ : TySubst) : EnvInterp env (ρ.inst θ) where
+  interp n α := I.interp n (α.inst θ)
+  mem := by
+    intro n inst gen hconst hinst
+    simpa [Ty.denote_inst] using I.mem hconst (hinst.inst θ)
+
+theorem EnvInterp.inst_interp {env : Env} {ρ : TyVal}
+    (I : EnvInterp env ρ) (θ : TySubst) (n : Name) (α : Ty) :
+    (I.inst θ).interp n α = I.interp n (α.inst θ) := rfl
+
+theorem EnvInterp.inst_comp {env : Env} {ρ : TyVal}
+    (I : EnvInterp env ρ) (σ θ : TySubst) (n : Name) (α : Ty) :
+    ((I.inst σ).inst θ).interp n α = (I.inst (θ.comp σ)).interp n α := by
+  simp [EnvInterp.inst_interp, Ty.inst_comp]
 
 end HOLean

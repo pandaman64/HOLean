@@ -30,6 +30,31 @@ theorem zfBoolOfEq_mem (x y : ZFSet) : zfBoolOfEq x y ∈ zfBool := by
   · simp [zfBoolOfEq, hxy, zfTrue_mem_zfBool]
   · simp [zfBoolOfEq, hxy, zfFalse_mem_zfBool]
 
+@[simp] theorem zfBoolOfEq_self (x : ZFSet) : zfBoolOfEq x x = zfTrue := by
+  simp [zfBoolOfEq]
+
+theorem zfBoolOfEq_true_iff (x y : ZFSet) :
+    zfBoolOfEq x y = zfTrue ↔ x = y := by
+  constructor
+  · intro h
+    by_cases hxy : x = y
+    · exact hxy
+    · simp [zfBoolOfEq, hxy] at h
+      exact (zfFalse_ne_zfTrue h).elim
+  · intro h
+    simp [zfBoolOfEq, h]
+
+theorem map_congr {f g : ZFSet → ZFSet} [Definable₁ f] [Definable₁ g]
+    {A : ZFSet} (h : ∀ x ∈ A, f x = g x) : map f A = map g A := by
+  apply ext
+  intro z
+  simp [mem_map]
+  constructor
+  · intro ⟨x, hx, heq⟩
+    exact ⟨x, hx, h x hx ▸ heq⟩
+  · intro ⟨x, hx, heq⟩
+    exact ⟨x, hx, (h x hx).symm ▸ heq⟩
+
 /-- Characteristic function of `x = ·` on a set `A`, landing in `zfBool`. -/
 noncomputable def zfEqAt (A x : ZFSet) : ZFSet :=
   map (zfBoolOfEq x) A
