@@ -136,12 +136,14 @@ We do **not** need the ordinal/cardinal hierarchy for the first model.
 HOLean/Model/Basic.lean   zfBool, zfTrue/zfFalse, graph application, succ
 HOLean/Model/Ty.lean      Ty.denote, TyVal.inst, INST_TYPE commutation
 HOLean/Model/Const.lean   I for eq / select (later: connectives)
-HOLean/Model/Tm.lean      denote on HasType
-HOLean/Model/Sound.lean   soundness of Provable
+HOLean/Model/Tm.lean      denote on raw terms; HasType.denote_mem
+HOLean/Model/Commute.lean open / close / instTy / subst commute with denote
+HOLean/Model/Sound.lean   EnvModel; Provable.sound; sound_holCore
 HOLean/Model/Axiom.lean   holEnv axioms; consistency
 ```
 
-`Basic`, `Ty`, `Const`, and `Tm` are in this PR.  Soundness is next.
+`Basic`, `Ty`, `Const`, `Tm`, `Commute`, and `Sound` are in this PR.
+`addDef` transport and the `holEnv` consistency argument are next.
 
 ## PR series (after this one)
 
@@ -149,7 +151,7 @@ Each slice should `lake build HOLean` and add theorems, not scaffolding alone.
 
 1. **Terms** — `denote` for `HasType`, application/λ lemmas, `eq` as a graph.
 2. **Kernel soundness** — the ten rules relative to any `I` that models `env`.
-   `holCore` (no axioms) is the first instance.
+   `holCore` (no axioms) is the first instance.  **Done in this PR.**
 3. **Definitions** — `addDef` preservation: if `I` models `env` and
    `HasType env [] rhs ty`, the extension models `env.addDef n ty rhs`.
    Then `holLogic` is a model.

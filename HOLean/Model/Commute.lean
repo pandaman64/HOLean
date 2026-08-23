@@ -177,6 +177,21 @@ theorem Tm.denote_open' (t : Tm) (I : EnvInterp env ρ) (ξ : FVarVal ρ)
     (t.open' u).denote I ξ [] = t.denote I ξ [u.denote I ξ []] :=
   Tm.denote_openAt t I ξ hu []
 
+/-- Applying the graph of a λ is opening the body.  Stated on raw
+`Tm.denote` so we never unfold `map` (whose `Definable₁` instance is
+not definitionally unique). -/
+theorem Tm.denote_beta {α β : Ty} {t u : Tm}
+    (ht : HasType env [α] t β) (hu : HasType env [] u α)
+    (I : EnvInterp env ρ) (ξ : FVarVal ρ) :
+    (Tm.app (.lam α t) u).denote I ξ [] =
+      (t.open' u).denote I ξ [] := by
+  have hmem := hu.denote_mem I ξ (CtxVal.nil ρ)
+  have happ := HasType.denote_lam_app ht I ξ (CtxVal.nil ρ) hmem
+  simp only [HasType.denote, CtxVal.nil, CtxVal.cons] at happ
+  change zfApp ((Tm.lam α t).denote I ξ []) (u.denote I ξ []) =
+    (t.open' u).denote I ξ []
+  rw [happ, Tm.denote_open' t I ξ hu]
+
 /-- Type instantiation commutes with denotation on raw terms. -/
 theorem Tm.denote_instTy (t : Tm) (θ : TySubst)
     (I : EnvInterp env ρ) (ξ : FVarVal ρ) (vs : List ZFSet) :

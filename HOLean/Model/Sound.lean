@@ -160,12 +160,9 @@ theorem Provable.sound [Env.HasEq env]
     intro ρ M ξ _hΓ
     rename_i t x α _β
     have hfvar : HasType env [] (.fvar x α) α := HasType.fvar x α
-    apply (Tm.denote_mkEq_true_iff_nil M.interp M.eq_ok ξ
+    exact (Tm.denote_mkEq_true_iff_nil M.interp M.eq_ok ξ
       (HasType.app (HasType.lam ht) hfvar) (ht.open' hfvar)).2
-    have hmem := hfvar.denote_mem M.interp ξ (CtxVal.nil ρ)
-    have happ := HasType.denote_lam_app ht M.interp ξ (CtxVal.nil ρ) hmem
-    refine Eq.trans ?_ (Tm.denote_open' t M.interp ξ hfvar).symm
-    simpa [HasType.denote, Tm.denote, CtxVal.nil, CtxVal.cons] using happ
+      (Tm.denote_beta ht hfvar M.interp ξ)
   | assume hp =>
     intro ρ M ξ hΓ
     exact hΓ _ (List.mem_singleton.2 rfl)

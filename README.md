@@ -7,9 +7,8 @@ object logic in Mathlib's [`ZFSet`](https://leanprover-community.github.io/mathl
 and conclude `⊬ ⊥`.
 
 This repository currently defines the syntax, the type theory, and the
-inference system, and proves the first layer of formal metatheory (unique
-typing, substitution lemmas, and that every kernel theorem is a closed
-boolean).
+inference system, interprets them in Mathlib's `ZFSet`, and proves that
+every `holCore` theorem denotes `zfTrue`.
 
 ## Why this dialect
 
@@ -51,6 +50,8 @@ HOLean/
   Model/Ty.lean        `Ty.denote`, `INST_TYPE` commutation
   Model/Const.lean     `eq` / `select` graphs
   Model/Tm.lean        `Tm.denote`, `HasType.denote_mem`, `EnvInterp.holCore`
+  Model/Commute.lean   denotation commutes with open / close / `instTy` / subst
+  Model/Sound.lean     `EnvModel`, `Provable.sound`, `Provable.sound_holCore`
 ```
 
 See `docs/MODEL.md` for the full standard-model plan.
@@ -218,8 +219,9 @@ theorems *about* `Env.LE` — still ahead of the `ZFSet` model.
 
 ### Phase 3 — Standard model in `ZFSet`
 
-Plan: [`docs/MODEL.md`](docs/MODEL.md).  This slice starts the interpretation;
-soundness and `¬ ⊢ ⊥` come in follow-up PRs.
+Plan: [`docs/MODEL.md`](docs/MODEL.md).  Types, terms, and kernel soundness
+for axiom-free environments (`holCore`) are in; `addDef` transport and
+`¬ ⊢ ⊥` come next.
 
 Fix a type valuation `ρ : Name → ZFSet`.
 
@@ -234,7 +236,7 @@ Fix a type valuation `ρ : Name → ZFSet`.
 - [x] `zfBool`; graph application; `succ` injective / not surjective on `ω`
 - [x] Term denotation (`HasType` → element of `⟦α⟧`)
 - [x] `eq` / `select` as graphs; `EnvInterp.holCore`
-- [ ] soundness of the ten rules
+- [x] soundness of the ten rules (`Provable.sound` / `sound_holCore`)
 - [ ] `addDef` preservation; model of `holLogic`
 - [ ] `holEnv` axioms; `⟦⊥⟧ = zfFalse`; `¬ [] ⊩[holEnv] ⊥`
 
