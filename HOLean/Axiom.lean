@@ -140,13 +140,7 @@ theorem holEnv_WF : holEnv.WF := fun p hp =>
   | Or.inl h => (holLogic_WF p h).weakenEnv holLogic_le_holEnv
   | Or.inr h => (HOLAxiom.bool_typed h).weakenEnv holLogic_le_holEnv
 
-/-- Kernel theorems already include environment axioms (`Provable.ax`). -/
-abbrev Proves := Provable
-
-theorem Proves.hol_ax {p} (h : HOLAxiom p) : [] ⊩[holEnv] p :=
-  Provable.ax (Or.inr h) (holEnv_WF p (Or.inr h))
-
-/-- Abbreviation kept for existing references. -/
-abbrev IsHOLAxiom := HOLAxiom
+theorem Provable.hol_ax {p} (h : HOLAxiom p) : [] ⊩[holEnv] p :=
+  of_axiom holEnv_WF (Or.inr h)
 
 end HOLean

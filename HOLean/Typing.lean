@@ -457,9 +457,41 @@ theorem HasType.dest_mkEq {Γ s t α β} (h : HasType env Γ (Tm.mkEq α s t) β
       cases hc
       exact ⟨rfl, hs, ht⟩
 
-/-- Every axiom of a well-formed environment is a closed boolean. -/
+/-- Well-formedness of an environment.
+
+```
+Env.WF env  ≔  ∀ p, env.axioms p → HasType env [] p .bool
+```
+
+Every postulated axiom must be a **closed boolean sentence in this
+signature**.  `HasType env [] p .bool` is three facts at once:
+
+1. **Declared constants only.**  Every `const n inst` in `p` is in
+   `env.constants`, at an instance of the stored generic type.
+2. **Locally closed.**  No dangling `bvar`s (`p.LC 0`).  A theorem
+   cannot mention a bound index that has no binder.
+3. **A sentence.**  `p` has type `bool`, not an arbitrary term.
+
+The constant table has no extra obligation: every `Ty` is a valid
+generic type (schematic type variables allowed).  There is no δ, so a
+definition is just the axiom `⊢ c = t`.  `Env.WF.addDef` preserves WF
+when the name is fresh and the RHS has the declared type.
+
+`holCore` is WF (no axioms).  `holLogic` and `holEnv` are proved WF by
+the `addDef` chain plus typing of the HOL schemas.
+
+`Provable.ax` admits one axiom given its typing; `Provable.of_axiom`
+does the same from `env.WF`. -/
 def Env.WF (env : Env) : Prop :=
   ∀ p, env.axioms p → HasType env [] p .bool
+
+theorem Env.WF.typed {p} (hwf : env.WF) (hp : env.axioms p) :
+    HasType env [] p .bool :=
+  hwf p hp
+
+theorem Env.WF.lc0 {p} (hwf : env.WF) (hp : env.axioms p) :
+    p.LC 0 = true :=
+  (hwf p hp).lc0
 
 theorem Env.WF.addAxiom {ax : Tm} (hwf : env.WF) (hty : HasType env [] ax .bool) :
     (env.addAxiom ax).WF := by

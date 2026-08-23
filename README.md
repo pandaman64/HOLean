@@ -42,7 +42,7 @@ HOLean/
   Syntax/Const.lean    names and generic types of `eq`, `select`
   Syntax/Tm.lean       locally nameless terms, shift / LC / open–close
   Env.lean             `Env` (constants × axioms), `addDef`, `holCore`
-  Typing.lean          `HasType env`, inference, substitution lemmas
+  Typing.lean          `HasType env`, `Env.WF`, inference, substitution lemmas
   Connective.lean      T, ∧, ⇒, ∀, ⊥, ¬, ∨, ∃, ONE_ONE, ONTO as `addDef`
   Kernel.lean          ten HOL Light rules plus `Provable.ax`
   Derived.lean         SYM, GEN, CONJ, projections, MP, weakening
@@ -103,6 +103,13 @@ against `holLogic`; `holEnv` is `holLogic` plus η / SELECT / INFINITY.
 definitional extensions (`addDef`), not Lean term formers.
 Type-level `new_basic_type_definition` is later.
 
+**`Env.WF`.**  An environment is well-formed when every axiom is a closed
+boolean in that signature (`HasType env [] p .bool`): only declared
+constants, no dangling `bvar`s, type `bool`.  The constant table has no
+extra check — every `Ty` is a valid generic type.  `holCore` is WF (no
+axioms); `addDef` preserves WF; `holLogic` and `holEnv` are proved WF.
+`Provable.of_axiom` turns `env.WF` plus `env.axioms p` into `[] ⊩[env] p`.
+
 ### Lists as hypothesis sets
 
 `Provable env` stores hypotheses as `List Tm`.  The rules use `++` and
@@ -126,9 +133,9 @@ INST σ               Γ ⊢ p                           ⇒  Γ[σ] ⊢ p[σ]
 
 `Provable.bool_typed` shows every derivable sequent has closed boolean
 hypotheses and a closed boolean conclusion.  Rules that form equations
-need `Env.HasEq`.  `Provable.ax` admits a closed environment axiom
-(`⊢ c = t` for definitions; the HOL schemas in `holEnv`).  The notation
-is `Γ ⊩[env] p` for `Provable env Γ p`.
+need `Env.HasEq`.  `Provable.ax` admits a closed environment axiom;
+`Provable.of_axiom` does so from `env.WF`.  The notation is
+`Γ ⊩[env] p` for `Provable env Γ p`.
 
 `ABS` still requires `x ∉ FV(Γ)`: locally nameless syntax removes binder
 clash, not hypothesis freshness.  Bound contexts are ordinary lists

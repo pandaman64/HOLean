@@ -94,8 +94,9 @@ inductive Provable (env : Env) : List Tm → Tm → Prop where
   /-- `INST` (simultaneous, type-preserving substitution of free variables). -/
   | inst {Γ p σ} (hσ : σ.Ok env) (h : Provable env Γ p) :
       Provable env (Γ.map (·.applySubst σ)) (p.applySubst σ)
-  /-- An environment axiom (a closed boolean).  Definitions are axioms
-  `⊢ c = t`; the HOL schemas are the remaining axioms of `holEnv`. -/
+  /-- Admit one environment axiom, given that it is a closed boolean.
+  In a well-formed environment this typing is `env.WF`; see `of_axiom`.
+  Definitions are axioms `⊢ c = t`; the HOL schemas live in `holEnv`. -/
   | ax {p} (hp : env.axioms p) (hty : HasType env [] p .bool) :
       Provable env [] p
 
@@ -196,6 +197,10 @@ theorem bool_typed [Env.HasEq env] {Γ p} (h : Γ ⊩[env] p) :
     constructor
     · intro q hq; cases hq
     · exact hty
+
+/-- Admit an axiom of a well-formed environment. -/
+theorem of_axiom {p} (hwf : env.WF) (hp : env.axioms p) : [] ⊩[env] p :=
+  ax hp (hwf.typed hp)
 
 theorem concl_bool [Env.HasEq env] {Γ p} (h : Γ ⊩[env] p) : HasType env [] p .bool :=
   (bool_typed h).2

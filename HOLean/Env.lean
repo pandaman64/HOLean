@@ -27,6 +27,10 @@ plus those schemas.
 User definitions grow the environment (`addConst` / `addAxiom` / `addDef`).
 Logical connectives are definitional extensions of `holCore` (`holLogic`).
 Type-level `new_basic_type_definition` is later.
+
+An environment is **well-formed** (`Env.WF`, after `HasType`) when every
+axiom is a closed boolean in that signature.  The constant table needs no
+separate check: every `Ty` is a valid generic type.
 -/
 
 namespace HOLean
@@ -35,7 +39,8 @@ namespace HOLean
 structure Env where
   /-- Generic type of each declared constant, if any. -/
   constants : Name → Option Ty
-  /-- Postulated closed boolean terms. -/
+  /-- Postulated sentences.  `Env.WF` requires each to be a closed boolean
+  in this signature (`HasType env [] p .bool`). -/
   axioms : Tm → Prop
 
 namespace Env
