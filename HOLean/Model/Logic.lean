@@ -17,6 +17,8 @@ that into the expected two-valued truth tables, used later to satisfy
 
 open ZFSet Classical
 
+set_option maxHeartbeats 800000
+
 namespace HOLean
 
 variable {env : Env} {ρ : TyVal}
@@ -257,18 +259,19 @@ theorem EnvModel.denote_and [Env.HasConnectives env]
   have hpB := hp.denote_bool_mem M.interp ξ vs
   have hqB := hq.denote_bool_mem M.interp ξ vs
   have hand := EnvModel.denote_and_const M ξ vs.vals
+  simp [Tm.denote] at hand
   have happ1 := Tm.denote_of_lam_app (htAndDefInner (Γ := [])) M.interp ξ
     (CtxVal.nil ρ) hpB
   have happ2 := Tm.denote_of_lam_app (htAndExpandBvars (Γ := [])) M.interp ξ
-    ((CtxVal.nil ρ).cons (p.denote M.interp ξ vs.vals) hpB) hqB
+    ((CtxVal.nil ρ).cons (α := .bool) (p.denote M.interp ξ vs.vals) hpB) hqB
+  simp [CtxVal.nil, CtxVal.cons, Tm.andDef] at happ1 happ2
   have hval :
       zfApp (zfApp (Tm.andDef.denote M.interp ξ [])
           (p.denote M.interp ξ vs.vals))
         (q.denote M.interp ξ vs.vals) =
         (Tm.andExpand (Tm.bvar 1) (Tm.bvar 0)).denote M.interp ξ
           [q.denote M.interp ξ vs.vals, p.denote M.interp ξ vs.vals] :=
-    (congrArg (fun g => zfApp g (q.denote M.interp ξ vs.vals))
-      (by simpa [Tm.andDef] using happ1)).trans happ2
+    (congrArg (fun g => zfApp g (q.denote M.interp ξ vs.vals)) happ1).trans happ2
   have hterm : (p.and q).denote M.interp ξ vs.vals =
       zfApp (zfApp (Tm.andDef.denote M.interp ξ [])
           (p.denote M.interp ξ vs.vals))
@@ -276,11 +279,11 @@ theorem EnvModel.denote_and [Env.HasConnectives env]
     simp [Tm.and, Tm.denote, hand]
   have hiff :=
     EnvModel.andExpand_true_iff
-      (HasType.bvar (α := .bool) (Γ := [.bool, .bool]) (by simp))
-      (HasType.bvar (α := .bool) (Γ := [.bool, .bool]) (by simp))
-      M ξ ((CtxVal.nil ρ).cons (p.denote M.interp ξ vs.vals) hpB |>.cons
-        (q.denote M.interp ξ vs.vals) hqB)
-  simp [Tm.denote, CtxVal.nil, CtxVal.cons] at hiff
+      (htBvar1 (γ := .bool) (α := .bool) (Γ := []))
+      (htBvar0 (α := .bool) (Γ := [.bool]))
+      M ξ ((CtxVal.nil ρ).cons (α := .bool) (p.denote M.interp ξ vs.vals) hpB |>.cons
+        (α := .bool) (q.denote M.interp ξ vs.vals) hqB)
+  simp [Tm.denote] at hiff
   exact (hterm.trans hval) ▸ hiff
 
 /-! ## `⇒` -/
@@ -316,33 +319,39 @@ theorem EnvModel.denote_imp [Env.HasConnectives env]
   have hpB := hp.denote_bool_mem M.interp ξ vs
   have hqB := hq.denote_bool_mem M.interp ξ vs
   have himp := EnvModel.denote_imp_const M ξ vs.vals
+  simp [Tm.denote] at himp
   have happ1 := Tm.denote_of_lam_app (htImpDefInner (Γ := [])) M.interp ξ
     (CtxVal.nil ρ) hpB
   have happ2 := Tm.denote_of_lam_app (htImpExpandBvars (Γ := [])) M.interp ξ
-    ((CtxVal.nil ρ).cons (p.denote M.interp ξ vs.vals) hpB) hqB
+    ((CtxVal.nil ρ).cons (α := .bool) (p.denote M.interp ξ vs.vals) hpB) hqB
+  simp [CtxVal.nil, CtxVal.cons, Tm.impDef] at happ1 happ2
   have hval :
       zfApp (zfApp (Tm.impDef.denote M.interp ξ [])
           (p.denote M.interp ξ vs.vals))
         (q.denote M.interp ξ vs.vals) =
         (Tm.impExpand (Tm.bvar 1) (Tm.bvar 0)).denote M.interp ξ
           [q.denote M.interp ξ vs.vals, p.denote M.interp ξ vs.vals] :=
-    (congrArg (fun g => zfApp g (q.denote M.interp ξ vs.vals))
-      (by simpa [Tm.impDef] using happ1)).trans happ2
+    (congrArg (fun g => zfApp g (q.denote M.interp ξ vs.vals)) happ1).trans happ2
   have hterm : (p.imp q).denote M.interp ξ vs.vals =
       zfApp (zfApp (Tm.impDef.denote M.interp ξ [])
           (p.denote M.interp ξ vs.vals))
         (q.denote M.interp ξ vs.vals) := by
     simp [Tm.imp, Tm.denote, himp]
-  have hp' : HasType env [.bool, .bool] (Tm.bvar 1) .bool := HasType.bvar (by simp)
-  have hq' : HasType env [.bool, .bool] (Tm.bvar 0) .bool := HasType.bvar (by simp)
-  have vs' : CtxVal ρ [.bool, .bool] :=
-    (CtxVal.nil ρ).cons (p.denote M.interp ξ vs.vals) hpB |>.cons
-      (q.denote M.interp ξ vs.vals) hqB
+  have hp' : HasType env [.bool, .bool] (Tm.bvar 1) .bool :=
+    htBvar1 (γ := .bool) (α := .bool) (Γ := [])
+  have hq' : HasType env [.bool, .bool] (Tm.bvar 0) .bool :=
+    htBvar0 (α := .bool) (Γ := [.bool])
+  let vs' : CtxVal ρ [.bool, .bool] :=
+    (CtxVal.nil ρ).cons (α := .bool) (p.denote M.interp ξ vs.vals) hpB |>.cons
+      (α := .bool) (q.denote M.interp ξ vs.vals) hqB
+  have hvs : vs'.vals =
+      [q.denote M.interp ξ vs.vals, p.denote M.interp ξ vs.vals] := rfl
   have hiff :=
     Tm.denote_mkEq_true_iff M.interp M.eq_ok ξ (HasType.and hp' hq') hp' vs'
   have hand := EnvModel.denote_and hp' hq' M ξ vs'
   have handB := (HasType.and hp' hq').denote_bool_mem M.interp ξ vs'
-  simp [Tm.impExpand, Tm.denote, CtxVal.nil, CtxVal.cons] at hiff hand handB
+  rw [hvs] at hiff hand handB
+  simp [Tm.impExpand, Tm.denote] at hiff hand handB
   have hpq :
       (Tm.impExpand (Tm.bvar 1) (Tm.bvar 0)).denote M.interp ξ
           [q.denote M.interp ξ vs.vals, p.denote M.interp ξ vs.vals] = zfTrue ↔
@@ -455,6 +464,7 @@ theorem EnvModel.denote_all [Env.HasConnectives env]
   have hPset : P.denote M.interp ξ vs.vals ∈ (α ↝ .bool).denote ρ := by
     simpa [HasType.denote, Ty.denote_arrow] using hPmem
   have hconst := EnvModel.denote_all_const α M ξ vs.vals
+  simp [Tm.denote] at hconst
   have happ := Tm.denote_of_lam_app (htAllExpandBvar (α := α) (Γ := []))
     M.interp ξ (CtxVal.nil ρ) hPset
   have hterm : (Tm.all α P).denote M.interp ξ vs.vals =
@@ -464,11 +474,13 @@ theorem EnvModel.denote_all [Env.HasConnectives env]
     simp [Tm.all, Tm.denote, hconst]
   have hP' : HasType env [α ↝ .bool] (Tm.bvar 0) (α ↝ .bool) :=
     HasType.bvar (by simp)
-  have vs' : CtxVal ρ [α ↝ .bool] :=
+  let vs' : CtxVal ρ [α ↝ .bool] :=
     (CtxVal.nil ρ).cons (P.denote M.interp ξ vs.vals) hPset
+  have hvs : vs'.vals = [P.denote M.interp ξ vs.vals] := rfl
   have hiff := EnvModel.allExpand_true_iff hP' M ξ vs'
-  simp [Tm.denote, CtxVal.nil, CtxVal.cons] at hiff
-  exact (hterm.trans happ) ▸ hiff
+  rw [hvs] at hiff
+  simp [Tm.denote] at hiff
+  exact (hterm.trans (by simpa [CtxVal.nil] using happ)) ▸ hiff
 
 /-! ## `⊥` and `¬` -/
 
@@ -522,6 +534,7 @@ theorem EnvModel.denote_not [Env.HasConnectives env]
       p.denote M.interp ξ vs.vals = zfFalse := by
   have hpB := hp.denote_bool_mem M.interp ξ vs
   have hconst := EnvModel.denote_not_const M ξ vs.vals
+  simp [Tm.denote] at hconst
   have happ := Tm.denote_of_lam_app (htNotBody (Γ := [])) M.interp ξ
     (CtxVal.nil ρ) hpB
   have hterm : p.not.denote M.interp ξ vs.vals =
@@ -531,12 +544,15 @@ theorem EnvModel.denote_not [Env.HasConnectives env]
       zfApp (Tm.notDef.denote M.interp ξ []) (p.denote M.interp ξ vs.vals) =
         (Tm.imp (Tm.bvar 0) Tm.falsum).denote M.interp ξ
           [p.denote M.interp ξ vs.vals] := by
-    simpa [Tm.notDef] using happ
-  have hp' : HasType env [.bool] (Tm.bvar 0) .bool := HasType.bvar (by simp)
-  have vs' : CtxVal ρ [.bool] :=
-    (CtxVal.nil ρ).cons (p.denote M.interp ξ vs.vals) hpB
+    simpa [Tm.notDef, CtxVal.nil] using happ
+  have hp' : HasType env [.bool] (Tm.bvar 0) .bool :=
+    htBvar0 (α := .bool) (Γ := [])
+  let vs' : CtxVal ρ [.bool] :=
+    (CtxVal.nil ρ).cons (α := .bool) (p.denote M.interp ξ vs.vals) hpB
+  have hvs : vs'.vals = [p.denote M.interp ξ vs.vals] := rfl
   have hiff := EnvModel.denote_imp hp' HasType.falsum M ξ vs'
-  simp [Tm.denote, CtxVal.nil, CtxVal.cons, EnvModel.denote_falsum] at hiff
+  rw [hvs] at hiff
+  simp [Tm.denote, EnvModel.denote_falsum] at hiff
   have hneq : (p.denote M.interp ξ vs.vals = zfTrue → zfFalse = zfTrue) ↔
       p.denote M.interp ξ vs.vals = zfFalse := by
     constructor
@@ -607,6 +623,64 @@ private theorem htExBody [Env.HasConnectives env] {α : Ty} {Γ} :
           (Tm.bvar 0)))) .bool :=
   HasType.all (htExLamQ (α := α))
 
+/-- `P x ⇒ q` at values `x, q, P`. -/
+theorem EnvModel.denote_ex_imp_x [Env.HasConnectives env]
+    (α : Ty) (M : EnvModel env ρ) (ξ : FVarVal ρ)
+    {P q x : ZFSet}
+    (hP : P ∈ (α ↝ .bool).denote ρ) (hq : q ∈ zfBool) (hx : x ∈ α.denote ρ) :
+    zfApp
+        ((Tm.lam α (Tm.imp (Tm.app (Tm.bvar 2) (Tm.bvar 0)) (Tm.bvar 1))).denote
+          M.interp ξ [q, P])
+        x = zfTrue ↔
+      (zfApp P x = zfTrue → q = zfTrue) := by
+  let vsP : CtxVal ρ [α ↝ .bool] := (CtxVal.nil ρ).cons P hP
+  let vsq : CtxVal ρ [.bool, α ↝ .bool] := vsP.cons (α := .bool) q hq
+  let vsx : CtxVal ρ [α, .bool, α ↝ .bool] := vsq.cons (α := α) x hx
+  have happx := Tm.denote_of_lam_app (htExImpX (α := α) (Γ := []))
+    M.interp ξ vsq hx
+  have himpx := EnvModel.denote_imp (htExPx (α := α) (Γ := []))
+    (htBvar1 (γ := α) (α := .bool) (Γ := [α ↝ .bool])) M ξ vsx
+  have hvsx : vsx.vals = [x, q, P] := rfl
+  have hvsq : vsq.vals = [q, P] := rfl
+  rw [hvsx] at himpx
+  rw [hvsq] at happx
+  simp [Tm.denote] at himpx
+  exact happx.symm ▸ himpx
+
+/-- `(∀ x. P x ⇒ q) ⇒ q` at values `q, P`. -/
+theorem EnvModel.denote_ex_imp_q [Env.HasConnectives env]
+    (α : Ty) (M : EnvModel env ρ) (ξ : FVarVal ρ)
+    {P q : ZFSet}
+    (hP : P ∈ (α ↝ .bool).denote ρ) (hq : q ∈ zfBool) :
+    zfApp
+        ((Tm.lam .bool
+          (Tm.imp
+            (Tm.all α (Tm.lam α (Tm.imp (Tm.app (Tm.bvar 2) (Tm.bvar 0)) (Tm.bvar 1))))
+            (Tm.bvar 0))).denote M.interp ξ [P])
+        q = zfTrue ↔
+      ((∀ x ∈ α.denote ρ, zfApp P x = zfTrue → q = zfTrue) → q = zfTrue) := by
+  let vsP : CtxVal ρ [α ↝ .bool] := (CtxVal.nil ρ).cons P hP
+  let vsq : CtxVal ρ [.bool, α ↝ .bool] := vsP.cons (α := .bool) q hq
+  have happq := Tm.denote_of_lam_app (htExImpQ (α := α) (Γ := []))
+    M.interp ξ vsP hq
+  have hallx := EnvModel.denote_all (htExLamX (α := α) (Γ := [])) M ξ vsq
+  have himp := EnvModel.denote_imp (htExAllX (α := α) (Γ := []))
+    (htBvar0 (α := .bool) (Γ := [α ↝ .bool])) M ξ vsq
+  have hvsP : vsP.vals = [P] := rfl
+  have hvsq : vsq.vals = [q, P] := rfl
+  rw [hvsP] at happq
+  rw [hvsq] at hallx himp
+  simp [Tm.denote] at himp
+  constructor
+  · intro happT hallq
+    refine himp.1 (happq ▸ happT) ?_
+    refine hallx.2 ?_
+    intro x hx
+    exact (EnvModel.denote_ex_imp_x α M ξ hP hq hx).2 (hallq x hx)
+  · intro himpq
+    exact happq.symm ▸ himp.2 fun hallT =>
+      himpq fun x hx => (EnvModel.denote_ex_imp_x α M ξ hP hq hx).1 (hallx.1 hallT x hx)
+
 theorem EnvModel.denote_ex [Env.HasConnectives env]
     {Γ α P} (hP : HasType env Γ P (α ↝ .bool))
     (M : EnvModel env ρ) (ξ : FVarVal ρ) (vs : CtxVal ρ Γ) :
@@ -615,6 +689,7 @@ theorem EnvModel.denote_ex [Env.HasConnectives env]
   have hPset : P.denote M.interp ξ vs.vals ∈ (α ↝ .bool).denote ρ := by
     simpa [HasType.denote, Ty.denote_arrow] using hP.denote_mem M.interp ξ vs
   have hconst := EnvModel.denote_ex_const α M ξ vs.vals
+  simp [Tm.denote] at hconst
   have happ := Tm.denote_of_lam_app (htExBody (α := α) (Γ := []))
     M.interp ξ (CtxVal.nil ρ) hPset
   have hval :
@@ -624,57 +699,19 @@ theorem EnvModel.denote_ex [Env.HasConnectives env]
           (Tm.imp (Tm.all α (.lam α (Tm.imp (Tm.app (Tm.bvar 2) (Tm.bvar 0)) (Tm.bvar 1))))
             (Tm.bvar 0)))).denote M.interp ξ
           [P.denote M.interp ξ vs.vals] := by
-    simpa [Tm.exDef_instTy] using happ
+    simpa [Tm.exDef_instTy, CtxVal.nil] using happ
   have hterm : (Tm.ex α P).denote M.interp ξ vs.vals =
       zfApp ((Tm.exDef.instTy [(primTyVar, α)]).denote M.interp ξ [])
         (P.denote M.interp ξ vs.vals) := by
     simp [Tm.ex, Tm.denote, hconst]
-  have vsP : CtxVal ρ [α ↝ .bool] :=
+  let vsP : CtxVal ρ [α ↝ .bool] :=
     (CtxVal.nil ρ).cons (P.denote M.interp ξ vs.vals) hPset
   have hall := EnvModel.denote_all (htExLamQ (α := α) (Γ := [])) M ξ vsP
-  have hstep {q : ZFSet} (hq : q ∈ zfBool) :
-      zfApp
-          ((Tm.lam .bool
-            (Tm.imp
-              (Tm.all α (Tm.lam α (Tm.imp (Tm.app (Tm.bvar 2) (Tm.bvar 0)) (Tm.bvar 1))))
-              (Tm.bvar 0))).denote M.interp ξ [P.denote M.interp ξ vs.vals])
-          q = zfTrue ↔
-        ((∀ x ∈ α.denote ρ,
-            zfApp (P.denote M.interp ξ vs.vals) x = zfTrue → q = zfTrue) →
-          q = zfTrue) := by
-    have vsq : CtxVal ρ [.bool, α ↝ .bool] := vsP.cons q hq
-    have happq := Tm.denote_of_lam_app (htExImpQ (α := α) (Γ := []))
-      M.interp ξ vsP hq
-    have hallx := EnvModel.denote_all (htExLamX (α := α) (Γ := [])) M ξ vsq
-    have himp := EnvModel.denote_imp (htExAllX (α := α) (Γ := []))
-      (HasType.bvar (α := .bool) (Γ := [.bool, α ↝ .bool]) (by simp)) M ξ vsq
-    have hxT {x : ZFSet} (hx : x ∈ α.denote ρ) :
-        zfApp
-            ((Tm.lam α (Tm.imp (Tm.app (Tm.bvar 2) (Tm.bvar 0)) (Tm.bvar 1))).denote
-              M.interp ξ vsq.vals)
-            x = zfTrue ↔
-          (zfApp (P.denote M.interp ξ vs.vals) x = zfTrue → q = zfTrue) := by
-      have vsx : CtxVal ρ [α, .bool, α ↝ .bool] := vsq.cons x hx
-      have happx := Tm.denote_of_lam_app (htExImpX (α := α) (Γ := []))
-        M.interp ξ vsq hx
-      have himpx := EnvModel.denote_imp (htExPx (α := α) (Γ := []))
-        (HasType.bvar (α := .bool) (Γ := [α, .bool, α ↝ .bool]) (by simp))
-        M ξ vsx
-      simp [Tm.denote, CtxVal.cons] at himpx
-      exact happx.symm ▸ himpx
-    simp [Tm.denote, CtxVal.cons] at hallx himp
-    constructor
-    · intro happT hallq
-      refine himp.1 (happq ▸ happT) ?_
-      refine hallx.2 ?_
-      intro x hx
-      exact (hxT hx).2 (hallq x hx)
-    · intro himpq
-      exact happq.symm ▸ himp.2 fun hallT =>
-        himpq fun x hx => (hxT hx).1 (hallx.1 hallT x hx)
-  have hiff := hall.trans (Iff.trans (forall_congr' fun q =>
-      forall_congr' fun hq => hstep hq) zfBool_exists_iff)
-  exact (hterm.trans hval) ▸ hiff
+  have hvsP : vsP.vals = [P.denote M.interp ξ vs.vals] := rfl
+  rw [hvsP] at hall
+  refine (hterm.trans hval) ▸ hall.trans ?_
+  refine Iff.trans (forall_congr' fun q => forall_congr' fun hq =>
+    EnvModel.denote_ex_imp_q α M ξ hPset hq) zfBool_exists_iff
 
 /-! ## `ONE_ONE` / `ONTO` -/
 
@@ -764,6 +801,66 @@ private theorem htOOBody [Env.HasConnectives env] {α β : Ty} {Γ} :
                 (Tm.mkEq α (Tm.bvar 1) (Tm.bvar 0))))))) .bool :=
   HasType.all (htOOLamX (α := α) (β := β))
 
+theorem EnvModel.denote_oneOne_imp [Env.HasConnectives env]
+    (α β : Ty) (M : EnvModel env ρ) (ξ : FVarVal ρ)
+    {f x y : ZFSet}
+    (hf : f ∈ (α ↝ β).denote ρ) (hx : x ∈ α.denote ρ) (hy : y ∈ α.denote ρ) :
+    zfApp
+        ((Tm.lam α
+          (Tm.imp
+            (Tm.mkEq β (Tm.app (Tm.bvar 2) (Tm.bvar 1))
+              (Tm.app (Tm.bvar 2) (Tm.bvar 0)))
+            (Tm.mkEq α (Tm.bvar 1) (Tm.bvar 0)))).denote
+          M.interp ξ [x, f])
+        y = zfTrue ↔
+      (zfApp f x = zfApp f y → x = y) := by
+  let vsf : CtxVal ρ [α ↝ β] := (CtxVal.nil ρ).cons f hf
+  let vsx : CtxVal ρ [α, α ↝ β] := vsf.cons (α := α) x hx
+  let vsy : CtxVal ρ [α, α, α ↝ β] := vsx.cons (α := α) y hy
+  have happy := Tm.denote_of_lam_app (htOOImp (α := α) (β := β) (Γ := []))
+    M.interp ξ vsx hy
+  have himp := EnvModel.denote_imp (htOOEqF (α := α) (β := β) (Γ := []))
+    (htOOEqXY (α := α) (β := β) (Γ := [])) M ξ vsy
+  have heqL := Tm.denote_mkEq_true_iff M.interp M.eq_ok ξ
+    (htOOFx (α := α) (β := β) (Γ := [])) (htOOFy (α := α) (β := β) (Γ := [])) vsy
+  have heqR := Tm.denote_mkEq_true_iff M.interp M.eq_ok ξ
+    (htBvar1 (γ := α) (α := α) (Γ := [α ↝ β]))
+    (htBvar0 (α := α) (Γ := [α, α ↝ β])) vsy
+  have hvsx : vsx.vals = [x, f] := rfl
+  have hvsy : vsy.vals = [y, x, f] := rfl
+  rw [hvsx] at happy
+  rw [hvsy] at himp heqL heqR
+  simp [Tm.denote] at himp heqL heqR
+  exact happy.symm ▸ himp.trans (Iff.imp heqL heqR)
+
+theorem EnvModel.denote_oneOne_at [Env.HasConnectives env]
+    (α β : Ty) (M : EnvModel env ρ) (ξ : FVarVal ρ)
+    {f x : ZFSet}
+    (hf : f ∈ (α ↝ β).denote ρ) (hx : x ∈ α.denote ρ) :
+    zfApp
+        ((Tm.lam α
+          (Tm.all α
+            (Tm.lam α
+              (Tm.imp
+                (Tm.mkEq β (Tm.app (Tm.bvar 2) (Tm.bvar 1))
+                  (Tm.app (Tm.bvar 2) (Tm.bvar 0)))
+                (Tm.mkEq α (Tm.bvar 1) (Tm.bvar 0)))))).denote
+          M.interp ξ [f])
+        x = zfTrue ↔
+      ∀ y ∈ α.denote ρ, zfApp f x = zfApp f y → x = y := by
+  let vsf : CtxVal ρ [α ↝ β] := (CtxVal.nil ρ).cons f hf
+  let vsx : CtxVal ρ [α, α ↝ β] := vsf.cons (α := α) x hx
+  have happx := Tm.denote_of_lam_app (htOOAllY (α := α) (β := β) (Γ := []))
+    M.interp ξ vsf hx
+  have hally := EnvModel.denote_all (htOOLamY (α := α) (β := β) (Γ := [])) M ξ vsx
+  have hvsf : vsf.vals = [f] := rfl
+  have hvsx : vsx.vals = [x, f] := rfl
+  rw [hvsf] at happx
+  rw [hvsx] at hally
+  refine happx.symm ▸ hally.trans ?_
+  exact forall_congr' fun y => forall_congr' fun hy =>
+    EnvModel.denote_oneOne_imp α β M ξ hf hx hy
+
 theorem EnvModel.denote_oneOne [Env.HasConnectives env]
     {Γ α β f} (hf : HasType env Γ f (α ↝ β))
     (M : EnvModel env ρ) (ξ : FVarVal ρ) (vs : CtxVal ρ Γ) :
@@ -774,9 +871,9 @@ theorem EnvModel.denote_oneOne [Env.HasConnectives env]
   have hfset : f.denote M.interp ξ vs.vals ∈ (α ↝ β).denote ρ := by
     simpa [HasType.denote, Ty.denote_arrow] using hf.denote_mem M.interp ξ vs
   have hconst := EnvModel.denote_oneOne_const α β M ξ vs.vals
+  simp [Tm.denote] at hconst
   have happ := Tm.denote_of_lam_app (htOOBody (α := α) (β := β) (Γ := []))
     M.interp ξ (CtxVal.nil ρ) hfset
-
   have hval :
       zfApp ((Tm.oneOneDef.instTy [(primTyVar, α), (primTyVarB, β)]).denote
           M.interp ξ [])
@@ -786,62 +883,20 @@ theorem EnvModel.denote_oneOne [Env.HasConnectives env]
           (Tm.imp (Tm.mkEq β (Tm.app (Tm.bvar 2) (Tm.bvar 1)) (Tm.app (Tm.bvar 2) (Tm.bvar 0)))
             (Tm.mkEq α (Tm.bvar 1) (Tm.bvar 0))))))).denote M.interp ξ
         [f.denote M.interp ξ vs.vals] := by
-    simpa [Tm.oneOneDef_instTy] using happ
+    simpa [Tm.oneOneDef_instTy, CtxVal.nil] using happ
   have hterm : (Tm.oneOne α β f).denote M.interp ξ vs.vals =
       zfApp ((Tm.oneOneDef.instTy [(primTyVar, α), (primTyVarB, β)]).denote
           M.interp ξ [])
         (f.denote M.interp ξ vs.vals) := by
     simp [Tm.oneOne, Tm.denote, hconst]
-  have vsf : CtxVal ρ [α ↝ β] :=
+  let vsf : CtxVal ρ [α ↝ β] :=
     (CtxVal.nil ρ).cons (f.denote M.interp ξ vs.vals) hfset
   have hallx := EnvModel.denote_all (htOOLamX (α := α) (β := β) (Γ := [])) M ξ vsf
-  have hstep {x : ZFSet} (hx : x ∈ α.denote ρ) :
-      zfApp
-          ((Tm.lam α
-            (Tm.all α
-              (Tm.lam α
-                (Tm.imp
-                  (Tm.mkEq β (Tm.app (Tm.bvar 2) (Tm.bvar 1))
-                    (Tm.app (Tm.bvar 2) (Tm.bvar 0)))
-                  (Tm.mkEq α (Tm.bvar 1) (Tm.bvar 0)))))).denote
-            M.interp ξ [f.denote M.interp ξ vs.vals])
-          x = zfTrue ↔
-        ∀ y ∈ α.denote ρ,
-          zfApp (f.denote M.interp ξ vs.vals) x =
-            zfApp (f.denote M.interp ξ vs.vals) y → x = y := by
-    have vsx : CtxVal ρ [α, α ↝ β] := vsf.cons x hx
-    have happx := Tm.denote_of_lam_app (htOOAllY (α := α) (β := β) (Γ := []))
-      M.interp ξ vsf hx
-    have hally := EnvModel.denote_all (htOOLamY (α := α) (β := β) (Γ := []))
-      M ξ vsx
-    have hyStep {y : ZFSet} (hy : y ∈ α.denote ρ) :
-        zfApp
-            ((Tm.lam α
-              (Tm.imp
-                (Tm.mkEq β (Tm.app (Tm.bvar 2) (Tm.bvar 1))
-                  (Tm.app (Tm.bvar 2) (Tm.bvar 0)))
-                (Tm.mkEq α (Tm.bvar 1) (Tm.bvar 0)))).denote
-              M.interp ξ vsx.vals)
-            y = zfTrue ↔
-          (zfApp (f.denote M.interp ξ vs.vals) x =
-            zfApp (f.denote M.interp ξ vs.vals) y → x = y) := by
-      have vsy : CtxVal ρ [α, α, α ↝ β] := vsx.cons y hy
-      have happy := Tm.denote_of_lam_app (htOOImp (α := α) (β := β) (Γ := []))
-        M.interp ξ vsx hy
-      have himp := EnvModel.denote_imp (htOOEqF (α := α) (β := β) (Γ := []))
-        (htOOEqXY (α := α) (β := β) (Γ := [])) M ξ vsy
-      have heqL := Tm.denote_mkEq_true_iff M.interp M.eq_ok ξ
-        (htOOFx (α := α) (β := β) (Γ := [])) (htOOFy (α := α) (β := β) (Γ := []))
-        vsy
-      have heqR := Tm.denote_mkEq_true_iff M.interp M.eq_ok ξ
-        (HasType.bvar (α := α) (Γ := [α, α, α ↝ β]) (by simp))
-        (HasType.bvar (by simp)) vsy
-      simp [Tm.denote, CtxVal.cons] at himp heqL heqR
-      exact happy.symm ▸ himp.trans (Iff.imp heqL heqR)
-    refine happx.symm ▸ hally.trans ?_
-    exact forall_congr' fun y => forall_congr' fun hy => hyStep hy
+  have hvsf : vsf.vals = [f.denote M.interp ξ vs.vals] := rfl
+  rw [hvsf] at hallx
   refine (hterm.trans hval) ▸ hallx.trans ?_
-  exact forall_congr' fun x => forall_congr' fun hx => hstep hx
+  exact forall_congr' fun x => forall_congr' fun hx =>
+    EnvModel.denote_oneOne_at α β M ξ hfset hx
 
 theorem EnvModel.denote_onto_const [Env.HasConnectives env]
     (α β : Ty) (M : EnvModel env ρ) (ξ : FVarVal ρ) (vs : List ZFSet) :
@@ -893,6 +948,54 @@ private theorem htOntoBody [Env.HasConnectives env] {α β : Ty} {Γ} :
           (Tm.mkEq β (Tm.bvar 1) (Tm.app (Tm.bvar 2) (Tm.bvar 0))))))) .bool :=
   HasType.all (htOntoLamY (α := α) (β := β))
 
+theorem EnvModel.denote_onto_eq [Env.HasConnectives env]
+    (α β : Ty) (M : EnvModel env ρ) (ξ : FVarVal ρ)
+    {f y x : ZFSet}
+    (hf : f ∈ (α ↝ β).denote ρ) (hy : y ∈ β.denote ρ) (hx : x ∈ α.denote ρ) :
+    zfApp
+        ((Tm.lam α (Tm.mkEq β (Tm.bvar 1) (Tm.app (Tm.bvar 2) (Tm.bvar 0)))).denote
+          M.interp ξ [y, f])
+        x = zfTrue ↔
+      y = zfApp f x := by
+  let vsf : CtxVal ρ [α ↝ β] := (CtxVal.nil ρ).cons f hf
+  let vsy : CtxVal ρ [β, α ↝ β] := vsf.cons (α := β) y hy
+  let vsx : CtxVal ρ [α, β, α ↝ β] := vsy.cons (α := α) x hx
+  have happx := Tm.denote_of_lam_app (htOntoEq (α := α) (β := β) (Γ := []))
+    M.interp ξ vsy hx
+  have heq := Tm.denote_mkEq_true_iff M.interp M.eq_ok ξ
+    (htBvar1 (γ := α) (α := β) (Γ := [α ↝ β]))
+    (htOntoFx (α := α) (β := β) (Γ := [])) vsx
+  have hvsy : vsy.vals = [y, f] := rfl
+  have hvsx : vsx.vals = [x, y, f] := rfl
+  rw [hvsy] at happx
+  rw [hvsx] at heq
+  simp [Tm.denote] at heq
+  exact happx.symm ▸ heq
+
+theorem EnvModel.denote_onto_at [Env.HasConnectives env]
+    (α β : Ty) (M : EnvModel env ρ) (ξ : FVarVal ρ)
+    {f y : ZFSet}
+    (hf : f ∈ (α ↝ β).denote ρ) (hy : y ∈ β.denote ρ) :
+    zfApp
+        ((Tm.lam β
+          (Tm.ex α (Tm.lam α
+            (Tm.mkEq β (Tm.bvar 1) (Tm.app (Tm.bvar 2) (Tm.bvar 0)))))).denote
+          M.interp ξ [f])
+        y = zfTrue ↔
+      ∃ x ∈ α.denote ρ, y = zfApp f x := by
+  let vsf : CtxVal ρ [α ↝ β] := (CtxVal.nil ρ).cons f hf
+  let vsy : CtxVal ρ [β, α ↝ β] := vsf.cons (α := β) y hy
+  have happy := Tm.denote_of_lam_app (htOntoEx (α := α) (β := β) (Γ := []))
+    M.interp ξ vsf hy
+  have hex := EnvModel.denote_ex (htOntoLamX (α := α) (β := β) (Γ := [])) M ξ vsy
+  have hvsf : vsf.vals = [f] := rfl
+  have hvsy : vsy.vals = [y, f] := rfl
+  rw [hvsf] at happy
+  rw [hvsy] at hex
+  refine happy.symm ▸ hex.trans ?_
+  exact exists_congr fun x => and_congr_right fun hx =>
+    EnvModel.denote_onto_eq α β M ξ hf hy hx
+
 theorem EnvModel.denote_onto [Env.HasConnectives env]
     {Γ α β f} (hf : HasType env Γ f (α ↝ β))
     (M : EnvModel env ρ) (ξ : FVarVal ρ) (vs : CtxVal ρ Γ) :
@@ -902,6 +1005,7 @@ theorem EnvModel.denote_onto [Env.HasConnectives env]
   have hfset : f.denote M.interp ξ vs.vals ∈ (α ↝ β).denote ρ := by
     simpa [HasType.denote, Ty.denote_arrow] using hf.denote_mem M.interp ξ vs
   have hconst := EnvModel.denote_onto_const α β M ξ vs.vals
+  simp [Tm.denote] at hconst
   have happ := Tm.denote_of_lam_app (htOntoBody (α := α) (β := β) (Γ := []))
     M.interp ξ (CtxVal.nil ρ) hfset
   have hval :
@@ -911,44 +1015,19 @@ theorem EnvModel.denote_onto [Env.HasConnectives env]
       (Tm.all β (.lam β
         (Tm.ex α (.lam α (Tm.mkEq β (Tm.bvar 1) (Tm.app (Tm.bvar 2) (Tm.bvar 0))))))).denote
         M.interp ξ [f.denote M.interp ξ vs.vals] := by
-    simpa [Tm.ontoDef_instTy] using happ
+    simpa [Tm.ontoDef_instTy, CtxVal.nil] using happ
   have hterm : (Tm.onto α β f).denote M.interp ξ vs.vals =
       zfApp ((Tm.ontoDef.instTy [(primTyVar, α), (primTyVarB, β)]).denote
           M.interp ξ [])
         (f.denote M.interp ξ vs.vals) := by
     simp [Tm.onto, Tm.denote, hconst]
-  have vsf : CtxVal ρ [α ↝ β] :=
+  let vsf : CtxVal ρ [α ↝ β] :=
     (CtxVal.nil ρ).cons (f.denote M.interp ξ vs.vals) hfset
   have hally := EnvModel.denote_all (htOntoLamY (α := α) (β := β) (Γ := [])) M ξ vsf
-  have hstep {y : ZFSet} (hy : y ∈ β.denote ρ) :
-      zfApp
-          ((Tm.lam β
-            (Tm.ex α (Tm.lam α
-              (Tm.mkEq β (Tm.bvar 1) (Tm.app (Tm.bvar 2) (Tm.bvar 0)))))).denote
-            M.interp ξ [f.denote M.interp ξ vs.vals])
-          y = zfTrue ↔
-        ∃ x ∈ α.denote ρ, y = zfApp (f.denote M.interp ξ vs.vals) x := by
-    have vsy : CtxVal ρ [β, α ↝ β] := vsf.cons y hy
-    have happy := Tm.denote_of_lam_app (htOntoEx (α := α) (β := β) (Γ := []))
-      M.interp ξ vsf hy
-    have hex := EnvModel.denote_ex (htOntoLamX (α := α) (β := β) (Γ := [])) M ξ vsy
-    have hxStep {x : ZFSet} (hx : x ∈ α.denote ρ) :
-        zfApp
-            ((Tm.lam α (Tm.mkEq β (Tm.bvar 1) (Tm.app (Tm.bvar 2) (Tm.bvar 0)))).denote
-              M.interp ξ vsy.vals)
-            x = zfTrue ↔
-          y = zfApp (f.denote M.interp ξ vs.vals) x := by
-      have vsx : CtxVal ρ [α, β, α ↝ β] := vsy.cons x hx
-      have happx := Tm.denote_of_lam_app (htOntoEq (α := α) (β := β) (Γ := []))
-        M.interp ξ vsy hx
-      have heq := Tm.denote_mkEq_true_iff M.interp M.eq_ok ξ
-        (HasType.bvar (α := β) (Γ := [α, β, α ↝ β]) (by simp))
-        (htOntoFx (α := α) (β := β) (Γ := [])) vsx
-      simp [Tm.denote, CtxVal.cons] at heq
-      exact happx.symm ▸ heq
-    refine happy.symm ▸ hex.trans ?_
-    exact exists_congr fun x => exists_congr fun hx => hxStep hx
+  have hvsf : vsf.vals = [f.denote M.interp ξ vs.vals] := rfl
+  rw [hvsf] at hally
   refine (hterm.trans hval) ▸ hally.trans ?_
-  exact forall_congr' fun y => forall_congr' fun hy => hstep hy
+  exact forall_congr' fun y => forall_congr' fun hy =>
+    EnvModel.denote_onto_at α β M ξ hfset hy
 
 end HOLean

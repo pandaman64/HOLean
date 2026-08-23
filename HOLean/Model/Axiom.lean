@@ -22,6 +22,9 @@ namespace HOLean
 
 variable {env : Env} {ρ : TyVal}
 
+private theorem htBvar0 {α : Ty} {Γ} : HasType env (α :: Γ) (Tm.bvar 0) α :=
+  HasType.bvar List.getElem?_cons_zero
+
 /-- Reuse an interpretation when the constant tables agree. -/
 def EnvInterp.castConstants {env env' : Env} (I : EnvInterp env ρ)
     (h : env'.constants = env.constants) : EnvInterp env' ρ where
@@ -38,26 +41,23 @@ theorem EnvModel.denote_eta [Env.HasConnectives env]
     {α β f} (hf : HasType env [] f (α ↝ β))
     (M : EnvModel env ρ) (ξ : FVarVal ρ) :
     (etaAxiom α β f).denote M.interp ξ [] = zfTrue := by
-  have hf' := hf
+  have hbody : HasType env [α] (Tm.app (f.shift 1 0) (Tm.bvar 0)) β :=
+    HasType.app (hf.shift0 α) (htBvar0 (α := α) (Γ := []))
   have hlam : HasType env []
-      (.lam α (.app (f.shift 1 0) (.bvar 0))) (α ↝ β) :=
-    HasType.lam (HasType.app (hf.shift0 _) (HasType.bvar (by simp)))
+      (Tm.lam α (Tm.app (f.shift 1 0) (Tm.bvar 0))) (α ↝ β) :=
+    HasType.lam hbody
   have hiff := Tm.denote_mkEq_true_iff_nil M.interp M.eq_ok ξ hlam hf
   refine hiff.2 ?_
   have hfmem := mem_funs.1 (by
-    simpa [HasType.denote, Ty.denote_arrow, CtxVal.nil] using
+    simpa [HasType.denote, Ty.denote_arrow] using
       hf.denote_mem M.interp ξ (CtxVal.nil ρ))
-  have hfun :=
-    mem_funs.1 (by
-      simpa [HasType.denote, Ty.denote_arrow, CtxVal.nil] using
-        hlam.denote_mem M.interp ξ (CtxVal.nil ρ))
+  have hfun := mem_funs.1 (by
+    simpa [HasType.denote, Ty.denote_arrow] using
+      hlam.denote_mem M.interp ξ (CtxVal.nil ρ))
   apply zfIsFunc_ext hfun hfmem
   intro x hx
-  have happ := HasType.denote_lam_app
-    (HasType.app (hf.shift0 _) (HasType.bvar (by simp)))
-    M.interp ξ (CtxVal.nil ρ) hx
-  simp [HasType.denote, Tm.denote, CtxVal.nil, CtxVal.cons,
-    Tm.shift_of_LC0 hf.lc0, Tm.denote_LC0 f M.interp ξ _ hf.lc0] at happ
+  have happ := Tm.denote_of_lam_app hbody M.interp ξ (CtxVal.nil ρ) hx
+  rw [Tm.denote, Tm.denote_shift1_cons, Tm.denote_bvar_zero] at happ
   exact happ
 
 /-- SELECT: if `P x` then `P (ε P)`. -/
@@ -95,31 +95,32 @@ theorem EnvModel.denote_select [Env.HasConnectives env]
 theorem EnvModel.denote_infinity [Env.HasConnectives env]
     (M : EnvModel env ρ) (ξ : FVarVal ρ) :
     infinityAxiom.denote M.interp ξ [] = zfTrue := by
+  have hf : HasType env [Ty.ind ↝ Ty.ind] (Tm.bvar 0) (Ty.ind ↝ Ty.ind) :=
+    htBvar0 (α := Ty.ind ↝ Ty.ind) (Γ := [])
+  have hbody : HasType env [Ty.ind ↝ Ty.ind]
+      ((Tm.oneOne .ind .ind (.bvar 0)).and
+        (Tm.onto .ind .ind (.bvar 0)).not) .bool :=
+    HasType.and (HasType.oneOne hf) (HasType.not (HasType.onto hf))
   have hP : HasType env []
       (.lam (Ty.ind ↝ Ty.ind)
         ((Tm.oneOne .ind .ind (.bvar 0)).and
           (Tm.onto .ind .ind (.bvar 0)).not))
       ((Ty.ind ↝ Ty.ind) ↝ .bool) :=
-    HasType.lam (HasType.and (HasType.oneOne (HasType.bvar (by simp)))
-      (HasType.not (HasType.onto (HasType.bvar (by simp)))))
+    HasType.lam hbody
   have hex := EnvModel.denote_ex hP M ξ (CtxVal.nil ρ)
-  refine hex.2 ⟨zfSuccFun, mem_funs.2 zfSuccFun_isFunc, ?_⟩
-  have happ := HasType.denote_lam_app
-    (HasType.and (HasType.oneOne (HasType.bvar (by simp)))
-      (HasType.not (HasType.onto (HasType.bvar (by simp)))))
-    M.interp ξ (CtxVal.nil ρ) (mem_funs.2 zfSuccFun_isFunc)
-  have vsf : CtxVal ρ [Ty.ind ↝ Ty.ind] :=
-    (CtxVal.nil ρ).cons zfSuccFun (mem_funs.2 zfSuccFun_isFunc)
-  have hf : HasType env [Ty.ind ↝ Ty.ind] (.bvar 0) (Ty.ind ↝ Ty.ind) :=
-    HasType.bvar (by simp)
+  have hsucc : zfSuccFun ∈ (Ty.ind ↝ Ty.ind).denote ρ :=
+    mem_funs.2 zfSuccFun_isFunc
+  refine hex.2 ⟨zfSuccFun, hsucc, ?_⟩
+  have happ := Tm.denote_of_lam_app hbody M.interp ξ (CtxVal.nil ρ) hsucc
+  let vsf : CtxVal ρ [Ty.ind ↝ Ty.ind] :=
+    (CtxVal.nil ρ).cons zfSuccFun hsucc
   have hand := EnvModel.denote_and
     (HasType.oneOne hf) (HasType.not (HasType.onto hf)) M ξ vsf
   have hone := EnvModel.denote_oneOne hf M ξ vsf
   have honto := EnvModel.denote_onto hf M ξ vsf
   have hnot := EnvModel.denote_not (HasType.onto hf) M ξ vsf
-  simp [HasType.denote, Tm.denote, CtxVal.nil, CtxVal.cons] at
-    happ hand hone honto hnot
-  have hinj : ∀ x ∈ omega, ∀ y ∈ omega, zfApp zfSuccFun x = zfApp zfSuccFun y → x = y := by
+  have hinj : ∀ x ∈ omega, ∀ y ∈ omega,
+      zfApp zfSuccFun x = zfApp zfSuccFun y → x = y := by
     intro x hx y hy hxy
     exact zfSucc_inj ((zfSuccFun_app hx).symm.trans (hxy.trans (zfSuccFun_app hy)))
   have hns : ¬ ∀ y ∈ omega, ∃ x ∈ omega, y = zfApp zfSuccFun x := by
@@ -127,13 +128,14 @@ theorem EnvModel.denote_infinity [Env.HasConnectives env]
     obtain ⟨n, hn, hmiss⟩ := zfSucc_not_surj_omega
     obtain ⟨m, hm, heq⟩ := hsurj n hn
     exact hmiss m hm ((zfSuccFun_app hm).symm.trans heq.symm)
-  have hbody :
-      ((Tm.oneOne .ind .ind (.bvar 0)).and
-        (Tm.onto .ind .ind (.bvar 0)).not).denote M.interp ξ [zfSuccFun] = zfTrue :=
+  have hpred :
+      ((Tm.oneOne .ind .ind (Tm.bvar 0)).and
+        (Tm.onto .ind .ind (Tm.bvar 0)).not).denote M.interp ξ vsf.vals =
+        zfTrue :=
     hand.2 ⟨hone.2 hinj, hnot.2 (zfBool_eq_false_of_ne_true
       ((HasType.onto hf).denote_bool_mem M.interp ξ vsf) fun hT =>
-        hns (honto.1 (by simpa [HasType.denote, CtxVal.cons, Tm.denote] using hT)))⟩
-  simpa [HasType.denote, CtxVal.cons] using happ.symm ▸ hbody
+        hns (honto.1 hT))⟩
+  exact happ.symm ▸ hpred
 
 /-- `holEnv` has the same constants as `holLogic`. -/
 theorem holEnv_constants : holEnv.constants = holLogic.constants := rfl
@@ -145,16 +147,14 @@ theorem HOLAxiom.denote_holLogic {p} (h : HOLAxiom p)
   cases h with
   | eta hf =>
     exact EnvModel.denote_eta hf ((EnvModel.holLogic ρ hρ).inst θ) ξ
-  | select hP hx =>
-    have hdom : ((α.inst θ).denote ρ) = α.denote (ρ.inst θ) := Ty.denote_inst ρ θ α
+  | @select α P x hP hx =>
+    have hA : (α.denote (ρ.inst θ)).Nonempty :=
+      Ty.denote_nonempty (TyVal.inst_nonempty hρ θ) α
     have hsel :
         ((EnvModel.holLogic ρ hρ).interp.inst θ).interp selectName
             ((α ↝ .bool) ↝ α) =
-          zfSelect (α.denote (ρ.inst θ))
-            (hdom ▸ Ty.denote_nonempty hρ (α.inst θ)) := by
-      simp [EnvInterp.inst]
-      have := EnvModel.holLogic_interp_select ρ hρ (α.inst θ)
-      simpa [hdom] using this
+          zfSelect (α.denote (ρ.inst θ)) hA := by
+      simp [EnvInterp.inst, EnvModel.holLogic_interp_select, Ty.denote_inst]
     exact EnvModel.denote_select hP hx ((EnvModel.holLogic ρ hρ).inst θ) ξ hsel
   | infinity =>
     exact EnvModel.denote_infinity ((EnvModel.holLogic ρ hρ).inst θ) ξ
@@ -179,7 +179,7 @@ noncomputable def EnvModel.holEnv (ρ : TyVal) (hρ : ρ.Nonempty) :
         (HOLAxiom.denote_holLogic hax hρ θ ξ)
 
 /-- Standard nonempty type valuation: every variable is `omega`. -/
-def TyVal.std : TyVal := fun _ => omega
+def TyVal.std : TyVal.{0} := fun _ => omega
 
 theorem TyVal.std_nonempty : TyVal.std.Nonempty :=
   fun _ => ⟨∅, omega_zero⟩
@@ -198,10 +198,12 @@ theorem EnvModel.holEnv_falsum (ρ : TyVal) (hρ : ρ.Nonempty) (ξ : FVarVal ρ
 /-- Consistency of the initial HOL environment. -/
 theorem Provable.not_falsum_holEnv : ¬ [] ⊩[holEnv] Tm.falsum := by
   intro h
-  have hT := Provable.sound_holEnv h TyVal.std_nonempty
-    (FVarVal.ofNonempty TyVal.std_nonempty) (fun _ hq => hq.elim)
-  have hF := EnvModel.holEnv_falsum TyVal.std TyVal.std_nonempty
-    (FVarVal.ofNonempty TyVal.std_nonempty)
+  let ρ : TyVal.{0} := TyVal.std
+  have hρ : ρ.Nonempty := TyVal.std_nonempty
+  have hT := Provable.sound_holEnv (ρ := ρ) h hρ
+    (FVarVal.ofNonempty hρ)
+    (fun _ hq => nomatch hq)
+  have hF := EnvModel.holEnv_falsum ρ hρ (FVarVal.ofNonempty hρ)
   exact zfFalse_ne_zfTrue (hF ▸ hT)
 
 end HOLean
