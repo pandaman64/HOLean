@@ -27,11 +27,19 @@ See the README section “Environments vs definitional extensions”.
 
 namespace HOLean
 
-/-- `η`: `(λ x. f x) = f` for a closed function `f`. -/
+/-- `η`: `(λ x. f x) = f`.  `f` is shifted under the binder so the former is
+capture-avoiding on open terms. -/
 def etaAxiom (α β : Ty) (f : Tm) : Tm :=
-  Tm.mkEq (α ↝ β) (.lam α (.app f (.bvar 0))) f
+  Tm.mkEq (α ↝ β) (.lam α (.app (f.shift 1 0) (.bvar 0))) f
 
-/-- Hilbert choice: `P x ⇒ P (ε P)`. -/
+/-- Hilbert choice: `P x ⇒ P (ε P)`.
+
+Neither `imp` nor `app` binds, so this former is already well-formed when `P`
+or `x` is a `bvar` (a predicate/witness under a local binder).  Axiom
+*instances* (`IsHOLAxiom`) still require a locally closed sentence: theorems
+cannot mention dangling indices.  To use `ε` on a bound predicate, open it as
+an `fvar`, instantiate the schema, then abstract — the usual locally nameless
+discipline. -/
 def selectAxiom (α : Ty) (P x : Tm) : Tm :=
   Tm.imp (.app P x) (.app P (.app (.const .select α) P))
 
@@ -46,21 +54,23 @@ def infinityAxiom : Tm :=
 inductive IsHOLAxiom : Tm → Prop where
   | eta {α β f} (hf : HasType [] f (α ↝ β)) :
       IsHOLAxiom (etaAxiom α β f)
+  /-- Locally closed instance: `HasType []` allows fvars, not dangling `bvar`s.
+  Open a bound predicate to an fvar before forming an axiom instance. -/
   | select {α P x}
       (hP : HasType [] P (α ↝ .bool))
       (hx : HasType [] x α) :
       IsHOLAxiom (selectAxiom α P x)
   | infinity : IsHOLAxiom infinityAxiom
 
-theorem HasType.etaAxiom {α β f} (hf : HasType [] f (α ↝ β)) :
-    HasType [] (etaAxiom α β f) .bool :=
+theorem HasType.etaAxiom {Γ α β f} (hf : HasType Γ f (α ↝ β)) :
+    HasType Γ (etaAxiom α β f) .bool :=
   HasType.mkEq
-    (HasType.lam (HasType.app hf.of_closed (HasType.bvar (by simp [Ctx.get]))))
+    (HasType.lam (HasType.app (hf.shift0 _) (HasType.bvar (by simp))))
     hf
 
-theorem HasType.selectAxiom {α P x}
-    (hP : HasType [] P (α ↝ .bool)) (hx : HasType [] x α) :
-    HasType [] (selectAxiom α P x) .bool :=
+theorem HasType.selectAxiom {Γ α P x}
+    (hP : HasType Γ P (α ↝ .bool)) (hx : HasType Γ x α) :
+    HasType Γ (selectAxiom α P x) .bool :=
   HasType.imp (HasType.app hP hx)
     (HasType.app hP (HasType.app (HasType.const .select α) hP))
 
@@ -68,8 +78,8 @@ theorem HasType.of_infinityAxiom : HasType [] infinityAxiom .bool :=
   HasType.ex <|
     HasType.lam <|
       HasType.and
-        (HasType.oneOne (HasType.bvar (by simp [Ctx.get])))
-        (HasType.not (HasType.onto (HasType.bvar (by simp [Ctx.get]))))
+        (HasType.oneOne (HasType.bvar (by simp)))
+        (HasType.not (HasType.onto (HasType.bvar (by simp))))
 
 theorem IsHOLAxiom.bool_typed {p} (h : IsHOLAxiom p) : HasType [] p .bool := by
   cases h with

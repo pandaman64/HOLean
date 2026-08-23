@@ -100,6 +100,13 @@ INST σ               Γ ⊢ p                           ⇒  Γ[σ] ⊢ p[σ]
 `Provable.bool_typed` shows every derivable sequent has closed boolean
 hypotheses and a closed boolean conclusion.
 
+`ABS` still requires `x ∉ FV(Γ)`: locally nameless syntax removes binder
+clash, not hypothesis freshness.  Bound contexts are ordinary lists
+(`Γ[i]?`, `Γ.insertIdx c γ`).
+
+Derived rules that go through `DEDUCT_ANTISYM` against `⊢ T` ask for
+`T ∉ Γ` so the hypothesis list stays `Γ` rather than `Γ \ {T}`.
+
 Defined connectives are **Lean term formers**, not object-language constants
 (see “Environments vs definitional extensions” below).  Arguments placed
 under a binder are `shift`ed, so the formers are capture-avoiding on open

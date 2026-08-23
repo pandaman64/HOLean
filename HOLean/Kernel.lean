@@ -25,6 +25,12 @@ DEDUCT_ANTISYM       Γ ⊢ p        Δ ⊢ q              ⇒  Γ\{q}, Δ\{p} �
 INST_TYPE θ          Γ ⊢ p                           ⇒  Γ[θ] ⊢ p[θ]
 INST σ               Γ ⊢ p                           ⇒  Γ[σ] ⊢ p[σ]
 ```
+
+`ABS` still needs `x ∉ FV(Γ)`.  Locally nameless syntax eliminates *binder*
+clash (`Clash` during `INST_TYPE`), not hypothesis freshness.  `abstract`
+binds the fvar `(x, α)` in the conclusion; hypotheses keep their fvars.
+Without the side condition, `x = c ⊢ x = c` would yield
+`x = c ⊢ (λy. y) = (λy. c)`.
 -/
 
 namespace HOLean
@@ -32,6 +38,12 @@ namespace HOLean
 /-- Remove every copy of `p` (set difference on lists). -/
 def hypsErase (p : Tm) (Γ : List Tm) : List Tm :=
   Γ.filter (· ≠ p)
+
+theorem hypsErase_eq_of_not_mem {p : Tm} {Γ : List Tm} (h : p ∉ Γ) :
+    hypsErase p Γ = Γ := by
+  simp [hypsErase, List.filter_eq_self]
+  intro x hx heq
+  exact h (heq ▸ hx)
 
 /-- The HOL Light primitive inference system. -/
 inductive Provable : List Tm → Tm → Prop where
@@ -48,7 +60,11 @@ inductive Provable : List Tm → Tm → Prop where
       (h1 : Provable Γ (Tm.mkEq (α ↝ β) f g))
       (h2 : Provable Δ (Tm.mkEq α x y)) :
       Provable (Γ ++ Δ) (Tm.mkEq β (.app f x) (.app g y))
-  /-- `ABS`: abstract a free variable that does not occur in the hypotheses. -/
+  /-- `ABS`: close a free variable `(x, α)` in both sides of an equation.
+  Locally nameless syntax removes *binder* clash, but not this side
+  condition: `abstract` binds `x` in the conclusion while hypotheses keep
+  their fvars.  If `x` occurred in `Γ` one could turn `x = c ⊢ x = c` into
+  `x = c ⊢ (λy. y) = (λy. c)`. -/
   | abs {Γ s t x α β}
       (h : Provable Γ (Tm.mkEq β s t))
       (hfresh : ∀ p ∈ Γ, p.freeIn x α = false) :

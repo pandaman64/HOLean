@@ -87,100 +87,23 @@ def tyvars : Ty → List Name
 
 end Ty
 
-/-- De Bruijn lookup into a bound-variable context (index `0` is the innermost
-binder). -/
-def Ctx.get : List Ty → Nat → Option Ty
-  | [], _ => none
-  | α :: _, 0 => some α
-  | _ :: Γ, n + 1 => Ctx.get Γ n
-
-@[simp] theorem Ctx.get_nil (i : Nat) : Ctx.get [] i = none := rfl
-
-@[simp] theorem Ctx.get_cons_zero (α : Ty) (Γ : List Ty) :
-    Ctx.get (α :: Γ) 0 = some α := rfl
-
-@[simp] theorem Ctx.get_cons_succ (α : Ty) (Γ : List Ty) (n : Nat) :
-    Ctx.get (α :: Γ) (n + 1) = Ctx.get Γ n := rfl
-
-theorem Ctx.get_map (f : Ty → Ty) :
-    ∀ (Γ : List Ty) (i : Nat), Ctx.get (Γ.map f) i = (Ctx.get Γ i).map f
-  | [], _ => rfl
-  | _ :: _, 0 => rfl
-  | _ :: Γ, n + 1 => Ctx.get_map f Γ n
-
-theorem Ctx.get_append_prefix :
-    ∀ {Δ Γ : List Ty} {i : Nat},
-      i < Δ.length → Ctx.get (Δ ++ Γ) i = Ctx.get Δ i
-  | [], Γ, i, h => by cases h
-  | β :: Δ, Γ, 0, _ => by simp [Ctx.get]
-  | β :: Δ, Γ, n + 1, h => by
-    have : n < Δ.length := Nat.lt_of_succ_lt_succ h
-    simpa [Ctx.get] using Ctx.get_append_prefix (Δ := Δ) (Γ := Γ) this
-
-theorem Ctx.get_append_left {α : Ty} :
-    ∀ {Γ Δ : List Ty} {i : Nat}, Ctx.get Γ i = some α → Ctx.get (Γ ++ Δ) i = some α
-  | [], _, _, h => by cases h
-  | _ :: _, _, 0, h => by
-    simp at h
-    simp [h]
-  | _ :: Γ, Δ, n + 1, h => by
-    simp at h
-    simpa using Ctx.get_append_left (Γ := Γ) (Δ := Δ) (i := n) h
-
-theorem Ctx.get_eq_some_unique {Γ : List Ty} {i : Nat} {α β : Ty}
-    (hα : Ctx.get Γ i = some α) (hβ : Ctx.get Γ i = some β) : α = β := by
-  rw [hα] at hβ
-  injection hβ
-
-/-- Insert `γ` so that it becomes de Bruijn index `c` (outer binders stay
-at indices `> c`). -/
-def insertTy : Nat → Ty → List Ty → List Ty
-  | 0, γ, Γ => γ :: Γ
-  | _n + 1, γ, [] => [γ]
-  | n + 1, γ, β :: Γ => β :: insertTy n γ Γ
-
-theorem Ctx.get_insertTy_lt {γ α : Ty} :
-    ∀ {c i : Nat} {Γ : List Ty},
-      Ctx.get Γ i = some α → i < c → Ctx.get (insertTy c γ Γ) i = some α
-  | 0, i, Γ, hi, hlt => by cases hlt
-  | n + 1, i, [], hi, _ => by cases hi
-  | n + 1, i, β :: Γ, hi, hlt => by
-    cases i with
-    | zero =>
-      simpa [insertTy, Ctx.get] using hi
-    | succ i =>
-      have : i < n := Nat.lt_of_succ_lt_succ hlt
-      simp [Ctx.get] at hi
-      simpa [insertTy, Ctx.get] using
-        Ctx.get_insertTy_lt (γ := γ) (α := α) (c := n) (i := i) (Γ := Γ) hi this
-
-theorem Ctx.get_insertTy_ge {γ α : Ty} :
-    ∀ {c i : Nat} {Γ : List Ty},
-      Ctx.get Γ i = some α → c ≤ i → Ctx.get (insertTy c γ Γ) (i + 1) = some α
-  | 0, i, Γ, hi, _ => by
-    simpa [insertTy, Ctx.get] using hi
-  | n + 1, i, [], hi, _ => by cases hi
-  | n + 1, i, β :: Γ, hi, hle => by
-    cases i with
-    | zero =>
-      exact (Nat.not_succ_le_zero n hle).elim
-    | succ i =>
-      have : n ≤ i := Nat.le_of_succ_le_succ hle
-      simp [Ctx.get] at hi
-      simpa [insertTy, Ctx.get] using
-        Ctx.get_insertTy_ge (γ := γ) (α := α) (c := n) (i := i) (Γ := Γ) hi this
+/-!
+Bound-variable contexts are ordinary lists.  Index `0` is the innermost
+binder, so lookup is `Γ[i]?` (`List.getElem?`) and inserting a binder at
+depth `c` is `Γ.insertIdx c γ`.
+-/
 
 /-- Lookup in a snoc-context: the last index is the extra binder. -/
-theorem Ctx.get_snoc (Δ : List Ty) (α : Ty) (i : Nat) :
-    Ctx.get (Δ ++ [α]) i = if i = Δ.length then some α else Ctx.get Δ i := by
+theorem List.getElem?_snoc (Δ : List Ty) (α : Ty) (i : Nat) :
+    (Δ ++ [α])[i]? = if i = Δ.length then some α else Δ[i]? := by
   induction Δ generalizing i with
   | nil =>
-    cases i <;> simp [Ctx.get]
+    cases i <;> simp
   | cons γ Δ ih =>
     cases i with
     | zero =>
-      simp [List.length]
+      simp
     | succ n =>
-      simp [ih n]
+      simpa using ih n
 
 end HOLean

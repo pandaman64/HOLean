@@ -102,8 +102,8 @@ end Tm
 
 theorem HasType.tru {Γ} : HasType Γ Tm.tru .bool :=
   HasType.mkEq
-    (HasType.lam (HasType.bvar (by simp [Ctx.get])))
-    (HasType.lam (HasType.bvar (by simp [Ctx.get])))
+    (HasType.lam (HasType.bvar (by simp)))
+    (HasType.lam (HasType.bvar (by simp)))
 
 theorem HasType.and {Γ p q}
     (hp : HasType Γ p .bool) (hq : HasType Γ q .bool) :
@@ -112,11 +112,11 @@ theorem HasType.and {Γ p q}
   apply HasType.mkEq
   · apply HasType.lam
     exact HasType.app
-      (HasType.app (HasType.bvar (by simp [Ctx.get])) (hp.shift0 _))
+      (HasType.app (HasType.bvar (by simp)) (hp.shift0 _))
       (hq.shift0 _)
   · apply HasType.lam
     exact HasType.app
-      (HasType.app (HasType.bvar (by simp [Ctx.get])) (HasType.tru.shift0 _))
+      (HasType.app (HasType.bvar (by simp)) (HasType.tru.shift0 _))
       (HasType.tru.shift0 _)
 
 theorem HasType.imp {Γ p q}
@@ -129,7 +129,7 @@ theorem HasType.all {Γ α P} (hP : HasType Γ P (α ↝ .bool)) :
   HasType.mkEq hP (HasType.lam HasType.tru)
 
 theorem HasType.falsum {Γ} : HasType Γ Tm.falsum .bool :=
-  HasType.all (HasType.lam (HasType.bvar (by simp [Ctx.get])))
+  HasType.all (HasType.lam (HasType.bvar (by simp)))
 
 theorem HasType.not {Γ p} (hp : HasType Γ p .bool) :
     HasType Γ p.not .bool :=
@@ -141,20 +141,20 @@ theorem HasType.or {Γ p q}
   unfold Tm.or
   apply HasType.all
   apply HasType.lam
-  refine HasType.imp (HasType.imp (hp.shift0 _) (HasType.bvar (by simp [Ctx.get]))) ?_
-  refine HasType.imp (HasType.imp (hq.shift0 _) (HasType.bvar (by simp [Ctx.get]))) ?_
-  exact HasType.bvar (by simp [Ctx.get])
+  refine HasType.imp (HasType.imp (hp.shift0 _) (HasType.bvar (by simp))) ?_
+  refine HasType.imp (HasType.imp (hq.shift0 _) (HasType.bvar (by simp))) ?_
+  exact HasType.bvar (by simp)
 
 theorem HasType.ex {Γ α P} (hP : HasType Γ P (α ↝ .bool)) :
     HasType Γ (Tm.ex α P) .bool := by
   unfold Tm.ex
   apply HasType.all
   apply HasType.lam
-  refine HasType.imp ?_ (HasType.bvar (by simp [Ctx.get]))
+  refine HasType.imp ?_ (HasType.bvar (by simp))
   apply HasType.all
   apply HasType.lam
-  refine HasType.imp ?_ (HasType.bvar (by simp [Ctx.get]))
-  exact HasType.app (hP.shift_at .bool 0 |>.shift_at α 0) (HasType.bvar (by simp [Ctx.get]))
+  refine HasType.imp ?_ (HasType.bvar (by simp))
+  exact HasType.app (hP.shift_at .bool 0 |>.shift_at α 0) (HasType.bvar (by simp))
 
 theorem HasType.oneOne {Γ α β f} (hf : HasType Γ f (α ↝ β)) :
     HasType Γ (Tm.oneOne α β f) .bool := by
@@ -163,11 +163,11 @@ theorem HasType.oneOne {Γ α β f} (hf : HasType Γ f (α ↝ β)) :
   apply HasType.lam
   apply HasType.all
   apply HasType.lam
-  refine HasType.imp ?_ (HasType.mkEq (HasType.bvar (by simp [Ctx.get]))
-    (HasType.bvar (by simp [Ctx.get])))
+  refine HasType.imp ?_ (HasType.mkEq (HasType.bvar (by simp))
+    (HasType.bvar (by simp)))
   refine HasType.mkEq ?_ ?_
-  · exact HasType.app (hf.shift_at α 0 |>.shift_at α 0) (HasType.bvar (by simp [Ctx.get]))
-  · exact HasType.app (hf.shift_at α 0 |>.shift_at α 0) (HasType.bvar (by simp [Ctx.get]))
+  · exact HasType.app (hf.shift_at α 0 |>.shift_at α 0) (HasType.bvar (by simp))
+  · exact HasType.app (hf.shift_at α 0 |>.shift_at α 0) (HasType.bvar (by simp))
 
 theorem HasType.onto {Γ α β f} (hf : HasType Γ f (α ↝ β)) :
     HasType Γ (Tm.onto α β f) .bool := by
@@ -176,7 +176,7 @@ theorem HasType.onto {Γ α β f} (hf : HasType Γ f (α ↝ β)) :
   apply HasType.lam
   apply HasType.ex
   apply HasType.lam
-  refine HasType.mkEq (HasType.bvar (by simp [Ctx.get])) ?_
-  exact HasType.app (hf.shift_at β 0 |>.shift_at α 0) (HasType.bvar (by simp [Ctx.get]))
+  refine HasType.mkEq (HasType.bvar (by simp)) ?_
+  exact HasType.app (hf.shift_at β 0 |>.shift_at α 0) (HasType.bvar (by simp))
 
 end HOLean

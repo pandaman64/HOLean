@@ -95,7 +95,7 @@ theorem Tm.open_and_body (p q u : Tm) (hp : p.LC 0 = true) (hq : q.LC 0 = true) 
 namespace Provable
 
 theorem tru_intro : [] ⊩ Tm.tru :=
-  refl (HasType.lam (HasType.bvar (by simp [Ctx.get])))
+  refl (HasType.lam (HasType.bvar (by simp)))
 
 theorem eq_sym {Γ s t α} (h : Γ ⊩ Tm.mkEq α s t) : Γ ⊩ Tm.mkEq α t s := by
   obtain ⟨_, hs, _ht⟩ := HasType.dest_mkEq h.concl_bool
@@ -108,21 +108,28 @@ theorem eq_sym {Γ s t α} (h : Γ ⊩ Tm.mkEq α s t) : Γ ⊩ Tm.mkEq α t s :
     simpa [Tm.mkEq] using mkComb hfun hrefl_s
   simpa [Tm.mkEq] using eqMp hboolEq hrefl_s
 
-theorem eqt_intro {Γ p} (h : Γ ⊩ p) :
+/-- Raw form: `DEDUCT_ANTISYM` against `⊢ T` drops `T` if it was assumed. -/
+theorem eqt_intro_erase {Γ p} (h : Γ ⊩ p) :
     hypsErase Tm.tru Γ ⊩ Tm.mkEq .bool p Tm.tru := by
   simpa [hypsErase] using deductAntisym h tru_intro
 
+/-- `Γ ⊢ p` implies `Γ ⊢ p = T`.
+
+The kernel rule behind this is `DEDUCT_ANTISYM` with `⊢ T`, whose conclusion
+has hypotheses `Γ \ {T}`.  `T` is object-logic truth, not an assumption, so
+the side condition recovers the original list. -/
+theorem eqt_intro {Γ p} (h : Γ ⊩ p) (hT : Tm.tru ∉ Γ) :
+    Γ ⊩ Tm.mkEq .bool p Tm.tru :=
+  hypsErase_eq_of_not_mem hT ▸ eqt_intro_erase h
+
 theorem gen {Γ t x α} (h : Γ ⊩ t)
+    (hT : Tm.tru ∉ Γ)
     (hfresh : ∀ r ∈ Γ, r.freeIn x α = false) :
-    hypsErase Tm.tru Γ ⊩ Tm.all α (t.abstract x α) := by
-  have hT : Tm.tru.freeIn x α = false := Tm.tru_not_free x α
-  have hfresh' : ∀ r ∈ hypsErase Tm.tru Γ, r.freeIn x α = false := by
-    intro r hr
-    have : r ∈ Γ ∧ r ≠ Tm.tru := by simpa [hypsErase] using hr
-    exact hfresh r this.1
-  have habs := abs (eqt_intro h) hfresh'
+    Γ ⊩ Tm.all α (t.abstract x α) := by
+  have hTfree : Tm.tru.freeIn x α = false := Tm.tru_not_free x α
+  have habs := abs (eqt_intro h hT) hfresh
   have htruAbs : Tm.tru.abstract x α = Tm.lam α Tm.tru := by
-    simp [Tm.abstract, Tm.close, Tm.closeAt_fresh (t := Tm.tru) hT]
+    simp [Tm.abstract, Tm.close, Tm.closeAt_fresh (t := Tm.tru) hTfree]
   simpa [Tm.all, htruAbs] using habs
 
 theorem beta_conv {t u : Tm} {x : Name} {α β : Ty}
@@ -146,13 +153,14 @@ theorem beta_conv {t u : Tm} {x : Name} {α β : Ty}
 
 theorem conj {Γ Δ p q : _} (x : Name)
     (hp : Γ ⊩ p) (hq : Δ ⊩ q)
-    (hxΓ : ∀ r ∈ hypsErase Tm.tru Γ, r.freeIn x Tm.boolCombTy = false)
-    (hxΔ : ∀ r ∈ hypsErase Tm.tru Δ, r.freeIn x Tm.boolCombTy = false)
+    (hTΓ : Tm.tru ∉ Γ) (hTΔ : Tm.tru ∉ Δ)
+    (hxΓ : ∀ r ∈ Γ, r.freeIn x Tm.boolCombTy = false)
+    (hxΔ : ∀ r ∈ Δ, r.freeIn x Tm.boolCombTy = false)
     (hxp : p.freeIn x Tm.boolCombTy = false)
     (hxq : q.freeIn x Tm.boolCombTy = false) :
-    (hypsErase Tm.tru Γ ++ hypsErase Tm.tru Δ) ⊩ p.and q := by
-  have hpT := eqt_intro hp
-  have hqT := eqt_intro hq
+    (Γ ++ Δ) ⊩ p.and q := by
+  have hpT := eqt_intro hp hTΓ
+  have hqT := eqt_intro hq hTΔ
   have hp0 : p.LC 0 = true := hp.concl_bool.lc0
   have hq0 : q.LC 0 = true := hq.concl_bool.lc0
   have hT0 : Tm.tru.LC 0 = true := Tm.tru_LC
@@ -160,14 +168,13 @@ theorem conj {Γ Δ p q : _} (x : Name)
     refl (HasType.fvar x Tm.boolCombTy)
   have h1 := mkComb hf hpT
   have h2 := mkComb h1 hqT
-  have hfresh : ∀ r ∈ hypsErase Tm.tru Γ ++ hypsErase Tm.tru Δ,
-      r.freeIn x Tm.boolCombTy = false := by
+  have hfresh : ∀ r ∈ Γ ++ Δ, r.freeIn x Tm.boolCombTy = false := by
     intro r hr
     match List.mem_append.1 hr with
     | Or.inl hr => exact hxΓ r hr
     | Or.inr hr => exact hxΔ r hr
   have h2' :
-      hypsErase Tm.tru Γ ++ hypsErase Tm.tru Δ ⊩
+      Γ ++ Δ ⊩
         Tm.mkEq .bool
           (((Tm.fvar x Tm.boolCombTy).app p).app q)
           (((Tm.fvar x Tm.boolCombTy).app Tm.tru).app Tm.tru) := by
@@ -194,20 +201,20 @@ def projFst : Tm :=
   Tm.lam .bool (Tm.lam .bool (Tm.bvar 1))
 
 theorem hasType_projSnd : HasType [] projSnd Tm.boolCombTy :=
-  HasType.lam (HasType.lam (HasType.bvar (by simp [Ctx.get])))
+  HasType.lam (HasType.lam (HasType.bvar (by simp)))
 
 theorem hasType_projFst : HasType [] projFst Tm.boolCombTy :=
-  HasType.lam (HasType.lam (HasType.bvar (by simp [Ctx.get])))
+  HasType.lam (HasType.lam (HasType.bvar (by simp)))
 
 theorem and_lhs_type {p q} (hp : HasType [] p .bool) (hq : HasType [] q .bool) :
     HasType [Tm.boolCombTy] (((Tm.bvar 0).app p).app q) .bool := by
   unfold Tm.boolCombTy
-  exact HasType.app (HasType.app (HasType.bvar (by simp [Ctx.get])) hp.of_closed) hq.of_closed
+  exact HasType.app (HasType.app (HasType.bvar (by simp)) hp.of_closed) hq.of_closed
 
 theorem and_rhs_type :
     HasType [Tm.boolCombTy] (((Tm.bvar 0).app Tm.tru).app Tm.tru) .bool := by
   unfold Tm.boolCombTy
-  exact HasType.app (HasType.app (HasType.bvar (by simp [Ctx.get])) HasType.tru) HasType.tru
+  exact HasType.app (HasType.app (HasType.bvar (by simp)) HasType.tru) HasType.tru
 
 theorem and_eq_combinators {p q}
     (hp : HasType [] p .bool) (hq : HasType [] q .bool) :
@@ -240,7 +247,7 @@ theorem projFst_beta {p q : Tm} (x : Name)
     (hxp : p.freeIn x .bool = false) :
     [] ⊩ Tm.mkEq .bool ((projFst.app p).app q) p := by
   have ht : HasType [.bool] (Tm.lam .bool (Tm.bvar 1)) (.bool ↝ .bool) :=
-    HasType.lam (HasType.bvar (by simp [Ctx.get]))
+    HasType.lam (HasType.bvar (by simp))
   have h1 :=
     beta_conv (t := Tm.lam .bool (Tm.bvar 1)) (u := p) (x := x)
       (α := .bool) (β := .bool ↝ .bool) ht hp (by simp [Tm.freeIn])
@@ -260,7 +267,7 @@ theorem projSnd_beta {p q : Tm} (x : Name)
     (_hxq : q.freeIn x .bool = false) :
     [] ⊩ Tm.mkEq .bool ((projSnd.app p).app q) q := by
   have ht : HasType [.bool] (Tm.lam .bool (Tm.bvar 0)) (.bool ↝ .bool) :=
-    HasType.lam (HasType.bvar (by simp [Ctx.get]))
+    HasType.lam (HasType.bvar (by simp))
   have h1 :=
     beta_conv (t := Tm.lam .bool (Tm.bvar 0)) (u := p) (x := x)
       (α := .bool) (β := .bool ↝ .bool) ht hp (by simp [Tm.freeIn])
@@ -270,7 +277,7 @@ theorem projSnd_beta {p q : Tm} (x : Name)
     simpa using mkComb h1' (refl hq)
   have h3 :=
     beta_conv (t := Tm.bvar 0) (u := q) (x := x) (α := .bool) (β := .bool)
-      (HasType.bvar (by simp [Ctx.get])) hq (by simp [Tm.freeIn])
+      (HasType.bvar (by simp)) hq (by simp [Tm.freeIn])
   have h3' : [] ⊩ Tm.mkEq .bool ((Tm.lam .bool (Tm.bvar 0)).app q) q := by
     simpa [Tm.open', Tm.openAt] using h3
   simpa using trans h2 h3'
@@ -364,22 +371,28 @@ theorem mp {Γ Δ p q} (x : Name)
     eqMp (eq_sym him') hp
   exact and_elim_right x hand hpTy hq hxp hxq hxqBool
 
-/-- Hypothesis weakening: from `Γ ⊢ p` conclude `q, Γ ⊢ p`.
-The kernel has no structural weakening; this is CONJ + right projection. -/
+/-- Hypothesis weakening: from `Γ ⊢ p` conclude `q :: Γ ⊢ p`.
+The kernel has no structural weakening; this is CONJ + right projection.
+`T ∉ q :: Γ` is the usual case (`T` is not an assumption). -/
 theorem add_assum {Γ p q} (x : Name)
     (hp : Γ ⊩ p) (hq : HasType [] q .bool)
-    (hxΓ : ∀ r ∈ hypsErase Tm.tru Γ, r.freeIn x Tm.boolCombTy = false)
+    (hT : Tm.tru ∉ q :: Γ)
+    (hxΓ : ∀ r ∈ Γ, r.freeIn x Tm.boolCombTy = false)
     (hxqComb : q.freeIn x Tm.boolCombTy = false)
     (hxp : p.freeIn x Tm.boolCombTy = false)
     (hxpBool : p.freeIn x .bool = false) :
-    (hypsErase Tm.tru [q] ++ hypsErase Tm.tru Γ) ⊩ p := by
-  have hxq : ∀ r ∈ hypsErase Tm.tru [q], r.freeIn x Tm.boolCombTy = false := by
+    (q :: Γ) ⊩ p := by
+  have hTq : Tm.tru ∉ [q] := by
+    intro ht
+    simp at ht
+    exact hT (ht ▸ List.Mem.head _)
+  have hTΓ : Tm.tru ∉ Γ := fun h => hT (List.Mem.tail _ h)
+  have hxq : ∀ r ∈ [q], r.freeIn x Tm.boolCombTy = false := by
     intro r hr
-    have : r ∈ [q] ∧ r ≠ Tm.tru := by simpa [hypsErase] using hr
-    simp at this
-    exact this.1 ▸ hxqComb
-  have hc := conj x (assume hq) hp hxq hxΓ hxqComb hxp
-  exact and_elim_right x hc hq hp.concl_bool hxqComb hxp hxpBool
+    simp at hr
+    exact hr ▸ hxqComb
+  have hc := conj x (assume hq) hp hTq hTΓ hxq hxΓ hxqComb hxp
+  simpa using and_elim_right x hc hq hp.concl_bool hxqComb hxp hxpBool
 
 end Provable
 end HOLean

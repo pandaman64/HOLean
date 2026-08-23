@@ -4,6 +4,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 -/
 
 import HOLean.Syntax.Tm
+import Init.Data.List.Nat.InsertIdx
 
 /-!
 # Extrinsic typing
@@ -21,7 +22,7 @@ namespace HOLean
 /-- Algorithmic type inference. -/
 def Tm.infer (t : Tm) (Γ : List Ty) : Option Ty :=
   match t with
-  | bvar i => Ctx.get Γ i
+  | bvar i => Γ[i]?
   | fvar _ α => some α
   | const c α => some (c.inst α)
   | app f a =>
@@ -35,7 +36,7 @@ def Tm.infer (t : Tm) (Γ : List Ty) : Option Ty :=
 
 /-- Declarative typing judgment. -/
 inductive HasType : List Ty → Tm → Ty → Prop where
-  | bvar {Γ α} {i : Nat} (h : Ctx.get Γ i = some α) :
+  | bvar {Γ α} {i : Nat} (h : Γ[i]? = some α) :
       HasType Γ (.bvar i) α
   | fvar {Γ} (x : Name) (α : Ty) :
       HasType Γ (.fvar x α) α
@@ -55,7 +56,7 @@ theorem HasType.unique {Γ t α} (h : HasType Γ t α) :
   | bvar hi =>
     intro β hβ
     cases hβ with
-    | bvar hi' => exact Ctx.get_eq_some_unique hi hi'
+    | bvar hi' => exact Option.some.inj (hi.symm.trans hi')
   | fvar x α =>
     intro β hβ
     cases hβ
@@ -141,7 +142,8 @@ theorem HasType.weaken {Γ Δ t α} (h : HasType Γ t α) :
     HasType (Γ ++ Δ) t α := by
   induction h with
   | bvar hi =>
-    exact HasType.bvar (Ctx.get_append_left hi)
+    exact HasType.bvar <|
+      (List.getElem?_append_left (List.getElem?_eq_some_iff.1 hi).1).trans hi
   | fvar x α =>
     exact HasType.fvar x α
   | const c α =>
@@ -166,7 +168,7 @@ theorem HasType.strengthen :
     simp [Tm.LC] at hLC
     cases h with
     | bvar hi =>
-      exact HasType.bvar ((Ctx.get_append_prefix hLC).symm.trans hi)
+      exact HasType.bvar ((List.getElem?_append_left hLC).symm.trans hi)
   | fvar x β =>
     intro Δ Γ α h hLC
     cases h
@@ -197,7 +199,7 @@ theorem HasType.instTy {Γ t α} (h : HasType Γ t α) (θ : TySubst) :
     HasType (Γ.map (Ty.inst θ)) (t.instTy θ) (α.inst θ) := by
   induction h with
   | bvar hi =>
-    exact HasType.bvar (by simpa [Ctx.get_map] using congrArg (Option.map (Ty.inst θ)) hi)
+    exact HasType.bvar (by simpa [List.getElem?_map] using congrArg (Option.map (Ty.inst θ)) hi)
   | fvar x α =>
     exact HasType.fvar x (α.inst θ)
   | const c α =>
@@ -256,25 +258,20 @@ theorem HasType.applySubst {Γ t β σ} (ht : HasType Γ t β) (hσ : σ.Ok) :
   | lam _ ih =>
     exact HasType.lam ih
 
-theorem Ctx.get_length_snoc (Γ : List Ty) (α : Ty) :
-    Ctx.get (Γ ++ [α]) Γ.length = some α := by
-  induction Γ with
-  | nil => simp
-  | cons _ Γ ih => simpa [List.length] using ih
-
 /-- Closing a free variable introduces a binder of that variable's type. -/
 theorem HasType.closeAt {Γ t β x α} (ht : HasType Γ t β) :
     HasType (Γ ++ [α]) (t.closeAt Γ.length x α) β := by
   induction ht with
   | bvar hi =>
-    exact HasType.bvar (Ctx.get_append_left hi)
+    exact HasType.bvar <|
+      (List.getElem?_append_left (List.getElem?_eq_some_iff.1 hi).1).trans hi
   | fvar y γ =>
     rename_i Γ
     by_cases h : y = x ∧ γ = α
     · have hs : (Tm.fvar y γ).closeAt Γ.length x α = Tm.bvar Γ.length := by
         simp [Tm.closeAt, h]
       rw [hs]
-      exact HasType.bvar (h.2 ▸ Ctx.get_length_snoc Γ α)
+      exact HasType.bvar (h.2 ▸ List.getElem?_concat_length (l := Γ) (a := α))
     · have hs : (Tm.fvar y γ).closeAt Γ.length x α = Tm.fvar y γ := by
         simp [Tm.closeAt, h]
       rw [hs]
@@ -304,7 +301,7 @@ theorem HasType.openAt_aux {α u} (hu : HasType [] u α) :
     rename_i i
     intro Δ hΓ
     subst hΓ
-    rw [Ctx.get_snoc] at hi
+    rw [List.getElem?_snoc] at hi
     by_cases hlen : i = Δ.length
     · simp [hlen] at hi
       cases hi
@@ -342,24 +339,11 @@ theorem HasType.open' {t β α u} (ht : HasType [α] t β) (hu : HasType [] u α
     HasType [] (t.open' u) β := by
   simpa [Tm.open'] using ht.openAt (Γ := []) (α := α) hu
 
-theorem Ctx.get_lt_length {Γ : List Ty} {i : Nat} {α : Ty}
-    (h : Ctx.get Γ i = some α) : i < Γ.length := by
-  induction Γ generalizing i with
-  | nil =>
-    cases h
-  | cons γ Γ ih =>
-    cases i with
-    | zero =>
-      simp [List.length]
-    | succ n =>
-      simp [Ctx.get] at h
-      simpa [List.length] using ih h
-
 /-- A well-typed term mentions only in-scope bound indices. -/
 theorem HasType.lc {Γ t α} (h : HasType Γ t α) : t.LC Γ.length = true := by
   induction h with
   | bvar hi =>
-    simp [Tm.LC, Ctx.get_lt_length hi]
+    simp [Tm.LC, (List.getElem?_eq_some_iff.1 hi).1]
   | fvar x α =>
     simp [Tm.LC]
   | const c α =>
@@ -374,7 +358,7 @@ theorem HasType.lc0 {t α} (h : HasType [] t α) : t.LC 0 = true :=
 
 /-- Place a term under one extra binder at de Bruijn index `c`. -/
 theorem HasType.shift_at {Γ t α} (h : HasType Γ t α) (γ : Ty) :
-    ∀ c, HasType (insertTy c γ Γ) (t.shift 1 c) α := by
+    ∀ c, HasType (Γ.insertIdx c γ) (t.shift 1 c) α := by
   induction h with
   | bvar hi =>
     rename_i i
@@ -382,12 +366,13 @@ theorem HasType.shift_at {Γ t α} (h : HasType Γ t α) (γ : Ty) :
     by_cases hlt : i < c
     · have hs : (Tm.bvar i).shift 1 c = Tm.bvar i := by simp [Tm.shift, hlt]
       rw [hs]
-      exact HasType.bvar (Ctx.get_insertTy_lt hi hlt)
+      exact HasType.bvar ((List.getElem?_insertIdx_of_lt hlt).trans hi)
     · have hle : c ≤ i := Nat.le_of_not_gt hlt
       have hs : (Tm.bvar i).shift 1 c = Tm.bvar (i + 1) := by
         simp [Tm.shift, hlt]
       rw [hs]
-      exact HasType.bvar (Ctx.get_insertTy_ge hi hle)
+      exact HasType.bvar
+        ((List.getElem?_insertIdx_of_gt (Nat.lt_succ_of_le hle)).trans hi)
   | fvar x α =>
     intro c
     simp [Tm.shift]
@@ -401,12 +386,13 @@ theorem HasType.shift_at {Γ t α} (h : HasType Γ t α) (γ : Ty) :
     simpa [Tm.shift] using HasType.app (ihf c) (iha c)
   | lam _ ih =>
     intro c
-    simpa [Tm.shift, insertTy] using HasType.lam (ih (c + 1))
+    apply HasType.lam
+    simpa [Tm.shift, List.insertIdx_succ_cons] using ih (c + 1)
 
 /-- Place a term under one extra innermost binder. -/
 theorem HasType.shift0 {Γ t α} (γ : Ty) (h : HasType Γ t α) :
     HasType (γ :: Γ) (t.shift 1 0) α := by
-  simpa [insertTy] using h.shift_at γ 0
+  simpa [List.insertIdx_zero] using h.shift_at γ 0
 
 /-- Equations are booleans when both sides share a type. -/
 theorem HasType.mkEq {Γ s t α} (hs : HasType Γ s α) (ht : HasType Γ t α) :
