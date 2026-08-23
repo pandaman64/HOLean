@@ -47,7 +47,7 @@ HOLean/
   Derived.lean         SYM, GEN, CONJ, projections, MP, weakening
   Axiom.lean           η / SELECT / INFINITY; `holEnv` over `holLogic`
   Elab/Translate.lean  `Lean.Expr` → `Ty` / `Tm`, filtered by sort
-  Elab/Term.lean       `hol_ty%` / `hol_tm%` / `hol_prop%` / `hol%` / `#hol`
+  Elab/Term.lean       `hol_ty(…)` / `hol_tm(…)` / `hol_prop(…)` / `hol(…)` / `#hol`
   Model/Basic.lean     `zfBool`, graph application, `succ` on `omega`
   Model/Ty.lean        `Ty.denote`, `INST_TYPE` commutation
   Model/Const.lean     `eq` / `select` graphs
@@ -125,7 +125,7 @@ axioms); `addDef` preserves WF; `holLogic` and `holEnv` are proved WF.
 
 ### Lean frontend
 
-`hol_ty%`, `hol_tm%`, `hol_prop%`, and `hol%` reuse Lean's elaborator.
+`hol_ty(…)`, `hol_tm(…)`, `hol_prop(…)`, and `hol(…)` reuse Lean's elaborator.
 The resulting `Lean.Expr` is classified by the sort of its type and then
 walked into `Ty` / `Tm`:
 
@@ -277,7 +277,7 @@ should satisfy η (functions *are* graphs), `SELECT` (`Classical.epsilon` /
 
 - [x] Reuse Lean's elaborator; translate `Lean.Expr` → `Ty` / `Tm`
 - [x] Reject dependent types by the sort of the Π-body
-- [x] `hol_ty%` / `hol_tm%` / `hol_prop%` / `hol%` / `#hol`
+- [x] `hol_ty(…)` / `hol_tm(…)` / `hol_prop(…)` / `hol(…)` / `#hol`
 
 ### Phase 5 — What we are *not* doing yet
 

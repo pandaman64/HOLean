@@ -13,10 +13,11 @@ Surface syntax that looks like Lean 4, elaborated by Lean, then filtered
 and translated to HOL:
 
 ```
-hol_ty%   (α → Prop)           -- Ty
-hol_tm%   (fun (x : α) => x)   -- Tm
-hol_prop% (∀ x : α, x = x)     -- Tm of type bool
-hol%      …                    -- dispatch on the sort of the Lean type
+hol_ty(α → Prop)             -- Ty
+hol_tm(fun (x : α) => x)     -- Tm
+hol_prop(∀ x : α, x = x)     -- Tm of type bool
+hol(True)                    -- dispatch on the sort of the Lean type
+hol_ty% Prop                 -- tight `%` form (`term:max`)
 ```
 
 `#hol t` prints the translation and, for terms, `Tm.infer holEnv []`.
@@ -82,19 +83,32 @@ def holCommand (stx : Syntax) : TermElabM MessageData := do
 end HOLean.Elab
 
 /-- Elaborate a Lean type into a HOL `Ty`. -/
-elab "hol_ty%" t:term : term =>
+elab "hol_ty(" t:term ")" : term =>
   HOLean.Elab.elabAsTy t
 
 /-- Elaborate a Lean term into a HOL `Tm`. -/
-elab "hol_tm%" t:term : term =>
+elab "hol_tm(" t:term ")" : term =>
   HOLean.Elab.elabAsTm t
 
 /-- Elaborate a Lean proposition into a HOL boolean term. -/
-elab "hol_prop%" t:term : term =>
+elab "hol_prop(" t:term ")" : term =>
   HOLean.Elab.elabAsProp t
 
 /-- Elaborate into `Ty` or `Tm` according to the sort of the Lean type. -/
-elab "hol%" t:term : term =>
+elab "hol(" t:term ")" : term =>
+  HOLean.Elab.elabBySort t
+
+/-- Tight `%` form: only a `term:max` argument, so `hol_ty% Prop = …` parses. -/
+elab:max "hol_ty%" t:term:max : term =>
+  HOLean.Elab.elabAsTy t
+
+elab:max "hol_tm%" t:term:max : term =>
+  HOLean.Elab.elabAsTm t
+
+elab:max "hol_prop%" t:term:max : term =>
+  HOLean.Elab.elabAsProp t
+
+elab:max "hol%" t:term:max : term =>
   HOLean.Elab.elabBySort t
 
 /-- Print the HOL translation of a Lean4-like term, type, or proposition. -/

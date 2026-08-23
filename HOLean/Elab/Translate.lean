@@ -37,22 +37,8 @@ namespace HOLean
 /-- Lean stand-in for the HOL type of individuals.  `Nat` is also accepted. -/
 opaque Ind : Type
 
-instance : ToExpr Ty where
-  toTypeExpr := mkConst ``Ty
-  toExpr
-    | .var x => mkApp (mkConst ``Ty.var) (toExpr x)
-    | .bool => mkConst ``Ty.bool
-    | .ind => mkConst ``Ty.ind
-    | .arrow α β => mkApp2 (mkConst ``Ty.arrow) (toExpr α) (toExpr β)
-
-instance : ToExpr Tm where
-  toTypeExpr := mkConst ``Tm
-  toExpr
-    | .bvar i => mkApp (mkConst ``Tm.bvar) (toExpr i)
-    | .fvar x α => mkApp2 (mkConst ``Tm.fvar) (toExpr x) (toExpr α)
-    | .const n α => mkApp2 (mkConst ``Tm.const) (toExpr n) (toExpr α)
-    | .app f a => mkApp2 (mkConst ``Tm.app) (toExpr f) (toExpr a)
-    | .lam α t => mkApp2 (mkConst ``Tm.lam) (toExpr α) (toExpr t)
+deriving instance ToExpr for Ty
+deriving instance ToExpr for Tm
 
 end HOLean
 
@@ -78,6 +64,8 @@ def ready (e : Expr) : MetaM Expr := do
   if e.hasExprMVar then
     throwError "HOLean: expression still has metavariables{indentExpr e}"
   return e
+
+mutual
 
 /-- Apply a HOL head to Lean arguments, each translated as a term. -/
 partial def apps (head : Tm) (args : Array Expr) : MetaM Tm :=
@@ -105,7 +93,7 @@ partial def exprToTy (e : Expr) : MetaM Ty := do
         (it is a term of type bool)"
     return .var (holName decl.userName)
   | .const n _ =>
-    if n == ``Prop || n == ``Bool then
+    if n == `Prop || n == ``Bool then
       return .bool
     else if n == ``Nat || n == ``HOLean.Ind then
       return .ind
@@ -134,15 +122,15 @@ partial def exprToTy (e : Expr) : MetaM Ty := do
 /-- Known Lean constants that denote HOL primitives or connectives. -/
 partial def translateConst (n : Lean.Name) (args : Array Expr) : MetaM (Option Tm) := do
   match n with
-  | ``True | ``Bool.true | ``true =>
+  | ``True | ``Bool.true =>
     if args.isEmpty then return some Tm.tru else return none
-  | ``False | ``Bool.false | ``false =>
+  | ``False | ``Bool.false =>
     if args.isEmpty then return some Tm.falsum else return none
-  | ``And | ``and | ``Bool.and =>
+  | ``And | ``Bool.and =>
     some <$> apps (.const andName andTy) args
-  | ``Or | ``or | ``Bool.or =>
+  | ``Or | ``Bool.or =>
     some <$> apps (.const orName orTy) args
-  | ``Not | ``not | ``Bool.not =>
+  | ``Not | ``Bool.not =>
     some <$> apps (.const notName notTy) args
   | ``Iff =>
     some <$> apps (Tm.eqConst .bool) args
@@ -194,7 +182,7 @@ partial def exprToTm (e : Expr) : MetaM Tm := do
   | .bvar i =>
     return .bvar i
   | .sort l =>
-    throwError "HOLean: universe `{.sort l}` is a type, not a term (use `hol_ty%`)"
+    throwError "HOLean: universe {Expr.sort l} is a type, not a term (use `hol_ty%`)"
   | .lam n α body bi =>
     if bi.isInstImplicit then
       throwError "HOLean: type-class binders are not allowed"
@@ -253,6 +241,8 @@ partial def exprToTm (e : Expr) : MetaM Tm := do
     throwError "HOLean: literals are not HOL terms{indentExpr e}"
   | .proj .. =>
     throwError "HOLean: structure projections are not HOL terms{indentExpr e}"
+
+end
 
 /-- Infer the HOL type of a translated term in `holEnv`. -/
 def inferHol (t : Tm) : Option Ty :=
