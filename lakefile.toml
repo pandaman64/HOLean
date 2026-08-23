@@ -1,0 +1,10 @@
+name = "HOLean"
+version = "0.1.0"
+defaultTargets = ["holean"]
+
+[[lean_lib]]
+name = "HOLean"
+
+[[lean_exe]]
+name = "holean"
+root = "Main"
