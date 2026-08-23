@@ -8,38 +8,56 @@ import HOLean.Syntax.Ty
 /-!
 # Primitive constants
 
-The HOL Light kernel starts with equality alone; Hilbert choice is added as a
-second primitive.  Every other logical constant is a definitional extension.
+The HOL Light kernel starts with equality; Hilbert choice is the second
+primitive.  Every other logical constant is a definitional extension of an
+environment (`Env.addDef`).
 
-Each primitive is *parametric* in a single type argument `α`.
+Constants are identified by `Name`.  The initial signature assigns each
+primitive a *generic* type (type variables allowed).  A term
+`Tm.const n inst` carries the *instantiated* type `inst`, which must be a
+substitution instance of the generic type (`Ty.isInstanceOf`).
 -/
 
 namespace HOLean
 
-/-- Primitive (non-defined) HOL constants. -/
-inductive Const where
-  /-- Equality, with generic type `α ↝ α ↝ bool`. -/
-  | eq
-  /-- Hilbert ε / `@`, with generic type `(α ↝ bool) ↝ α`. -/
-  | select
-  deriving DecidableEq, Repr, Inhabited
+/-- Name of object-logic equality. -/
+def eqName : Name := "eq"
 
-namespace Const
+/-- Name of Hilbert ε / `@`. -/
+def selectName : Name := "select"
 
-/-- The type of a primitive constant after instantiating its unique type
-parameter. -/
-def inst : Const → Ty → Ty
-  | eq, α => α ↝ α ↝ .bool
-  | select, α => (α ↝ .bool) ↝ α
+/-- The schematic parameter of `eq` and `select`. -/
+def primTyVar : Name := "A"
 
-@[simp] theorem inst_eq (α : Ty) : eq.inst α = (α ↝ α ↝ .bool) := rfl
-@[simp] theorem inst_select (α : Ty) : select.inst α = ((α ↝ .bool) ↝ α) := rfl
+/-- Generic type of equality: `A ↝ A ↝ bool`. -/
+def eqTy : Ty :=
+  .var primTyVar ↝ .var primTyVar ↝ .bool
 
-/-- Type instantiation commutes with reading off a constant's type. -/
-theorem inst_tyInst (c : Const) (α : Ty) (θ : TySubst) :
-    (c.inst α).inst θ = c.inst (α.inst θ) := by
-  cases c <;> simp [inst, Ty.inst]
+/-- Generic type of Hilbert choice: `(A ↝ bool) ↝ A`. -/
+def selectTy : Ty :=
+  (.var primTyVar ↝ .bool) ↝ .var primTyVar
 
-end Const
+theorem eqName_ne_selectName : eqName ≠ selectName := by
+  decide
+
+/-- Initial constant table: `eq` and `select`. -/
+def holConstants (n : Name) : Option Ty :=
+  if n = eqName then some eqTy
+  else if n = selectName then some selectTy
+  else none
+
+@[simp] theorem holConstants_eq : holConstants eqName = some eqTy := by
+  simp [holConstants]
+
+@[simp] theorem holConstants_select : holConstants selectName = some selectTy := by
+  simp [holConstants, show selectName ≠ eqName from eqName_ne_selectName.symm]
+
+theorem eqTy_isInstanceOf (α : Ty) :
+    eqTy.isInstanceOf (α ↝ α ↝ .bool) :=
+  ⟨[(primTyVar, α)], by simp [eqTy, primTyVar, Ty.inst, TySubst.lookup]⟩
+
+theorem selectTy_isInstanceOf (α : Ty) :
+    selectTy.isInstanceOf ((α ↝ .bool) ↝ α) :=
+  ⟨[(primTyVar, α)], by simp [selectTy, primTyVar, Ty.inst, TySubst.lookup]⟩
 
 end HOLean

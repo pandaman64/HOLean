@@ -3,15 +3,18 @@ Copyright (c) 2026 HOLean authors.
 Released under Apache 2.0 license as described in the file LICENSE.
 -/
 
-import HOLean.Syntax.Tm
+import HOLean.Env
 import Init.Data.List.Nat.InsertIdx
 
 /-!
 # Extrinsic typing
 
-`HasType Γ t α` means `t` has type `α` when bound indices are interpreted in
-the context `Γ` (innermost binder first).  Free variables carry their own
-types, so they need no context entry.
+`HasType env Γ t α` means `t` has type `α` in environment `env` when bound
+indices are interpreted in the context `Γ` (innermost binder first).  Free
+variables carry their own types, so they need no context entry.
+
+A constant `const n inst` is well-typed when `env` assigns `n` a generic
+type of which `inst` is an instance.  Typing reads only `env.constants`.
 
 A term that is well-typed in the empty bound context is automatically locally
 closed: there is no way to type an unbound `bvar`.
@@ -19,39 +22,46 @@ closed: there is no way to type an unbound `bvar`.
 
 namespace HOLean
 
-/-- Algorithmic type inference. -/
-def Tm.infer (t : Tm) (Γ : List Ty) : Option Ty :=
+/-- Algorithmic type inference, relative to an environment. -/
+def Tm.infer (env : Env) (t : Tm) (Γ : List Ty) : Option Ty :=
   match t with
   | bvar i => Γ[i]?
   | fvar _ α => some α
-  | const c α => some (c.inst α)
+  | const n τ =>
+    match env.constants n with
+    | some gen => if (gen.matchTy τ []).isSome then some τ else none
+    | none => none
   | app f a =>
-    match f.infer Γ, a.infer Γ with
+    match f.infer env Γ, a.infer env Γ with
     | some (α ↝ β), some α' => if α = α' then some β else none
     | _, _ => none
   | lam α t =>
-    match t.infer (α :: Γ) with
+    match t.infer env (α :: Γ) with
     | some β => some (α ↝ β)
     | none => none
 
-/-- Declarative typing judgment. -/
-inductive HasType : List Ty → Tm → Ty → Prop where
+/-- Declarative typing judgment, relative to an environment. -/
+inductive HasType (env : Env) : List Ty → Tm → Ty → Prop where
   | bvar {Γ α} {i : Nat} (h : Γ[i]? = some α) :
-      HasType Γ (.bvar i) α
+      HasType env Γ (.bvar i) α
   | fvar {Γ} (x : Name) (α : Ty) :
-      HasType Γ (.fvar x α) α
-  | const {Γ} (c : Const) (α : Ty) :
-      HasType Γ (.const c α) (c.inst α)
+      HasType env Γ (.fvar x α) α
+  | const {Γ n inst gen}
+      (hconst : env.constants n = some gen)
+      (hinst : gen.isInstanceOf inst) :
+      HasType env Γ (.const n inst) inst
   | app {Γ α β} {f a : Tm}
-      (hf : HasType Γ f (α ↝ β)) (ha : HasType Γ a α) :
-      HasType Γ (.app f a) β
+      (hf : HasType env Γ f (α ↝ β)) (ha : HasType env Γ a α) :
+      HasType env Γ (.app f a) β
   | lam {Γ α β} {t : Tm}
-      (ht : HasType (α :: Γ) t β) :
-      HasType Γ (.lam α t) (α ↝ β)
+      (ht : HasType env (α :: Γ) t β) :
+      HasType env Γ (.lam α t) (α ↝ β)
+
+variable {env : Env}
 
 /-- Unique typing: a term has at most one type in a given context. -/
-theorem HasType.unique {Γ t α} (h : HasType Γ t α) :
-    ∀ {β}, HasType Γ t β → α = β := by
+theorem HasType.unique {Γ t α} (h : HasType env Γ t α) :
+    ∀ {β}, HasType env Γ t β → α = β := by
   induction h with
   | bvar hi =>
     intro β hβ
@@ -61,7 +71,7 @@ theorem HasType.unique {Γ t α} (h : HasType Γ t α) :
     intro β hβ
     cases hβ
     rfl
-  | const c α =>
+  | const hconst hinst =>
     intro β hβ
     cases hβ
     rfl
@@ -77,21 +87,21 @@ theorem HasType.unique {Γ t α} (h : HasType Γ t α) :
       cases ih ht'
       rfl
 
-theorem HasType.infer_of {Γ t α} (h : HasType Γ t α) : t.infer Γ = some α := by
+theorem HasType.infer_of {Γ t α} (h : HasType env Γ t α) : t.infer env Γ = some α := by
   induction h with
   | bvar hi =>
     simpa [Tm.infer] using hi
   | fvar x α =>
     simp [Tm.infer]
-  | const c α =>
-    simp [Tm.infer]
+  | const hconst hinst =>
+    simp [Tm.infer, hconst, Ty.matchTy_of_isInstanceOf hinst]
   | app _ _ ihf iha =>
     simp [Tm.infer, ihf, iha]
   | lam _ ih =>
     simp [Tm.infer, ih]
 
 theorem HasType.of_infer {Γ : List Ty} :
-    ∀ {t α}, t.infer Γ = some α → HasType Γ t α := by
+    ∀ {t α}, t.infer env Γ = some α → HasType env Γ t α := by
   intro t
   induction t generalizing Γ with
   | bvar i =>
@@ -101,17 +111,25 @@ theorem HasType.of_infer {Γ : List Ty} :
     intro α h
     simp [Tm.infer] at h
     exact h ▸ HasType.fvar x β
-  | const c β =>
+  | const n β =>
     intro α h
-    simp [Tm.infer] at h
-    exact h ▸ HasType.const c β
+    cases hc : env.constants n with
+    | none =>
+      simp [Tm.infer, hc] at h
+    | some gen =>
+      simp [Tm.infer, hc] at h
+      by_cases hm : (gen.matchTy β []).isSome
+      · simp [hm] at h
+        cases h
+        exact HasType.const hc (Ty.isInstanceOf_of_isSome (by simp [hm]))
+      · simp [hm] at h
   | app f a ihf iha =>
     intro α h
-    cases hf : f.infer Γ with
+    cases hf : f.infer env Γ with
     | none =>
       simp [Tm.infer, hf] at h
     | some σ =>
-      cases ha : a.infer Γ with
+      cases ha : a.infer env Γ with
       | none =>
         simp [Tm.infer, hf, ha] at h
       | some τ =>
@@ -125,7 +143,7 @@ theorem HasType.of_infer {Γ : List Ty} :
         | ind => simp [Tm.infer, hf, ha] at h
   | lam β t iht =>
     intro α h
-    cases ht : t.infer (β :: Γ) with
+    cases ht : t.infer env (β :: Γ) with
     | none =>
       simp [Tm.infer, ht] at h
     | some γ =>
@@ -134,33 +152,49 @@ theorem HasType.of_infer {Γ : List Ty} :
       exact HasType.lam (iht ht)
 
 /-- Typing is decidable via inference. -/
-theorem HasType.iff_infer {Γ t α} : HasType Γ t α ↔ t.infer Γ = some α :=
+theorem HasType.iff_infer {Γ t α} : HasType env Γ t α ↔ t.infer env Γ = some α :=
   ⟨HasType.infer_of, HasType.of_infer⟩
 
 /-- Binders may be added *outside* the current context (higher indices). -/
-theorem HasType.weaken {Γ Δ t α} (h : HasType Γ t α) :
-    HasType (Γ ++ Δ) t α := by
+theorem HasType.weaken {Γ Δ t α} (h : HasType env Γ t α) :
+    HasType env (Γ ++ Δ) t α := by
   induction h with
   | bvar hi =>
     exact HasType.bvar <|
       (List.getElem?_append_left (List.getElem?_eq_some_iff.1 hi).1).trans hi
   | fvar x α =>
     exact HasType.fvar x α
-  | const c α =>
-    exact HasType.const c α
+  | const hconst hinst =>
+    exact HasType.const hconst hinst
+  | app _ _ ihf iha =>
+    exact HasType.app ihf iha
+  | lam _ ih =>
+    exact HasType.lam ih
+
+/-- Growing the environment preserves typing. -/
+theorem HasType.weakenEnv {env' : Env} {Γ t α}
+    (hle : env.LE env') (h : HasType env Γ t α) :
+    HasType env' Γ t α := by
+  induction h with
+  | bvar hi =>
+    exact HasType.bvar hi
+  | fvar x α =>
+    exact HasType.fvar x α
+  | const hconst hinst =>
+    exact HasType.const (hle.constants _ _ hconst) hinst
   | app _ _ ihf iha =>
     exact HasType.app ihf iha
   | lam _ ih =>
     exact HasType.lam ih
 
 /-- A term typed in the empty bound context remains typed in any context. -/
-theorem HasType.of_closed {Γ t α} (h : HasType [] t α) : HasType Γ t α := by
+theorem HasType.of_closed {Γ t α} (h : HasType env [] t α) : HasType env Γ t α := by
   simpa using (HasType.weaken (Γ := []) (Δ := Γ) h)
 
 /-- Drop unused *outer* binders when the term does not mention them. -/
 theorem HasType.strengthen :
     ∀ {t : Tm} {Δ Γ : List Ty} {α},
-      HasType (Δ ++ Γ) t α → t.LC Δ.length = true → HasType Δ t α := by
+      HasType env (Δ ++ Γ) t α → t.LC Δ.length = true → HasType env Δ t α := by
   intro t
   induction t with
   | bvar i =>
@@ -173,10 +207,10 @@ theorem HasType.strengthen :
     intro Δ Γ α h hLC
     cases h
     exact HasType.fvar x β
-  | const c β =>
+  | const n β =>
     intro Δ Γ α h hLC
     cases h
-    exact HasType.const c β
+    exact HasType.const ‹_› ‹_›
   | app f a ihf iha =>
     intro Δ Γ α h hLC
     simp [Tm.LC] at hLC
@@ -190,21 +224,20 @@ theorem HasType.strengthen :
     | lam ht =>
       exact HasType.lam (ih (Δ := β :: Δ) (Γ := Γ) ht (by simpa [List.length] using hLC))
 
-theorem HasType.strengthen_nil {Γ t α} (h : HasType Γ t α) (hLC : t.LC 0 = true) :
-    HasType [] t α :=
+theorem HasType.strengthen_nil {Γ t α} (h : HasType env Γ t α) (hLC : t.LC 0 = true) :
+    HasType env [] t α :=
   HasType.strengthen (Δ := []) (Γ := Γ) (by simpa using h) hLC
 
 /-- Type instantiation preserves typing. -/
-theorem HasType.instTy {Γ t α} (h : HasType Γ t α) (θ : TySubst) :
-    HasType (Γ.map (Ty.inst θ)) (t.instTy θ) (α.inst θ) := by
+theorem HasType.instTy {Γ t α} (h : HasType env Γ t α) (θ : TySubst) :
+    HasType env (Γ.map (Ty.inst θ)) (t.instTy θ) (α.inst θ) := by
   induction h with
   | bvar hi =>
     exact HasType.bvar (by simpa [List.getElem?_map] using congrArg (Option.map (Ty.inst θ)) hi)
   | fvar x α =>
     exact HasType.fvar x (α.inst θ)
-  | const c α =>
-    rw [Const.inst_tyInst]
-    exact HasType.const c (α.inst θ)
+  | const hconst hinst =>
+    exact HasType.const hconst (hinst.inst θ)
   | app _ _ ihf iha =>
     exact HasType.app ihf iha
   | lam _ ih =>
@@ -213,8 +246,8 @@ theorem HasType.instTy {Γ t α} (h : HasType Γ t α) (θ : TySubst) :
 /-- Single free-variable substitution preserves typing when the substitute is
 closed of the expected type. -/
 theorem HasType.substFvar {Γ t β x α u}
-    (ht : HasType Γ t β) (hu : HasType [] u α) :
-    HasType Γ (t.substFvar x α u) β := by
+    (ht : HasType env Γ t β) (hu : HasType env [] u α) :
+    HasType env Γ (t.substFvar x α u) β := by
   induction ht with
   | bvar hi =>
     exact HasType.bvar hi
@@ -227,8 +260,8 @@ theorem HasType.substFvar {Γ t β x α u}
         simp [Tm.substFvar, h]
       rw [hs]
       exact HasType.fvar y γ
-  | const c α' =>
-    exact HasType.const c α'
+  | const hconst hinst =>
+    exact HasType.const hconst hinst
   | app _ _ ihf iha =>
     exact HasType.app ihf iha
   | lam _ ih =>
@@ -236,11 +269,15 @@ theorem HasType.substFvar {Γ t β x α u}
 
 /-- A simultaneous substitution is type-correct when every replacement is a
 closed term of the advertised type. -/
-def Tm.Subst.Ok (σ : Tm.Subst) : Prop :=
-  ∀ x α u, σ.lookup x α = some u → HasType [] u α
+def Tm.Subst.Ok (env : Env) (σ : Tm.Subst) : Prop :=
+  ∀ x α u, σ.lookup x α = some u → HasType env [] u α
 
-theorem HasType.applySubst {Γ t β σ} (ht : HasType Γ t β) (hσ : σ.Ok) :
-    HasType Γ (t.applySubst σ) β := by
+theorem Tm.Subst.Ok.weakenEnv {env' : Env} {σ : Tm.Subst}
+    (hle : env.LE env') (hσ : σ.Ok env) : σ.Ok env' :=
+  fun x α u h => (hσ x α u h).weakenEnv hle
+
+theorem HasType.applySubst {Γ t β σ} (ht : HasType env Γ t β) (hσ : σ.Ok env) :
+    HasType env Γ (t.applySubst σ) β := by
   induction ht with
   | bvar hi =>
     exact HasType.bvar hi
@@ -251,16 +288,16 @@ theorem HasType.applySubst {Γ t β σ} (ht : HasType Γ t β) (hσ : σ.Ok) :
       exact HasType.fvar x α
     | some u =>
       exact (hσ x α u hlook).of_closed
-  | const c α =>
-    exact HasType.const c α
+  | const hconst hinst =>
+    exact HasType.const hconst hinst
   | app _ _ ihf iha =>
     exact HasType.app ihf iha
   | lam _ ih =>
     exact HasType.lam ih
 
 /-- Closing a free variable introduces a binder of that variable's type. -/
-theorem HasType.closeAt {Γ t β x α} (ht : HasType Γ t β) :
-    HasType (Γ ++ [α]) (t.closeAt Γ.length x α) β := by
+theorem HasType.closeAt {Γ t β x α} (ht : HasType env Γ t β) :
+    HasType env (Γ ++ [α]) (t.closeAt Γ.length x α) β := by
   induction ht with
   | bvar hi =>
     exact HasType.bvar <|
@@ -276,25 +313,25 @@ theorem HasType.closeAt {Γ t β x α} (ht : HasType Γ t β) :
         simp [Tm.closeAt, h]
       rw [hs]
       exact HasType.fvar y γ
-  | const c α' =>
-    exact HasType.const c α'
+  | const hconst hinst =>
+    exact HasType.const hconst hinst
   | app _ _ ihf iha =>
     exact HasType.app ihf iha
   | lam _ ih =>
     simpa [Tm.closeAt, List.length] using HasType.lam ih
 
-theorem HasType.close {t β x α} (ht : HasType [] t β) :
-    HasType [α] (t.close x α) β := by
+theorem HasType.close {t β x α} (ht : HasType env [] t β) :
+    HasType env [α] (t.close x α) β := by
   simpa [Tm.close] using ht.closeAt (Γ := []) (x := x) (α := α)
 
-theorem HasType.abstract {t β x α} (ht : HasType [] t β) :
-    HasType [] (t.abstract x α) (α ↝ β) :=
+theorem HasType.abstract {t β x α} (ht : HasType env [] t β) :
+    HasType env [] (t.abstract x α) (α ↝ β) :=
   HasType.lam (ht.close (x := x) (α := α))
 
 /-- Opening the outermost extra binder at a closed term of that binder's type. -/
-theorem HasType.openAt_aux {α u} (hu : HasType [] u α) :
-    ∀ {Γ t β} (_h : HasType Γ t β) (Δ : List Ty),
-      Γ = Δ ++ [α] → HasType Δ (t.openAt Δ.length u) β := by
+theorem HasType.openAt_aux {α u} (hu : HasType env [] u α) :
+    ∀ {Γ t β} (_h : HasType env Γ t β) (Δ : List Ty),
+      Γ = Δ ++ [α] → HasType env Δ (t.openAt Δ.length u) β := by
   intro Γ t β h
   induction h with
   | bvar hi =>
@@ -315,11 +352,11 @@ theorem HasType.openAt_aux {α u} (hu : HasType [] u α) :
     subst hΓ
     simp [Tm.openAt]
     exact HasType.fvar x α'
-  | const c α' =>
+  | const hconst hinst =>
     intro Δ hΓ
     subst hΓ
     simp [Tm.openAt]
-    exact HasType.const c α'
+    exact HasType.const hconst hinst
   | app _ _ ihf iha =>
     intro Δ hΓ
     exact HasType.app (ihf Δ hΓ) (iha Δ hΓ)
@@ -330,35 +367,35 @@ theorem HasType.openAt_aux {α u} (hu : HasType [] u α) :
     apply ih
     simp [List.cons_append]
 
-theorem HasType.openAt {Γ t β α u} (ht : HasType (Γ ++ [α]) t β)
-    (hu : HasType [] u α) :
-    HasType Γ (t.openAt Γ.length u) β :=
+theorem HasType.openAt {Γ t β α u} (ht : HasType env (Γ ++ [α]) t β)
+    (hu : HasType env [] u α) :
+    HasType env Γ (t.openAt Γ.length u) β :=
   HasType.openAt_aux hu ht Γ rfl
 
-theorem HasType.open' {t β α u} (ht : HasType [α] t β) (hu : HasType [] u α) :
-    HasType [] (t.open' u) β := by
+theorem HasType.open' {t β α u} (ht : HasType env [α] t β) (hu : HasType env [] u α) :
+    HasType env [] (t.open' u) β := by
   simpa [Tm.open'] using ht.openAt (Γ := []) (α := α) hu
 
 /-- A well-typed term mentions only in-scope bound indices. -/
-theorem HasType.lc {Γ t α} (h : HasType Γ t α) : t.LC Γ.length = true := by
+theorem HasType.lc {Γ t α} (h : HasType env Γ t α) : t.LC Γ.length = true := by
   induction h with
   | bvar hi =>
     simp [Tm.LC, (List.getElem?_eq_some_iff.1 hi).1]
   | fvar x α =>
     simp [Tm.LC]
-  | const c α =>
+  | const hconst hinst =>
     simp [Tm.LC]
   | app _ _ ihf iha =>
     simp [Tm.LC, ihf, iha]
   | lam _ ih =>
     simpa [Tm.LC, List.length] using ih
 
-theorem HasType.lc0 {t α} (h : HasType [] t α) : t.LC 0 = true :=
+theorem HasType.lc0 {t α} (h : HasType env [] t α) : t.LC 0 = true :=
   h.lc
 
 /-- Place a term under one extra binder at de Bruijn index `c`. -/
-theorem HasType.shift_at {Γ t α} (h : HasType Γ t α) (γ : Ty) :
-    ∀ c, HasType (Γ.insertIdx c γ) (t.shift 1 c) α := by
+theorem HasType.shift_at {Γ t α} (h : HasType env Γ t α) (γ : Ty) :
+    ∀ c, HasType env (Γ.insertIdx c γ) (t.shift 1 c) α := by
   induction h with
   | bvar hi =>
     rename_i i
@@ -377,10 +414,10 @@ theorem HasType.shift_at {Γ t α} (h : HasType Γ t α) (γ : Ty) :
     intro c
     simp [Tm.shift]
     exact HasType.fvar x α
-  | const k α =>
+  | const hconst hinst =>
     intro c
     simp [Tm.shift]
-    exact HasType.const k α
+    exact HasType.const hconst hinst
   | app _ _ ihf iha =>
     intro c
     simpa [Tm.shift] using HasType.app (ihf c) (iha c)
@@ -390,23 +427,66 @@ theorem HasType.shift_at {Γ t α} (h : HasType Γ t α) (γ : Ty) :
     simpa [Tm.shift, List.insertIdx_succ_cons] using ih (c + 1)
 
 /-- Place a term under one extra innermost binder. -/
-theorem HasType.shift0 {Γ t α} (γ : Ty) (h : HasType Γ t α) :
-    HasType (γ :: Γ) (t.shift 1 0) α := by
+theorem HasType.shift0 {Γ t α} (γ : Ty) (h : HasType env Γ t α) :
+    HasType env (γ :: Γ) (t.shift 1 0) α := by
   simpa [List.insertIdx_zero] using h.shift_at γ 0
 
+/-- The equality constant at type `α`. -/
+theorem HasType.eqConst [Env.HasEq env] {Γ} (α : Ty) :
+    HasType env Γ (Tm.eqConst α) (α ↝ α ↝ .bool) :=
+  HasType.const Env.HasEq.eq_const (eqTy_isInstanceOf α)
+
+/-- The Hilbert-choice constant at type `α`. -/
+theorem HasType.selectConst [Env.HasSelect env] {Γ} (α : Ty) :
+    HasType env Γ (Tm.selectConst α) ((α ↝ .bool) ↝ α) :=
+  HasType.const Env.HasSelect.select_const (selectTy_isInstanceOf α)
+
 /-- Equations are booleans when both sides share a type. -/
-theorem HasType.mkEq {Γ s t α} (hs : HasType Γ s α) (ht : HasType Γ t α) :
-    HasType Γ (Tm.mkEq α s t) .bool :=
-  HasType.app (HasType.app (HasType.const .eq α) hs) ht
+theorem HasType.mkEq [Env.HasEq env] {Γ s t α}
+    (hs : HasType env Γ s α) (ht : HasType env Γ t α) :
+    HasType env Γ (Tm.mkEq α s t) .bool :=
+  HasType.app (HasType.app (HasType.eqConst α) hs) ht
 
 /-- Inversion for `s = t`. -/
-theorem HasType.dest_mkEq {Γ s t α β} (h : HasType Γ (Tm.mkEq α s t) β) :
-    β = .bool ∧ HasType Γ s α ∧ HasType Γ t α := by
+theorem HasType.dest_mkEq {Γ s t α β} (h : HasType env Γ (Tm.mkEq α s t) β) :
+    β = .bool ∧ HasType env Γ s α ∧ HasType env Γ t α := by
   cases h with
   | app hf ht =>
     cases hf with
     | app hc hs =>
       cases hc
       exact ⟨rfl, hs, ht⟩
+
+/-- Every axiom of a well-formed environment is a closed boolean. -/
+def Env.WF (env : Env) : Prop :=
+  ∀ p, env.axioms p → HasType env [] p .bool
+
+theorem Env.WF.addAxiom {ax : Tm} (hwf : env.WF) (hty : HasType env [] ax .bool) :
+    (env.addAxiom ax).WF := by
+  intro p hp
+  match hp with
+  | Or.inl heq =>
+    subst heq
+    exact hty.weakenEnv (Env.LE.addAxiom env p)
+  | Or.inr hax =>
+    exact (hwf p hax).weakenEnv (Env.LE.addAxiom env ax)
+
+theorem Env.WF.addConst {n : Name} {ty : Ty} (hwf : env.WF)
+    (hfresh : env.constants n = none) :
+    (env.addConst n ty).WF := by
+  intro p hp
+  exact (hwf p hp).weakenEnv (Env.LE.addConst_of_fresh hfresh)
+
+theorem Env.WF.addDef [Env.HasEq env] {n : Name} {ty : Ty} {rhs : Tm}
+    (hwf : env.WF) (hfresh : env.constants n = none)
+    (hn : n ≠ eqName) (hty : HasType env [] rhs ty) :
+    (env.addDef n ty rhs).WF := by
+  haveI : Env.HasEq (env.addConst n ty) := Env.HasEq.addConst hn
+  have hle : env.LE (env.addConst n ty) := Env.LE.addConst_of_fresh hfresh
+  have hconst : HasType (env.addConst n ty) [] (.const n ty) ty :=
+    HasType.const (by simp) (Ty.isInstanceOf_self ty)
+  have heq : HasType (env.addConst n ty) [] (Tm.mkEq ty (.const n ty) rhs) .bool :=
+    HasType.mkEq hconst (hty.weakenEnv hle)
+  exact (hwf.addConst hfresh).addAxiom heq
 
 end HOLean

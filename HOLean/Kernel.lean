@@ -5,6 +5,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 
 import HOLean.Typing
 
+
 /-!
 # The HOL Light kernel
 
@@ -45,72 +46,90 @@ theorem hypsErase_eq_of_not_mem {p : Tm} {Γ : List Tm} (h : p ∉ Γ) :
   intro x hx heq
   exact h (heq ▸ hx)
 
-/-- The HOL Light primitive inference system. -/
-inductive Provable : List Tm → Tm → Prop where
+/-- The HOL Light primitive inference system, relative to an environment. -/
+inductive Provable (env : Env) : List Tm → Tm → Prop where
   /-- `REFL t` gives `⊢ t = t`. -/
-  | refl {t α} (ht : HasType [] t α) :
-      Provable [] (Tm.mkEq α t t)
+  | refl {t α} (ht : HasType env [] t α) :
+      Provable env [] (Tm.mkEq α t t)
   /-- `TRANS`. -/
   | trans {Γ Δ s t u α}
-      (h1 : Provable Γ (Tm.mkEq α s t))
-      (h2 : Provable Δ (Tm.mkEq α t u)) :
-      Provable (Γ ++ Δ) (Tm.mkEq α s u)
+      (h1 : Provable env Γ (Tm.mkEq α s t))
+      (h2 : Provable env Δ (Tm.mkEq α t u)) :
+      Provable env (Γ ++ Δ) (Tm.mkEq α s u)
   /-- `MK_COMB`. -/
   | mkComb {Γ Δ f g x y α β}
-      (h1 : Provable Γ (Tm.mkEq (α ↝ β) f g))
-      (h2 : Provable Δ (Tm.mkEq α x y)) :
-      Provable (Γ ++ Δ) (Tm.mkEq β (.app f x) (.app g y))
+      (h1 : Provable env Γ (Tm.mkEq (α ↝ β) f g))
+      (h2 : Provable env Δ (Tm.mkEq α x y)) :
+      Provable env (Γ ++ Δ) (Tm.mkEq β (.app f x) (.app g y))
   /-- `ABS`: close a free variable `(x, α)` in both sides of an equation.
   Locally nameless syntax removes *binder* clash, but not this side
   condition: `abstract` binds `x` in the conclusion while hypotheses keep
   their fvars.  If `x` occurred in `Γ` one could turn `x = c ⊢ x = c` into
   `x = c ⊢ (λy. y) = (λy. c)`. -/
   | abs {Γ s t x α β}
-      (h : Provable Γ (Tm.mkEq β s t))
+      (h : Provable env Γ (Tm.mkEq β s t))
       (hfresh : ∀ p ∈ Γ, p.freeIn x α = false) :
-      Provable Γ (Tm.mkEq (α ↝ β) (s.abstract x α) (t.abstract x α))
+      Provable env Γ (Tm.mkEq (α ↝ β) (s.abstract x α) (t.abstract x α))
   /-- `BETA`: the trivial redex `((λ x. t) x) = t[x]`. -/
   | beta {t x α β}
-      (ht : HasType [α] t β) :
-      Provable []
+      (ht : HasType env [α] t β) :
+      Provable env []
         (Tm.mkEq β (.app (.lam α t) (.fvar x α)) (t.open' (.fvar x α)))
   /-- `ASSUME`: a boolean term proves itself. -/
-  | assume {p} (hp : HasType [] p .bool) :
-      Provable [p] p
+  | assume {p} (hp : HasType env [] p .bool) :
+      Provable env [p] p
   /-- `EQ_MP`. -/
   | eqMp {Γ Δ p q}
-      (h1 : Provable Γ (Tm.mkEq .bool p q))
-      (h2 : Provable Δ p) :
-      Provable (Γ ++ Δ) q
+      (h1 : Provable env Γ (Tm.mkEq .bool p q))
+      (h2 : Provable env Δ p) :
+      Provable env (Γ ++ Δ) q
   /-- `DEDUCT_ANTISYM_RULE`. -/
   | deductAntisym {Γ Δ p q}
-      (h1 : Provable Γ p)
-      (h2 : Provable Δ q) :
-      Provable (hypsErase q Γ ++ hypsErase p Δ) (Tm.mkEq .bool p q)
+      (h1 : Provable env Γ p)
+      (h2 : Provable env Δ q) :
+      Provable env (hypsErase q Γ ++ hypsErase p Δ) (Tm.mkEq .bool p q)
   /-- `INST_TYPE`. -/
-  | instType {Γ p} (θ : TySubst) (h : Provable Γ p) :
-      Provable (Γ.map (·.instTy θ)) (p.instTy θ)
+  | instType {Γ p} (θ : TySubst) (h : Provable env Γ p) :
+      Provable env (Γ.map (·.instTy θ)) (p.instTy θ)
   /-- `INST` (simultaneous, type-preserving substitution of free variables). -/
-  | inst {Γ p σ} (hσ : σ.Ok) (h : Provable Γ p) :
-      Provable (Γ.map (·.applySubst σ)) (p.applySubst σ)
+  | inst {Γ p σ} (hσ : σ.Ok env) (h : Provable env Γ p) :
+      Provable env (Γ.map (·.applySubst σ)) (p.applySubst σ)
 
-scoped notation:50 Γ:51 " ⊩ " p:50 => Provable Γ p
+scoped notation:50 Γ:51 " ⊩[" env:0 "] " p:50 => Provable env Γ p
 
 namespace Provable
 
+variable {env : Env}
+
 private theorem hyps_append {Γ Δ : List Tm}
-    (hΓ : ∀ q ∈ Γ, HasType [] q .bool)
-    (hΔ : ∀ q ∈ Δ, HasType [] q .bool) :
-    ∀ q ∈ Γ ++ Δ, HasType [] q .bool := by
+    (hΓ : ∀ q ∈ Γ, HasType env [] q .bool)
+    (hΔ : ∀ q ∈ Δ, HasType env [] q .bool) :
+    ∀ q ∈ Γ ++ Δ, HasType env [] q .bool := by
   intro q hq
   match List.mem_append.1 hq with
   | Or.inl h => exact hΓ q h
   | Or.inr h => exact hΔ q h
 
+/-- Growing the environment preserves kernel theorems. -/
+theorem weakenEnv {env env' : Env} {Γ p}
+    (hle : env.LE env') (h : Provable env Γ p) :
+    Provable env' Γ p := by
+  induction h with
+  | refl ht => exact refl (ht.weakenEnv hle)
+  | trans _ _ ih1 ih2 => exact trans ih1 ih2
+  | mkComb _ _ ih1 ih2 => exact mkComb ih1 ih2
+  | abs _ hfresh ih => exact abs ih hfresh
+  | beta ht => exact beta (ht.weakenEnv hle)
+  | assume hp => exact assume (hp.weakenEnv hle)
+  | eqMp _ _ ih1 ih2 => exact eqMp ih1 ih2
+  | deductAntisym _ _ ih1 ih2 => exact deductAntisym ih1 ih2
+  | instType θ _ ih => exact instType θ ih
+  | inst hσ _ ih => exact inst (hσ.weakenEnv hle) ih
+
 /-- Every hypothesis and the conclusion of a kernel theorem is a closed
 boolean.  This is the first sanity theorem for the inference system. -/
-theorem bool_typed {Γ p} (h : Γ ⊩ p) :
-    (∀ q ∈ Γ, HasType [] q .bool) ∧ HasType [] p .bool := by
+theorem bool_typed [Env.HasEq env] {Γ p} (h : Γ ⊩[env] p) :
+    (∀ q ∈ Γ, HasType env [] q .bool) ∧ HasType env [] p .bool := by
   induction h with
   | refl ht =>
     constructor
@@ -169,14 +188,15 @@ theorem bool_typed {Γ p} (h : Γ ⊩ p) :
       exact (ih.1 q' hq').applySubst hσ
     · exact ih.2.applySubst hσ
 
-theorem concl_bool {Γ p} (h : Γ ⊩ p) : HasType [] p .bool :=
+theorem concl_bool [Env.HasEq env] {Γ p} (h : Γ ⊩[env] p) : HasType env [] p .bool :=
   (bool_typed h).2
 
-theorem hyps_bool {Γ p} (h : Γ ⊩ p) : ∀ q ∈ Γ, HasType [] q .bool :=
+theorem hyps_bool [Env.HasEq env] {Γ p} (h : Γ ⊩[env] p) : ∀ q ∈ Γ, HasType env [] q .bool :=
   (bool_typed h).1
 
 /-- Boolean reflexivity is also derivable from `ASSUME` + `DEDUCT_ANTISYM`. -/
-theorem bool_refl {p} (hp : HasType [] p .bool) : [] ⊩ Tm.mkEq .bool p p := by
+theorem bool_refl [Env.HasEq env] {p} (hp : HasType env [] p .bool) :
+    [] ⊩[env] Tm.mkEq .bool p p := by
   simpa [hypsErase] using Provable.deductAntisym (assume hp) (assume hp)
 
 end Provable

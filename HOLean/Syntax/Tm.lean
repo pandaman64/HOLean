@@ -12,8 +12,12 @@ Locally nameless terms for HOL Light's four constructors:
 
 * bound variables (`bvar`) — de Bruijn indices
 * free variables (`fvar`) — HOL-style pairs `(name, type)`
-* constants (`const`) — a primitive plus its type-argument
+* constants (`const`) — a name plus its *instantiated* type
 * application and λ-abstraction
+
+The type stored on `const n inst` is the type of that occurrence, not a
+type argument.  It must be an instance of the constant's generic type in
+the environment (`Ty.isInstanceOf`).
 
 Locally nameless syntax avoids HOL Light's `Clash` during `INST_TYPE`: a type
 instantiation cannot capture a free variable by a binder, because binders are
@@ -28,8 +32,8 @@ inductive Tm where
   | bvar : Nat → Tm
   /-- Free variable, identified by *both* name and type (HOL Light). -/
   | fvar : Name → Ty → Tm
-  /-- Primitive constant instantiated at a type argument. -/
-  | const : Const → Ty → Tm
+  /-- Constant `n` at instantiated type `inst`. -/
+  | const : Name → Ty → Tm
   /-- Application. -/
   | app : Tm → Tm → Tm
   /-- λ-abstraction; the binder type is stored, the bound name is not. -/
@@ -86,8 +90,8 @@ def instTy (t : Tm) (θ : TySubst) : Tm :=
 @[simp] theorem instTy_bvar (θ : TySubst) (i : Nat) : (bvar i).instTy θ = bvar i := rfl
 @[simp] theorem instTy_fvar (θ : TySubst) (x : Name) (α : Ty) :
     (fvar x α).instTy θ = fvar x (α.inst θ) := rfl
-@[simp] theorem instTy_const (θ : TySubst) (c : Const) (α : Ty) :
-    (const c α).instTy θ = const c (α.inst θ) := rfl
+@[simp] theorem instTy_const (θ : TySubst) (n : Name) (α : Ty) :
+    (const n α).instTy θ = const n (α.inst θ) := rfl
 @[simp] theorem instTy_app (θ : TySubst) (f a : Tm) :
     (app f a).instTy θ = app (f.instTy θ) (a.instTy θ) := rfl
 @[simp] theorem instTy_lam (θ : TySubst) (α : Ty) (t : Tm) :
@@ -112,8 +116,8 @@ def substFvar (t : Tm) (x : Name) (α : Ty) (u : Tm) : Tm :=
 @[simp] theorem substFvar_bvar (x : Name) (α : Ty) (u : Tm) (i : Nat) :
     (bvar i).substFvar x α u = bvar i := rfl
 
-@[simp] theorem substFvar_const (x : Name) (α : Ty) (u : Tm) (c : Const) (β : Ty) :
-    (const c β).substFvar x α u = const c β := rfl
+@[simp] theorem substFvar_const (x : Name) (α : Ty) (u : Tm) (n : Name) (β : Ty) :
+    (const n β).substFvar x α u = const n β := rfl
 
 theorem substFvar_fvar_self (x : Name) (α : Ty) (u : Tm) :
     (fvar x α).substFvar x α u = u := by
@@ -143,20 +147,33 @@ def applySubst (t : Tm) (σ : Subst) : Tm :=
   | app f a => app (f.applySubst σ) (a.applySubst σ)
   | lam α t => lam α (t.applySubst σ)
 
-/-- `s = t` at type `α`, i.e. `(=)[α] s t`. -/
+/-- Equality constant at type `α ↝ α ↝ bool`. -/
+def eqConst (α : Ty) : Tm :=
+  const eqName (α ↝ α ↝ .bool)
+
+/-- Hilbert-choice constant at type `(α ↝ bool) ↝ α`. -/
+def selectConst (α : Ty) : Tm :=
+  const selectName ((α ↝ .bool) ↝ α)
+
+/-- `s = t` at type `α`, i.e. `(=) : α ↝ α ↝ bool` applied to `s` and `t`. -/
 def mkEq (α : Ty) (s t : Tm) : Tm :=
-  app (app (const .eq α) s) t
+  app (app (eqConst α) s) t
 
 @[simp] theorem mkEq_eq (α : Ty) (s t : Tm) :
-    mkEq α s t = app (app (const .eq α) s) t := rfl
+    mkEq α s t = app (app (eqConst α) s) t := rfl
+
+@[simp] theorem eqConst_eq (α : Ty) :
+    eqConst α = const eqName (α ↝ α ↝ .bool) := rfl
 
 /-- Destructor for equations. -/
 def destEq : Tm → Option (Ty × Tm × Tm)
-  | app (app (const .eq α) s) t => some (α, s, t)
+  | app (app (const n (.arrow α (.arrow β .bool))) s) t =>
+      if n = eqName ∧ α = β then some (α, s, t) else none
   | _ => none
 
 @[simp] theorem destEq_mkEq (α : Ty) (s t : Tm) :
-    destEq (mkEq α s t) = some (α, s, t) := rfl
+    destEq (mkEq α s t) = some (α, s, t) := by
+  simp [destEq, mkEq, eqConst]
 
 /-- Schematic type variables occurring in a term. -/
 def tyvars : Tm → List Name
@@ -189,7 +206,7 @@ def LC (t : Tm) (n : Nat) : Bool :=
 
 @[simp] theorem LC_bvar (i n : Nat) : (bvar i).LC n = decide (i < n) := rfl
 @[simp] theorem LC_fvar (x : Name) (α : Ty) (n : Nat) : (fvar x α).LC n = true := rfl
-@[simp] theorem LC_const (c : Const) (α : Ty) (n : Nat) : (const c α).LC n = true := rfl
+@[simp] theorem LC_const (n : Name) (α : Ty) (k : Nat) : (const n α).LC k = true := rfl
 @[simp] theorem LC_app (f a : Tm) (n : Nat) : (app f a).LC n = (f.LC n && a.LC n) := rfl
 @[simp] theorem LC_lam (α : Ty) (t : Tm) (n : Nat) : (lam α t).LC n = t.LC (n + 1) := rfl
 

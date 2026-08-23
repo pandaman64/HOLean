@@ -92,25 +92,28 @@ theorem Tm.open_and_body (p q u : Tm) (hp : p.LC 0 = true) (hq : q.LC 0 = true) 
     ((((Tm.bvar 0).app p).app q).open' u) = ((u.app p).app q) := by
   simp [Tm.open', Tm.openAt, Tm.openAt_of_LC hp, Tm.openAt_of_LC hq]
 
+variable {env : Env} [Env.HasEq env]
+set_option linter.unusedSectionVars false
+
 namespace Provable
 
-theorem tru_intro : [] ⊩ Tm.tru :=
+theorem tru_intro : [] ⊩[env] Tm.tru :=
   refl (HasType.lam (HasType.bvar (by simp)))
 
-theorem eq_sym {Γ s t α} (h : Γ ⊩ Tm.mkEq α s t) : Γ ⊩ Tm.mkEq α t s := by
+theorem eq_sym {Γ s t α} (h : Γ ⊩[env] Tm.mkEq α s t) : Γ ⊩[env] Tm.mkEq α t s := by
   obtain ⟨_, hs, _ht⟩ := HasType.dest_mkEq h.concl_bool
-  have hrefl_eq : [] ⊩ Tm.mkEq (α ↝ α ↝ .bool) (Tm.const .eq α) (Tm.const .eq α) :=
-    refl (HasType.const .eq α)
-  have hfun : Γ ⊩ Tm.mkEq (α ↝ .bool) ((Tm.const .eq α).app s) ((Tm.const .eq α).app t) := by
-    simpa using mkComb hrefl_eq h
-  have hrefl_s : [] ⊩ Tm.mkEq α s s := refl hs
-  have hboolEq : Γ ⊩ Tm.mkEq .bool (Tm.mkEq α s s) (Tm.mkEq α t s) := by
+  have hrefl_eq : [] ⊩[env] Tm.mkEq (α ↝ α ↝ .bool) (Tm.eqConst α) (Tm.eqConst α) :=
+    refl (HasType.eqConst α)
+  have hfun : Γ ⊩[env] Tm.mkEq (α ↝ .bool) ((Tm.eqConst α).app s) ((Tm.eqConst α).app t) := by
+    simpa [Tm.eqConst] using mkComb hrefl_eq h
+  have hrefl_s : [] ⊩[env] Tm.mkEq α s s := refl hs
+  have hboolEq : Γ ⊩[env] Tm.mkEq .bool (Tm.mkEq α s s) (Tm.mkEq α t s) := by
     simpa [Tm.mkEq] using mkComb hfun hrefl_s
   simpa [Tm.mkEq] using eqMp hboolEq hrefl_s
 
 /-- Raw form: `DEDUCT_ANTISYM` against `⊢ T` drops `T` if it was assumed. -/
-theorem eqt_intro_erase {Γ p} (h : Γ ⊩ p) :
-    hypsErase Tm.tru Γ ⊩ Tm.mkEq .bool p Tm.tru := by
+theorem eqt_intro_erase {Γ p} (h : Γ ⊩[env] p) :
+    hypsErase Tm.tru Γ ⊩[env] Tm.mkEq .bool p Tm.tru := by
   simpa [hypsErase] using deductAntisym h tru_intro
 
 /-- `Γ ⊢ p` implies `Γ ⊢ p = T`.
@@ -118,14 +121,14 @@ theorem eqt_intro_erase {Γ p} (h : Γ ⊩ p) :
 The kernel rule behind this is `DEDUCT_ANTISYM` with `⊢ T`, whose conclusion
 has hypotheses `Γ \ {T}`.  `T` is object-logic truth, not an assumption, so
 the side condition recovers the original list. -/
-theorem eqt_intro {Γ p} (h : Γ ⊩ p) (hT : Tm.tru ∉ Γ) :
-    Γ ⊩ Tm.mkEq .bool p Tm.tru :=
+theorem eqt_intro {Γ p} (h : Γ ⊩[env] p) (hT : Tm.tru ∉ Γ) :
+    Γ ⊩[env] Tm.mkEq .bool p Tm.tru :=
   hypsErase_eq_of_not_mem hT ▸ eqt_intro_erase h
 
-theorem gen {Γ t x α} (h : Γ ⊩ t)
+theorem gen {Γ t x α} (h : Γ ⊩[env] t)
     (hT : Tm.tru ∉ Γ)
     (hfresh : ∀ r ∈ Γ, r.freeIn x α = false) :
-    Γ ⊩ Tm.all α (t.abstract x α) := by
+    Γ ⊩[env] Tm.all α (t.abstract x α) := by
   have hTfree : Tm.tru.freeIn x α = false := Tm.tru_not_free x α
   have habs := abs (eqt_intro h hT) hfresh
   have htruAbs : Tm.tru.abstract x α = Tm.lam α Tm.tru := by
@@ -133,11 +136,11 @@ theorem gen {Γ t x α} (h : Γ ⊩ t)
   simpa [Tm.all, htruAbs] using habs
 
 theorem beta_conv {t u : Tm} {x : Name} {α β : Ty}
-    (ht : HasType [α] t β) (hu : HasType [] u α)
+    (ht : HasType env [α] t β) (hu : HasType env [] u α)
     (hf : t.freeIn x α = false) :
-    [] ⊩ Tm.mkEq β ((Tm.lam α t).app u) (t.open' u) := by
+    [] ⊩[env] Tm.mkEq β ((Tm.lam α t).app u) (t.open' u) := by
   have hβ := beta (t := t) (x := x) (α := α) (β := β) ht
-  have hσ : Tm.Subst.Ok [(x, α, u)] := by
+  have hσ : Tm.Subst.Ok env [(x, α, u)] := by
     intro y γ v hv
     simp [Tm.Subst.lookup] at hv
     obtain ⟨⟨rfl, rfl⟩, rfl⟩ := hv
@@ -152,19 +155,19 @@ theorem beta_conv {t u : Tm} {x : Name} {α β : Ty}
   exact hconcl ▸ hinst
 
 theorem conj {Γ Δ p q : _} (x : Name)
-    (hp : Γ ⊩ p) (hq : Δ ⊩ q)
+    (hp : Γ ⊩[env] p) (hq : Δ ⊩[env] q)
     (hTΓ : Tm.tru ∉ Γ) (hTΔ : Tm.tru ∉ Δ)
     (hxΓ : ∀ r ∈ Γ, r.freeIn x Tm.boolCombTy = false)
     (hxΔ : ∀ r ∈ Δ, r.freeIn x Tm.boolCombTy = false)
     (hxp : p.freeIn x Tm.boolCombTy = false)
     (hxq : q.freeIn x Tm.boolCombTy = false) :
-    (Γ ++ Δ) ⊩ p.and q := by
+    (Γ ++ Δ) ⊩[env] p.and q := by
   have hpT := eqt_intro hp hTΓ
   have hqT := eqt_intro hq hTΔ
   have hp0 : p.LC 0 = true := hp.concl_bool.lc0
   have hq0 : q.LC 0 = true := hq.concl_bool.lc0
   have hT0 : Tm.tru.LC 0 = true := Tm.tru_LC
-  have hf : [] ⊩ Tm.mkEq Tm.boolCombTy (Tm.fvar x Tm.boolCombTy) (Tm.fvar x Tm.boolCombTy) :=
+  have hf : [] ⊩[env] Tm.mkEq Tm.boolCombTy (Tm.fvar x Tm.boolCombTy) (Tm.fvar x Tm.boolCombTy) :=
     refl (HasType.fvar x Tm.boolCombTy)
   have h1 := mkComb hf hpT
   have h2 := mkComb h1 hqT
@@ -174,7 +177,7 @@ theorem conj {Γ Δ p q : _} (x : Name)
     | Or.inl hr => exact hxΓ r hr
     | Or.inr hr => exact hxΔ r hr
   have h2' :
-      Γ ++ Δ ⊩
+      Γ ++ Δ ⊩[env]
         Tm.mkEq .bool
           (((Tm.fvar x Tm.boolCombTy).app p).app q)
           (((Tm.fvar x Tm.boolCombTy).app Tm.tru).app Tm.tru) := by
@@ -200,24 +203,24 @@ def projSnd : Tm :=
 def projFst : Tm :=
   Tm.lam .bool (Tm.lam .bool (Tm.bvar 1))
 
-theorem hasType_projSnd : HasType [] projSnd Tm.boolCombTy :=
+theorem hasType_projSnd : HasType env [] projSnd Tm.boolCombTy :=
   HasType.lam (HasType.lam (HasType.bvar (by simp)))
 
-theorem hasType_projFst : HasType [] projFst Tm.boolCombTy :=
+theorem hasType_projFst : HasType env [] projFst Tm.boolCombTy :=
   HasType.lam (HasType.lam (HasType.bvar (by simp)))
 
-theorem and_lhs_type {p q} (hp : HasType [] p .bool) (hq : HasType [] q .bool) :
-    HasType [Tm.boolCombTy] (((Tm.bvar 0).app p).app q) .bool := by
+theorem and_lhs_type {p q} (hp : HasType env [] p .bool) (hq : HasType env [] q .bool) :
+    HasType env [Tm.boolCombTy] (((Tm.bvar 0).app p).app q) .bool := by
   unfold Tm.boolCombTy
   exact HasType.app (HasType.app (HasType.bvar (by simp)) hp.of_closed) hq.of_closed
 
 theorem and_rhs_type :
-    HasType [Tm.boolCombTy] (((Tm.bvar 0).app Tm.tru).app Tm.tru) .bool := by
+    HasType env [Tm.boolCombTy] (((Tm.bvar 0).app Tm.tru).app Tm.tru) .bool := by
   unfold Tm.boolCombTy
   exact HasType.app (HasType.app (HasType.bvar (by simp)) HasType.tru) HasType.tru
 
 theorem and_eq_combinators {p q}
-    (hp : HasType [] p .bool) (hq : HasType [] q .bool) :
+    (hp : HasType env [] p .bool) (hq : HasType env [] q .bool) :
     p.and q =
       Tm.mkEq (Tm.boolCombTy ↝ .bool)
         (Tm.lam Tm.boolCombTy (((Tm.bvar 0).app p).app q))
@@ -226,11 +229,11 @@ theorem and_eq_combinators {p q}
 
 /-- `(λ f. f p q) u = u p q` by general β. -/
 theorem comb_beta {p q u : Tm} (x : Name)
-    (hp : HasType [] p .bool) (hq : HasType [] q .bool)
-    (hu : HasType [] u Tm.boolCombTy)
+    (hp : HasType env [] p .bool) (hq : HasType env [] q .bool)
+    (hu : HasType env [] u Tm.boolCombTy)
     (hxp : p.freeIn x Tm.boolCombTy = false)
     (hxq : q.freeIn x Tm.boolCombTy = false) :
-    [] ⊩ Tm.mkEq .bool
+    [] ⊩[env] Tm.mkEq .bool
       ((Tm.lam Tm.boolCombTy (((Tm.bvar 0).app p).app q)).app u)
       ((u.app p).app q) := by
   have hβ :=
@@ -243,131 +246,133 @@ theorem comb_beta {p q u : Tm} (x : Name)
   exact hopen ▸ hβ
 
 theorem projFst_beta {p q : Tm} (x : Name)
-    (hp : HasType [] p .bool) (hq : HasType [] q .bool)
+    (hp : HasType env [] p .bool) (hq : HasType env [] q .bool)
     (hxp : p.freeIn x .bool = false) :
-    [] ⊩ Tm.mkEq .bool ((projFst.app p).app q) p := by
-  have ht : HasType [.bool] (Tm.lam .bool (Tm.bvar 1)) (.bool ↝ .bool) :=
+    [] ⊩[env] Tm.mkEq .bool ((projFst.app p).app q) p := by
+  have ht : HasType env [.bool] (Tm.lam .bool (Tm.bvar 1)) (.bool ↝ .bool) :=
     HasType.lam (HasType.bvar (by simp))
   have h1 :=
     beta_conv (t := Tm.lam .bool (Tm.bvar 1)) (u := p) (x := x)
       (α := .bool) (β := .bool ↝ .bool) ht hp (by simp [Tm.freeIn])
-  have h1' : [] ⊩ Tm.mkEq (.bool ↝ .bool) (projFst.app p) (Tm.lam .bool p) := by
+  have h1' : [] ⊩[env] Tm.mkEq (.bool ↝ .bool) (projFst.app p) (Tm.lam .bool p) := by
     simpa [projFst, Tm.open', Tm.openAt] using h1
-  have h2 : [] ⊩ Tm.mkEq .bool ((projFst.app p).app q) ((Tm.lam .bool p).app q) := by
+  have h2 : [] ⊩[env] Tm.mkEq .bool ((projFst.app p).app q) ((Tm.lam .bool p).app q) := by
     simpa using mkComb h1' (refl hq)
   have h3 :=
     beta_conv (t := p) (u := q) (x := x) (α := .bool) (β := .bool)
       hp.of_closed hq hxp
-  have h3' : [] ⊩ Tm.mkEq .bool ((Tm.lam .bool p).app q) p := by
+  have h3' : [] ⊩[env] Tm.mkEq .bool ((Tm.lam .bool p).app q) p := by
     simpa [Tm.openAt_of_LC hp.lc0] using h3
   simpa using trans h2 h3'
 
 theorem projSnd_beta {p q : Tm} (x : Name)
-    (hp : HasType [] p .bool) (hq : HasType [] q .bool)
+    (hp : HasType env [] p .bool) (hq : HasType env [] q .bool)
     (_hxq : q.freeIn x .bool = false) :
-    [] ⊩ Tm.mkEq .bool ((projSnd.app p).app q) q := by
-  have ht : HasType [.bool] (Tm.lam .bool (Tm.bvar 0)) (.bool ↝ .bool) :=
+    [] ⊩[env] Tm.mkEq .bool ((projSnd.app p).app q) q := by
+  have ht : HasType env [.bool] (Tm.lam .bool (Tm.bvar 0)) (.bool ↝ .bool) :=
     HasType.lam (HasType.bvar (by simp))
   have h1 :=
     beta_conv (t := Tm.lam .bool (Tm.bvar 0)) (u := p) (x := x)
       (α := .bool) (β := .bool ↝ .bool) ht hp (by simp [Tm.freeIn])
-  have h1' : [] ⊩ Tm.mkEq (.bool ↝ .bool) (projSnd.app p) (Tm.lam .bool (Tm.bvar 0)) := by
+  have h1' : [] ⊩[env] Tm.mkEq (.bool ↝ .bool) (projSnd.app p) (Tm.lam .bool (Tm.bvar 0)) := by
     simpa [projSnd, Tm.open', Tm.openAt] using h1
-  have h2 : [] ⊩ Tm.mkEq .bool ((projSnd.app p).app q) ((Tm.lam .bool (Tm.bvar 0)).app q) := by
+  have h2 : [] ⊩[env] Tm.mkEq .bool ((projSnd.app p).app q) ((Tm.lam .bool (Tm.bvar 0)).app q) := by
     simpa using mkComb h1' (refl hq)
   have h3 :=
     beta_conv (t := Tm.bvar 0) (u := q) (x := x) (α := .bool) (β := .bool)
       (HasType.bvar (by simp)) hq (by simp [Tm.freeIn])
-  have h3' : [] ⊩ Tm.mkEq .bool ((Tm.lam .bool (Tm.bvar 0)).app q) q := by
+  have h3' : [] ⊩[env] Tm.mkEq .bool ((Tm.lam .bool (Tm.bvar 0)).app q) q := by
     simpa [Tm.open', Tm.openAt] using h3
   simpa using trans h2 h3'
 
 /-- Left projection: `Γ ⊢ p ∧ q` gives `Γ ⊢ p`. -/
 theorem and_elim_left {Γ p q} (x : Name)
-    (h : Γ ⊩ p.and q)
-    (hp : HasType [] p .bool) (hq : HasType [] q .bool)
+    (h : Γ ⊩[env] p.and q)
+    (hp : HasType env [] p .bool) (hq : HasType env [] q .bool)
     (hxp : p.freeIn x Tm.boolCombTy = false)
     (hxq : q.freeIn x Tm.boolCombTy = false)
     (hxpBool : p.freeIn x .bool = false) :
-    Γ ⊩ p := by
+    Γ ⊩[env] p := by
   have heq :
-      Γ ⊩ Tm.mkEq (Tm.boolCombTy ↝ .bool)
+      Γ ⊩[env] Tm.mkEq (Tm.boolCombTy ↝ .bool)
         (Tm.lam Tm.boolCombTy (((Tm.bvar 0).app p).app q))
         (Tm.lam Tm.boolCombTy (((Tm.bvar 0).app Tm.tru).app Tm.tru)) :=
     (and_eq_combinators hp hq) ▸ h
   have happ :
-      Γ ⊩ Tm.mkEq .bool
+      Γ ⊩[env] Tm.mkEq .bool
         ((Tm.lam Tm.boolCombTy (((Tm.bvar 0).app p).app q)).app projFst)
         ((Tm.lam Tm.boolCombTy (((Tm.bvar 0).app Tm.tru).app Tm.tru)).app projFst) := by
     simpa using mkComb heq (refl hasType_projFst)
   have hl := comb_beta (p := p) (q := q) (u := projFst) x hp hq hasType_projFst hxp hxq
   have hr :=
     comb_beta (p := Tm.tru) (q := Tm.tru) (u := projFst) x
-      HasType.tru HasType.tru hasType_projFst
+      (HasType.tru (env := env)) (HasType.tru (env := env)) hasType_projFst
       (Tm.tru_not_free _ _) (Tm.tru_not_free _ _)
   have hπp := projFst_beta x hp hq hxpBool
-  have hπT := projFst_beta (p := Tm.tru) (q := Tm.tru) x HasType.tru HasType.tru
+  have hπT := projFst_beta (p := Tm.tru) (q := Tm.tru) x
+    (HasType.tru (env := env)) (HasType.tru (env := env))
     (Tm.tru_not_free x .bool)
-  have hl' : [] ⊩ Tm.mkEq .bool
+  have hl' : [] ⊩[env] Tm.mkEq .bool
       ((Tm.lam Tm.boolCombTy (((Tm.bvar 0).app p).app q)).app projFst) p :=
     trans hl hπp
-  have hr' : [] ⊩ Tm.mkEq .bool
+  have hr' : [] ⊩[env] Tm.mkEq .bool
       ((Tm.lam Tm.boolCombTy (((Tm.bvar 0).app Tm.tru).app Tm.tru)).app projFst) Tm.tru :=
     trans hr hπT
-  have hpT : Γ ⊩ Tm.mkEq .bool p Tm.tru := by
+  have hpT : Γ ⊩[env] Tm.mkEq .bool p Tm.tru := by
     have h1 := trans (eq_sym hl') happ
     simpa using trans h1 hr'
   simpa using eqMp (eq_sym hpT) tru_intro
 
 /-- Right projection: `Γ ⊢ p ∧ q` gives `Γ ⊢ q`. -/
 theorem and_elim_right {Γ p q} (x : Name)
-    (h : Γ ⊩ p.and q)
-    (hp : HasType [] p .bool) (hq : HasType [] q .bool)
+    (h : Γ ⊩[env] p.and q)
+    (hp : HasType env [] p .bool) (hq : HasType env [] q .bool)
     (hxp : p.freeIn x Tm.boolCombTy = false)
     (hxq : q.freeIn x Tm.boolCombTy = false)
     (hxqBool : q.freeIn x .bool = false) :
-    Γ ⊩ q := by
+    Γ ⊩[env] q := by
   have heq :
-      Γ ⊩ Tm.mkEq (Tm.boolCombTy ↝ .bool)
+      Γ ⊩[env] Tm.mkEq (Tm.boolCombTy ↝ .bool)
         (Tm.lam Tm.boolCombTy (((Tm.bvar 0).app p).app q))
         (Tm.lam Tm.boolCombTy (((Tm.bvar 0).app Tm.tru).app Tm.tru)) :=
     (and_eq_combinators hp hq) ▸ h
   have happ :
-      Γ ⊩ Tm.mkEq .bool
+      Γ ⊩[env] Tm.mkEq .bool
         ((Tm.lam Tm.boolCombTy (((Tm.bvar 0).app p).app q)).app projSnd)
         ((Tm.lam Tm.boolCombTy (((Tm.bvar 0).app Tm.tru).app Tm.tru)).app projSnd) := by
     simpa using mkComb heq (refl hasType_projSnd)
   have hl := comb_beta (p := p) (q := q) (u := projSnd) x hp hq hasType_projSnd hxp hxq
   have hr :=
     comb_beta (p := Tm.tru) (q := Tm.tru) (u := projSnd) x
-      HasType.tru HasType.tru hasType_projSnd
+      (HasType.tru (env := env)) (HasType.tru (env := env)) hasType_projSnd
       (Tm.tru_not_free _ _) (Tm.tru_not_free _ _)
   have hπq := projSnd_beta x hp hq hxqBool
-  have hπT := projSnd_beta (p := Tm.tru) (q := Tm.tru) x HasType.tru HasType.tru
+  have hπT := projSnd_beta (p := Tm.tru) (q := Tm.tru) x
+    (HasType.tru (env := env)) (HasType.tru (env := env))
     (Tm.tru_not_free x .bool)
-  have hl' : [] ⊩ Tm.mkEq .bool
+  have hl' : [] ⊩[env] Tm.mkEq .bool
       ((Tm.lam Tm.boolCombTy (((Tm.bvar 0).app p).app q)).app projSnd) q :=
     trans hl hπq
-  have hr' : [] ⊩ Tm.mkEq .bool
+  have hr' : [] ⊩[env] Tm.mkEq .bool
       ((Tm.lam Tm.boolCombTy (((Tm.bvar 0).app Tm.tru).app Tm.tru)).app projSnd) Tm.tru :=
     trans hr hπT
-  have hqT : Γ ⊩ Tm.mkEq .bool q Tm.tru := by
+  have hqT : Γ ⊩[env] Tm.mkEq .bool q Tm.tru := by
     have h1 := trans (eq_sym hl') happ
     simpa using trans h1 hr'
   simpa using eqMp (eq_sym hqT) tru_intro
 
 /-- Modus ponens from `p ⇒ q ≔ (p ∧ q) = p`. -/
 theorem mp {Γ Δ p q} (x : Name)
-    (him : Γ ⊩ p.imp q) (hp : Δ ⊩ p)
-    (hq : HasType [] q .bool)
+    (him : Γ ⊩[env] p.imp q) (hp : Δ ⊩[env] p)
+    (hq : HasType env [] q .bool)
     (hxp : p.freeIn x Tm.boolCombTy = false)
     (hxq : q.freeIn x Tm.boolCombTy = false)
     (hxqBool : q.freeIn x .bool = false) :
-    (Γ ++ Δ) ⊩ q := by
-  have hpTy : HasType [] p .bool := hp.concl_bool
-  have him' : Γ ⊩ Tm.mkEq .bool (p.and q) p := by
+    (Γ ++ Δ) ⊩[env] q := by
+  have hpTy : HasType env [] p .bool := hp.concl_bool
+  have him' : Γ ⊩[env] Tm.mkEq .bool (p.and q) p := by
     simpa [Tm.imp] using him
-  have hand : (Γ ++ Δ) ⊩ p.and q :=
+  have hand : (Γ ++ Δ) ⊩[env] p.and q :=
     eqMp (eq_sym him') hp
   exact and_elim_right x hand hpTy hq hxp hxq hxqBool
 
@@ -375,13 +380,13 @@ theorem mp {Γ Δ p q} (x : Name)
 The kernel has no structural weakening; this is CONJ + right projection.
 `T ∉ q :: Γ` is the usual case (`T` is not an assumption). -/
 theorem add_assum {Γ p q} (x : Name)
-    (hp : Γ ⊩ p) (hq : HasType [] q .bool)
+    (hp : Γ ⊩[env] p) (hq : HasType env [] q .bool)
     (hT : Tm.tru ∉ q :: Γ)
     (hxΓ : ∀ r ∈ Γ, r.freeIn x Tm.boolCombTy = false)
     (hxqComb : q.freeIn x Tm.boolCombTy = false)
     (hxp : p.freeIn x Tm.boolCombTy = false)
     (hxpBool : p.freeIn x .bool = false) :
-    (q :: Γ) ⊩ p := by
+    (q :: Γ) ⊩[env] p := by
   have hTq : Tm.tru ∉ [q] := by
     intro ht
     simp at ht

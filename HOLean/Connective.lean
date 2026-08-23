@@ -100,14 +100,16 @@ theorem tru_not_free (x : Name) (α : Ty) : tru.freeIn x α = false := rfl
 
 end Tm
 
-theorem HasType.tru {Γ} : HasType Γ Tm.tru .bool :=
+variable {env : Env} [Env.HasEq env]
+
+theorem HasType.tru {Γ} : HasType env Γ Tm.tru .bool :=
   HasType.mkEq
     (HasType.lam (HasType.bvar (by simp)))
     (HasType.lam (HasType.bvar (by simp)))
 
 theorem HasType.and {Γ p q}
-    (hp : HasType Γ p .bool) (hq : HasType Γ q .bool) :
-    HasType Γ (p.and q) .bool := by
+    (hp : HasType env Γ p .bool) (hq : HasType env Γ q .bool) :
+    HasType env Γ (p.and q) .bool := by
   unfold Tm.and Tm.boolCombTy
   apply HasType.mkEq
   · apply HasType.lam
@@ -120,24 +122,24 @@ theorem HasType.and {Γ p q}
       (HasType.tru.shift0 _)
 
 theorem HasType.imp {Γ p q}
-    (hp : HasType Γ p .bool) (hq : HasType Γ q .bool) :
-    HasType Γ (p.imp q) .bool :=
+    (hp : HasType env Γ p .bool) (hq : HasType env Γ q .bool) :
+    HasType env Γ (p.imp q) .bool :=
   HasType.mkEq (HasType.and hp hq) hp
 
-theorem HasType.all {Γ α P} (hP : HasType Γ P (α ↝ .bool)) :
-    HasType Γ (Tm.all α P) .bool :=
+theorem HasType.all {Γ α P} (hP : HasType env Γ P (α ↝ .bool)) :
+    HasType env Γ (Tm.all α P) .bool :=
   HasType.mkEq hP (HasType.lam HasType.tru)
 
-theorem HasType.falsum {Γ} : HasType Γ Tm.falsum .bool :=
+theorem HasType.falsum {Γ} : HasType env Γ Tm.falsum .bool :=
   HasType.all (HasType.lam (HasType.bvar (by simp)))
 
-theorem HasType.not {Γ p} (hp : HasType Γ p .bool) :
-    HasType Γ p.not .bool :=
+theorem HasType.not {Γ p} (hp : HasType env Γ p .bool) :
+    HasType env Γ p.not .bool :=
   HasType.imp hp HasType.falsum
 
 theorem HasType.or {Γ p q}
-    (hp : HasType Γ p .bool) (hq : HasType Γ q .bool) :
-    HasType Γ (p.or q) .bool := by
+    (hp : HasType env Γ p .bool) (hq : HasType env Γ q .bool) :
+    HasType env Γ (p.or q) .bool := by
   unfold Tm.or
   apply HasType.all
   apply HasType.lam
@@ -145,8 +147,8 @@ theorem HasType.or {Γ p q}
   refine HasType.imp (HasType.imp (hq.shift0 _) (HasType.bvar (by simp))) ?_
   exact HasType.bvar (by simp)
 
-theorem HasType.ex {Γ α P} (hP : HasType Γ P (α ↝ .bool)) :
-    HasType Γ (Tm.ex α P) .bool := by
+theorem HasType.ex {Γ α P} (hP : HasType env Γ P (α ↝ .bool)) :
+    HasType env Γ (Tm.ex α P) .bool := by
   unfold Tm.ex
   apply HasType.all
   apply HasType.lam
@@ -156,8 +158,8 @@ theorem HasType.ex {Γ α P} (hP : HasType Γ P (α ↝ .bool)) :
   refine HasType.imp ?_ (HasType.bvar (by simp))
   exact HasType.app (hP.shift_at .bool 0 |>.shift_at α 0) (HasType.bvar (by simp))
 
-theorem HasType.oneOne {Γ α β f} (hf : HasType Γ f (α ↝ β)) :
-    HasType Γ (Tm.oneOne α β f) .bool := by
+theorem HasType.oneOne {Γ α β f} (hf : HasType env Γ f (α ↝ β)) :
+    HasType env Γ (Tm.oneOne α β f) .bool := by
   unfold Tm.oneOne
   apply HasType.all
   apply HasType.lam
@@ -169,8 +171,8 @@ theorem HasType.oneOne {Γ α β f} (hf : HasType Γ f (α ↝ β)) :
   · exact HasType.app (hf.shift_at α 0 |>.shift_at α 0) (HasType.bvar (by simp))
   · exact HasType.app (hf.shift_at α 0 |>.shift_at α 0) (HasType.bvar (by simp))
 
-theorem HasType.onto {Γ α β f} (hf : HasType Γ f (α ↝ β)) :
-    HasType Γ (Tm.onto α β f) .bool := by
+theorem HasType.onto {Γ α β f} (hf : HasType env Γ f (α ↝ β)) :
+    HasType env Γ (Tm.onto α β f) .bool := by
   unfold Tm.onto
   apply HasType.all
   apply HasType.lam
