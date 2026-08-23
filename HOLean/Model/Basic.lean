@@ -76,7 +76,12 @@ noncomputable def zfSuccFun : ZFSet :=
 theorem zfSuccFun_isFunc : IsFunc omega omega zfSuccFun :=
   (map_isFunc (f := zfSucc) (x := omega) (y := omega)).mpr fun _ => zfSucc_mem_omega
 
-/-- Application of a functional graph.  Well-defined when `IsFunc` holds. -/
+/-- Application of a functional graph, as a `ZFSet`.
+
+Mathlib's analogue is `Class.fval` (`′`), which applies a *class* function
+and returns a `Class`.  Term denotation is defined by recursion into
+`ZFSet`, so we keep the same operator (definite description of the unique
+`y` with `⟨x, y⟩ ∈ f`) at the set level. -/
 noncomputable def zfApp (f x : ZFSet) : ZFSet :=
   Classical.epsilon fun y : ZFSet => pair x y ∈ f
 

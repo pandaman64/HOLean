@@ -106,10 +106,15 @@ theorem Ty.denote_nonempty {ρ : TyVal} (hρ : ρ.Nonempty) :
   | .ind => ⟨∅, omega_zero⟩
   | .arrow α β => by
     obtain ⟨b, hb⟩ := Ty.denote_nonempty hρ β
-    let f : ZFSet → ZFSet := fun _ => b
-    let _ : Definable₁ f := Classical.allZFSetDefinable _
-    refine ⟨map f (α.denote ρ), mem_funs.2 ?_⟩
-    exact (map_isFunc (f := f) (x := α.denote ρ) (y := β.denote ρ)).mpr fun _ _ => hb
+    -- Graph of the constant function: `A × {b}`.
+    refine ⟨prod (α.denote ρ) {b}, mem_funs.2 ⟨?_, ?_⟩⟩
+    · intro z hz
+      obtain ⟨x, hx, y, hy, rfl⟩ := mem_prod.1 hz
+      exact pair_mem_prod.2 ⟨hx, (mem_singleton.1 hy).symm ▸ hb⟩
+    · intro z hz
+      refine ⟨b, pair_mem_prod.2 ⟨hz, mem_singleton.2 rfl⟩, ?_⟩
+      intro w hw
+      exact mem_singleton.1 (pair_mem_prod.1 hw).2
 
 /-- Choice on a predicate graph: a witness of `P` if any, else an
 arbitrary element of the nonempty set `A`. -/
