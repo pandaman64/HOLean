@@ -71,6 +71,10 @@ theorem Ty.denote_inst_nil (ρ : TyVal) (α : Ty) :
     (α.inst []).denote ρ = α.denote ρ := by
   rw [Ty.inst_nil]
 
+theorem Ty.denote_instVal_nil (ρ : TyVal) (α : Ty) :
+    α.denote (ρ.inst []) = α.denote ρ := by
+  rw [← Ty.denote_inst, Ty.inst_nil]
+
 theorem TyVal.inst_nil (ρ : TyVal) : ρ.inst [] = ρ := by
   funext x
   simp [TyVal.inst]

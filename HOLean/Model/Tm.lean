@@ -263,4 +263,32 @@ theorem EnvInterp.inst_comp {env : Env} {ρ : TyVal}
     ((I.inst σ).inst θ).interp n α = (I.inst (θ.comp σ)).interp n α := by
   simp [EnvInterp.inst_interp, Ty.inst_comp]
 
+theorem EnvInterp.inst_nil {env : Env} {ρ : TyVal}
+    (I : EnvInterp env ρ) (n : Name) (α : Ty) :
+    (I.inst []).interp n α = I.interp n α := by
+  simp [EnvInterp.inst_interp, Ty.inst_nil]
+
+/-- Reindex a free-variable assignment along a pointwise equality of
+type universes.  Used when `ρ.inst` compositions are only propositionally
+equal. -/
+def FVarVal.congr {ρ ρ' : TyVal} (ξ : FVarVal ρ)
+    (h : ∀ α : Ty, Ty.denote ρ α = Ty.denote ρ' α) : FVarVal ρ' where
+  val := ξ.val
+  mem x α := h α ▸ ξ.mem x α
+
+@[simp] theorem FVarVal.congr_val {ρ ρ' : TyVal} (ξ : FVarVal ρ)
+    (h : ∀ α : Ty, Ty.denote ρ α = Ty.denote ρ' α) (x : Name) (α : Ty) :
+    (ξ.congr h).val x α = ξ.val x α := rfl
+
+/-- Reindex an environment interpretation along the same universe equality. -/
+def EnvInterp.reindex {env : Env} {ρ ρ' : TyVal} (I : EnvInterp env ρ)
+    (h : ∀ α : Ty, Ty.denote ρ α = Ty.denote ρ' α) : EnvInterp env ρ' where
+  interp := I.interp
+  mem := fun {_n inst _gen} hconst hinst => h inst ▸ I.mem hconst hinst
+
+@[simp] theorem EnvInterp.reindex_interp {env : Env} {ρ ρ' : TyVal}
+    (I : EnvInterp env ρ) (h : ∀ α : Ty, Ty.denote ρ α = Ty.denote ρ' α)
+    (n : Name) (α : Ty) :
+    (I.reindex h).interp n α = I.interp n α := rfl
+
 end HOLean

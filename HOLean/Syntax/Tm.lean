@@ -183,6 +183,57 @@ def tyvars : Tm → List Name
   | app f a => f.tyvars ++ a.tyvars.filter (· ∉ f.tyvars)
   | lam α t => α.tyvars ++ t.tyvars.filter (· ∉ α.tyvars)
 
+theorem mem_tyvars_app {x : Name} {f a : Tm} :
+    x ∈ (app f a).tyvars ↔ x ∈ f.tyvars ∨ x ∈ a.tyvars := by
+  simp [tyvars, List.mem_append, List.mem_filter]
+  constructor
+  · intro h
+    match h with
+    | Or.inl h => exact Or.inl h
+    | Or.inr h => exact Or.inr h.1
+  · intro h
+    match h with
+    | Or.inl h => exact Or.inl h
+    | Or.inr h =>
+      by_cases hx : x ∈ f.tyvars
+      · exact Or.inl hx
+      · exact Or.inr ⟨h, hx⟩
+
+theorem mem_tyvars_lam {x : Name} {α : Ty} {t : Tm} :
+    x ∈ (lam α t).tyvars ↔ x ∈ α.tyvars ∨ x ∈ t.tyvars := by
+  simp [tyvars, List.mem_append, List.mem_filter]
+  constructor
+  · intro h
+    match h with
+    | Or.inl h => exact Or.inl h
+    | Or.inr h => exact Or.inr h.1
+  · intro h
+    match h with
+    | Or.inl h => exact Or.inl h
+    | Or.inr h =>
+      by_cases hx : x ∈ α.tyvars
+      · exact Or.inl hx
+      · exact Or.inr ⟨h, hx⟩
+
+/-- Substitutions that agree on the type variables of `t` instantiate it
+the same way. -/
+theorem instTy_eq_of (t : Tm) {θ σ : TySubst}
+    (h : ∀ x ∈ t.tyvars, (θ.lookup x).getD (Ty.var x) = (σ.lookup x).getD (Ty.var x)) :
+    t.instTy θ = t.instTy σ := by
+  induction t with
+  | bvar i =>
+    rfl
+  | fvar y α =>
+    simp [instTy, Ty.inst_eq_of (α := α) h]
+  | const n α =>
+    simp [instTy, Ty.inst_eq_of (α := α) h]
+  | app f a ihf iha =>
+    simp [instTy, ihf (fun x hx => h x (mem_tyvars_app.2 (Or.inl hx))),
+      iha (fun x hx => h x (mem_tyvars_app.2 (Or.inr hx)))]
+  | lam α t ih =>
+    simp [instTy, Ty.inst_eq_of (α := α) (fun x hx => h x (mem_tyvars_lam.2 (Or.inl hx))),
+      ih (fun x hx => h x (mem_tyvars_lam.2 (Or.inr hx)))]
+
 /-- Increment every bound index `≥ c` by `d`.  Used when a term is placed
 under additional λ-binders (so connectives do not capture). -/
 def shift (t : Tm) (d c : Nat) : Tm :=

@@ -57,20 +57,48 @@ theorem TyVal.inst_nonempty {ρ : TyVal} (hρ : ρ.Nonempty) (θ : TySubst) :
   | some α =>
     simpa [TyVal.inst, h] using Ty.denote_nonempty hρ α
 
-/-- Lift a model along a type substitution, when the environment has no
-axioms (so `ax_ok` is vacuous). -/
-noncomputable def EnvModel.inst {ρ : TyVal} (M : EnvModel env ρ) (θ : TySubst)
-    (hnone : ∀ p, env.axioms p → False) : EnvModel env (ρ.inst θ) where
+/-- Lift a model along a type substitution.  Axiom transport uses
+`FVarVal.congr`, because `(ρ.inst θ).inst θ'` and `ρ.inst (θ'.comp θ)`
+are only propositionally equal. -/
+noncomputable def EnvModel.inst {ρ : TyVal} (M : EnvModel env ρ) (θ : TySubst) :
+    EnvModel env (ρ.inst θ) where
   interp := M.interp.inst θ
   eq_ok := fun α => by
     simp [EnvInterp.inst]
     rw [M.eq_ok (α.inst θ)]
     simp [Ty.denote_inst]
-  ax_ok := fun _ p hp _ => (hnone p hp).elim
+  ax_ok := fun θ' p hp ξ => by
+    have hden : ∀ α : Ty,
+        Ty.denote ((ρ.inst θ).inst θ') α = Ty.denote (ρ.inst (θ'.comp θ)) α :=
+      fun α => Ty.denote_inst_comp ρ θ θ' α
+    have hax := M.ax_ok (θ'.comp θ) p hp (ξ.congr hden)
+    have hI : ∀ n α,
+        ((M.interp.inst θ).inst θ').interp n α =
+          (M.interp.inst (θ'.comp θ)).interp n α :=
+      fun n α => EnvInterp.inst_comp M.interp θ θ' n α
+    have hre := Tm.denote_reindex p ((M.interp.inst θ).inst θ') ξ hden []
+    have heq := Tm.denote_interp_eq p
+      (((M.interp.inst θ).inst θ').reindex hden)
+      (M.interp.inst (θ'.comp θ)) (ξ.congr hden) [] (by
+        intro n α
+        simpa [EnvInterp.reindex_interp] using hI n α)
+    exact (hre.trans heq).trans hax
 
 @[simp] theorem EnvModel.inst_interp {ρ : TyVal} (M : EnvModel env ρ)
-    (θ : TySubst) (hnone : ∀ p, env.axioms p → False) :
-    (M.inst θ hnone).interp = M.interp.inst θ := rfl
+    (θ : TySubst) :
+    (M.inst θ).interp = M.interp.inst θ := rfl
+
+/-- An axiom denotes `zfTrue` already at the uninstantiated valuation. -/
+theorem EnvModel.ax_denote {ρ : TyVal} (M : EnvModel env ρ) {p}
+    (hp : env.axioms p) (ξ : FVarVal ρ) :
+    p.denote M.interp ξ [] = zfTrue := by
+  have hρ : ∀ α : Ty, Ty.denote ρ α = Ty.denote (ρ.inst []) α := fun α =>
+    (Ty.denote_instVal_nil ρ α).symm
+  have hax := M.ax_ok [] p hp (ξ.congr hρ)
+  have hre := Tm.denote_reindex p M.interp ξ hρ []
+  have heq := Tm.denote_interp_eq p (M.interp.reindex hρ) (M.interp.inst [])
+    (ξ.congr hρ) [] (fun n α => (EnvInterp.inst_nil M.interp n α).symm)
+  exact (hre.trans heq).trans hax
 
 /-- `holCore` has a standard model at every nonempty type valuation. -/
 noncomputable def EnvModel.holCore (ρ : TyVal) (hρ : ρ.Nonempty) :
@@ -82,10 +110,8 @@ noncomputable def EnvModel.holCore (ρ : TyVal) (hρ : ρ.Nonempty) :
 theorem holCore_axioms_empty (p : Tm) : holCore.axioms p → False :=
   id
 
-/-- Soundness of the ten rules plus `ax`, for environments without axioms.
-`holCore` is the intended instance; `addDef` transport comes next. -/
+/-- Soundness of the ten rules plus `ax`. -/
 theorem Provable.sound [Env.HasEq env]
-    (hnone : ∀ p, env.axioms p → False)
     {asmΓ asmP} (h : asmΓ ⊩[env] asmP) :
     ∀ {ρ : TyVal} (M : EnvModel env ρ) (ξ : FVarVal ρ),
       HypsTrue M.interp ξ asmΓ → asmP.denote M.interp ξ [] = zfTrue := by
@@ -218,7 +244,7 @@ theorem Provable.sound [Env.HasEq env]
       intro q hq
       have := hΓ (q.instTy θ) (List.mem_map.2 ⟨q, hq, rfl⟩)
       rwa [Tm.denote_instTy] at this
-    have := ih (M.inst θ hnone) (ξ.pull θ) (by simpa using hΓ')
+    have := ih (M.inst θ) (ξ.pull θ) (by simpa using hΓ')
     simpa [Tm.denote_instTy] using this
   | inst hσ h ih =>
     intro ρ M ξ hΓ
@@ -236,13 +262,13 @@ theorem Provable.sound [Env.HasEq env]
     simp [CtxVal.nil] at heq this
     rwa [heq]
   | ax hp _hty =>
-    intro _ρ _M _ξ _hΓ
-    exact (hnone _ hp).elim
+    intro _ρ M ξ _hΓ
+    exact M.ax_denote hp ξ
 
 theorem Provable.sound_holCore {ρ : TyVal} {Γ p} (h : Γ ⊩[holCore] p)
     (hρ : ρ.Nonempty) (ξ : FVarVal ρ)
     (hΓ : HypsTrue (EnvInterp.holCore ρ hρ) ξ Γ) :
     p.denote (EnvInterp.holCore ρ hρ) ξ [] = zfTrue :=
-  Provable.sound holCore_axioms_empty h (EnvModel.holCore ρ hρ) ξ hΓ
+  Provable.sound h (EnvModel.holCore ρ hρ) ξ hΓ
 
 end HOLean

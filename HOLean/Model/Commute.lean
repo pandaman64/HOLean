@@ -262,4 +262,96 @@ theorem HasType.denote_applySubst {Γ t β σ} (ht : HasType env Γ t β)
     simp [lamFn, hx]
     simpa [CtxVal.cons] using ih (vs.cons x hx)
 
+/-- Denotation depends only on the interpretation table, not the `mem` proof. -/
+theorem Tm.denote_interp_eq (t : Tm) (I I' : EnvInterp env ρ) (ξ : FVarVal ρ)
+    (vs : List ZFSet) (h : ∀ n α, I.interp n α = I'.interp n α) :
+    t.denote I ξ vs = t.denote I' ξ vs := by
+  induction t generalizing vs with
+  | bvar i =>
+    rfl
+  | fvar x α =>
+    rfl
+  | const n α =>
+    exact h n α
+  | app f a ihf iha =>
+    simp [Tm.denote, ihf vs, iha vs]
+  | lam α t ih =>
+    simp [Tm.denote]
+    apply map_congr
+    intro x hx
+    simp [lamFn, hx]
+    exact ih (x :: vs)
+
+/-- Denotation is unchanged when type universes are pointwise equal. -/
+theorem Tm.denote_reindex (t : Tm) (I : EnvInterp env ρ) (ξ : FVarVal ρ)
+    {ρ' : TyVal} (h : ∀ α : Ty, Ty.denote ρ α = Ty.denote ρ' α) (vs : List ZFSet) :
+    t.denote I ξ vs = t.denote (I.reindex h) (ξ.congr h) vs := by
+  induction t generalizing vs with
+  | bvar i =>
+    rfl
+  | fvar x α =>
+    rfl
+  | const n α =>
+    rfl
+  | app f a ihf iha =>
+    simp [Tm.denote, ihf, iha]
+  | lam α t ih =>
+    apply ext
+    intro z
+    have hdom := h α
+    simp [Tm.denote, mem_map]
+    constructor
+    · intro ⟨x, hx, heq⟩
+      refine ⟨x, hdom ▸ hx, ?_⟩
+      have hx' : x ∈ α.denote ρ' := hdom ▸ hx
+      simp [lamFn, hx, hx'] at heq ⊢
+      exact ih (x :: vs) ▸ heq
+    · intro ⟨x, hx, heq⟩
+      refine ⟨x, hdom.symm ▸ hx, ?_⟩
+      have hx' : x ∈ α.denote ρ := hdom.symm ▸ hx
+      simp [lamFn, hx, hx'] at heq ⊢
+      exact (ih (x :: vs)).symm ▸ heq
+
+/-- Two free-variable assignments that agree on the fvars of `t` give the
+same denotation. -/
+theorem Tm.denote_fvarVal (t : Tm) (I : EnvInterp env ρ) (ξ ξ' : FVarVal ρ)
+    (vs : List ZFSet)
+    (h : ∀ x α, t.freeIn x α = false ∨ ξ.val x α = ξ'.val x α) :
+    t.denote I ξ vs = t.denote I ξ' vs := by
+  induction t generalizing vs with
+  | bvar i =>
+    rfl
+  | fvar y β =>
+    cases h y β with
+    | inl hf =>
+      simp [Tm.freeIn] at hf
+    | inr heq =>
+      simpa [Tm.denote] using heq
+  | const n α =>
+    rfl
+  | app f a ihf iha =>
+    simp [Tm.denote, ihf vs (fun x α =>
+      match h x α with
+      | Or.inl hf =>
+        Or.inl (by simp [Tm.freeIn, Bool.or_eq_false_iff] at hf; exact hf.1)
+      | Or.inr heq =>
+        Or.inr heq),
+      iha vs (fun x α =>
+        match h x α with
+        | Or.inl hf =>
+          Or.inl (by simp [Tm.freeIn, Bool.or_eq_false_iff] at hf; exact hf.2)
+        | Or.inr heq =>
+          Or.inr heq)]
+  | lam α t ih =>
+    simp [Tm.denote]
+    apply map_congr
+    intro x hx
+    simp [lamFn, hx]
+    exact ih (x :: vs) h
+
+theorem Tm.denote_no_fvars (t : Tm) (I : EnvInterp env ρ) (ξ ξ' : FVarVal ρ)
+    (vs : List ZFSet) (h : ∀ x α, t.freeIn x α = false) :
+    t.denote I ξ vs = t.denote I ξ' vs :=
+  Tm.denote_fvarVal t I ξ ξ' vs fun x α => Or.inl (h x α)
+
 end HOLean
