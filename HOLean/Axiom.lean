@@ -49,7 +49,7 @@ theorem HasType.selectAxiom {α P x}
     (hP : HasType [] P (α ↝ .bool)) (hx : HasType [] x α) :
     HasType [] (selectAxiom α P x) .bool :=
   HasType.imp (HasType.app hP hx)
-    (HasType.app hP (HasType.app HasType.const hP))
+    (HasType.app hP (HasType.app (HasType.const .select α) hP))
 
 theorem IsHOLAxiom.bool_typed {p} (h : IsHOLAxiom p) : HasType [] p .bool := by
   cases h with
@@ -60,12 +60,15 @@ theorem IsHOLAxiom.bool_typed {p} (h : IsHOLAxiom p) : HasType [] p .bool := by
 is the target of the eventual `ZFSet` model. -/
 inductive Proves : List Tm → Tm → Prop where
   | kernel {Γ p} : Provable Γ p → Proves Γ p
-  | axiom {p} : IsHOLAxiom p → Proves [] p
+  | ax {p} : IsHOLAxiom p → Proves [] p
 
 theorem Proves.bool_typed {Γ p} (h : Proves Γ p) :
     (∀ q ∈ Γ, HasType [] q .bool) ∧ HasType [] p .bool := by
   cases h with
   | kernel hk => exact hk.bool_typed
-  | axiom ha => exact ⟨by intro q hq; cases hq, ha.bool_typed⟩
+  | ax ha =>
+    constructor
+    · intro q hq; cases hq
+    · exact ha.bool_typed
 
 end HOLean

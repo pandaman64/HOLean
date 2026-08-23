@@ -32,8 +32,8 @@ def inst : Const → Ty → Ty
   | eq, α => α ↝ α ↝ .bool
   | select, α => (α ↝ .bool) ↝ α
 
-@[simp] theorem inst_eq (α : Ty) : eq.inst α = α ↝ α ↝ .bool := rfl
-@[simp] theorem inst_select (α : Ty) : select.inst α = (α ↝ .bool) ↝ α := rfl
+@[simp] theorem inst_eq (α : Ty) : eq.inst α = (α ↝ α ↝ .bool) := rfl
+@[simp] theorem inst_select (α : Ty) : select.inst α = ((α ↝ .bool) ↝ α) := rfl
 
 /-- Type instantiation commutes with reading off a constant's type. -/
 theorem inst_tyInst (c : Const) (α : Ty) (θ : TySubst) :

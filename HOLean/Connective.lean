@@ -45,7 +45,7 @@ def imp (p q : Tm) : Tm :=
   mkEq .bool (p.and q) p
 
 /-- Universal quantification: `∀ P` means `P = (λ x. T)`. -/
-def forall (α : Ty) (P : Tm) : Tm :=
+def all (α : Ty) (P : Tm) : Tm :=
   mkEq (α ↝ .bool) P (.lam α tru)
 
 end Tm
@@ -59,12 +59,12 @@ theorem HasType.and {p q}
     (hp : HasType [] p .bool) (hq : HasType [] q .bool) :
     HasType [] (p.and q) .bool := by
   unfold Tm.and Tm.boolCombTy
-  refine HasType.mkEq ?lhs ?rhs
-  · refine HasType.lam ?body
+  apply HasType.mkEq
+  · apply HasType.lam
     exact HasType.app
       (HasType.app (HasType.bvar (by simp [Ctx.get])) hp.of_closed)
       hq.of_closed
-  · refine HasType.lam ?body
+  · apply HasType.lam
     exact HasType.app
       (HasType.app (HasType.bvar (by simp [Ctx.get])) HasType.tru)
       HasType.tru
@@ -74,8 +74,8 @@ theorem HasType.imp {p q}
     HasType [] (p.imp q) .bool :=
   HasType.mkEq (HasType.and hp hq) hp
 
-theorem HasType.forall {α P} (hP : HasType [] P (α ↝ .bool)) :
-    HasType [] (Tm.forall α P) .bool :=
+theorem HasType.all {α P} (hP : HasType [] P (α ↝ .bool)) :
+    HasType [] (Tm.all α P) .bool :=
   HasType.mkEq hP (HasType.lam HasType.tru)
 
 end HOLean

@@ -39,32 +39,35 @@ inductive Tm where
 namespace Tm
 
 /-- Replace bound index `k` by the (locally closed) term `u`. -/
-def openAt (k : Nat) (u : Tm) : Tm → Tm
+def openAt (t : Tm) (k : Nat) (u : Tm) : Tm :=
+  match t with
   | bvar i => if i = k then u else bvar i
   | fvar x α => fvar x α
   | const c α => const c α
   | app f a => app (f.openAt k u) (a.openAt k u)
   | lam α t => lam α (t.openAt (k + 1) u)
 
-@[simp] def open' (u t : Tm) : Tm := t.openAt 0 u
+@[simp] def open' (t u : Tm) : Tm := t.openAt 0 u
 
 /-- Replace the free variable `(x, α)` at depth `k` by a bound index. -/
-def closeAt (k : Nat) (x : Name) (α : Ty) : Tm → Tm
+def closeAt (t : Tm) (k : Nat) (x : Name) (α : Ty) : Tm :=
+  match t with
   | bvar i => bvar i
   | fvar y β => if y = x ∧ β = α then bvar k else fvar y β
   | const c β => const c β
   | app f a => app (f.closeAt k x α) (a.closeAt k x α)
   | lam β t => lam β (t.closeAt (k + 1) x α)
 
-@[simp] def close (x : Name) (α : Ty) (t : Tm) : Tm := t.closeAt 0 x α
+@[simp] def close (t : Tm) (x : Name) (α : Ty) : Tm := t.closeAt 0 x α
 
 /-- HOL Light `mk_abs`: abstract the free variable `(x, α)`. -/
-def abstract (x : Name) (α : Ty) (t : Tm) : Tm :=
+def abstract (t : Tm) (x : Name) (α : Ty) : Tm :=
   lam α (t.close x α)
 
 /-- Is the HOL variable `(x, α)` free in `t`?  Binders do not shadow free
 variables (locally nameless). -/
-def freeIn (x : Name) (α : Ty) : Tm → Bool
+def freeIn (t : Tm) (x : Name) (α : Ty) : Bool :=
+  match t with
   | bvar _ => false
   | fvar y β => decide (y = x ∧ β = α)
   | const _ _ => false
@@ -72,7 +75,8 @@ def freeIn (x : Name) (α : Ty) : Tm → Bool
   | lam _ t => t.freeIn x α
 
 /-- Type instantiation of every type annotation in a term. -/
-def instTy (θ : TySubst) : Tm → Tm
+def instTy (t : Tm) (θ : TySubst) : Tm :=
+  match t with
   | bvar i => bvar i
   | fvar x α => fvar x (α.inst θ)
   | const c α => const c (α.inst θ)
@@ -97,7 +101,8 @@ def instTy (θ : TySubst) : Tm → Tm
   | lam α t => by simp [instTy, instTy_nil t]
 
 /-- Substitute a single free variable.  Capture-free when `u` is locally closed. -/
-def substFvar (x : Name) (α : Ty) (u : Tm) : Tm → Tm
+def substFvar (t : Tm) (x : Name) (α : Ty) (u : Tm) : Tm :=
+  match t with
   | bvar i => bvar i
   | fvar y β => if y = x ∧ β = α then u else fvar y β
   | const c β => const c β
@@ -127,7 +132,8 @@ def Subst.lookup (σ : Subst) (x : Name) (α : Ty) : Option Tm :=
   | [] => none
   | (y, β, u) :: rest => if y = x ∧ β = α then some u else lookup rest x α
 
-def applySubst (σ : Subst) : Tm → Tm
+def applySubst (t : Tm) (σ : Subst) : Tm :=
+  match t with
   | bvar i => bvar i
   | fvar x α =>
     match σ.lookup x α with

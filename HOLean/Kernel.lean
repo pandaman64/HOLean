@@ -82,9 +82,14 @@ scoped notation:50 Γ:51 " ⊩ " p:50 => Provable Γ p
 
 namespace Provable
 
-private theorem mem_append_elim {Γ Δ : List Tm} {q : Tm}
-    (hq : q ∈ Γ ++ Δ) : q ∈ Γ ∨ q ∈ Δ :=
-  List.mem_append.1 hq
+private theorem hyps_append {Γ Δ : List Tm}
+    (hΓ : ∀ q ∈ Γ, HasType [] q .bool)
+    (hΔ : ∀ q ∈ Δ, HasType [] q .bool) :
+    ∀ q ∈ Γ ++ Δ, HasType [] q .bool := by
+  intro q hq
+  match List.mem_append.1 hq with
+  | Or.inl h => exact hΓ q h
+  | Or.inr h => exact hΔ q h
 
 /-- Every hypothesis and the conclusion of a kernel theorem is a closed
 boolean.  This is the first sanity theorem for the inference system. -/
@@ -92,66 +97,57 @@ theorem bool_typed {Γ p} (h : Γ ⊩ p) :
     (∀ q ∈ Γ, HasType [] q .bool) ∧ HasType [] p .bool := by
   induction h with
   | refl ht =>
-    exact ⟨by intro q hq; cases hq, HasType.mkEq ht ht⟩
+    constructor
+    · intro q hq; cases hq
+    · exact HasType.mkEq ht ht
   | trans _h1 _h2 ih1 ih2 =>
-    refine ⟨?hyps, ?concl⟩
-    · intro q hq
-      cases mem_append_elim hq with
-      | inl hmem => exact ih1.1 q hmem
-      | inr hmem => exact ih2.1 q hmem
-    · obtain ⟨_, hs, _⟩ := HasType.dest_mkEq ih1.2
-      obtain ⟨_, _, hu⟩ := HasType.dest_mkEq ih2.2
-      exact HasType.mkEq hs hu
+    refine And.intro (hyps_append ih1.1 ih2.1) ?_
+    obtain ⟨_, hs, _ht⟩ := HasType.dest_mkEq ih1.2
+    obtain ⟨_, _ht', hu⟩ := HasType.dest_mkEq ih2.2
+    exact HasType.mkEq hs hu
   | mkComb _h1 _h2 ih1 ih2 =>
-    refine ⟨?hyps, ?concl⟩
-    · intro q hq
-      cases mem_append_elim hq with
-      | inl hmem => exact ih1.1 q hmem
-      | inr hmem => exact ih2.1 q hmem
-    · obtain ⟨_, hf, hg⟩ := HasType.dest_mkEq ih1.2
-      obtain ⟨_, hx, hy⟩ := HasType.dest_mkEq ih2.2
-      exact HasType.mkEq (HasType.app hf hx) (HasType.app hg hy)
+    refine And.intro (hyps_append ih1.1 ih2.1) ?_
+    obtain ⟨_, hf, hg⟩ := HasType.dest_mkEq ih1.2
+    obtain ⟨_, hx, hy⟩ := HasType.dest_mkEq ih2.2
+    exact HasType.mkEq (HasType.app hf hx) (HasType.app hg hy)
   | abs _h _hfresh ih =>
     obtain ⟨_, hs, ht⟩ := HasType.dest_mkEq ih.2
     exact ⟨ih.1, HasType.mkEq hs.abstract ht.abstract⟩
   | beta ht =>
-    refine ⟨by intro q hq; cases hq, ?_⟩
+    rename_i t x α β
+    refine And.intro (by intro q hq; cases hq) ?_
     exact HasType.mkEq
-      (HasType.app (HasType.lam ht) HasType.fvar)
-      (ht.open' HasType.fvar)
+      (HasType.app (HasType.lam ht) (HasType.fvar x α))
+      (ht.open' (HasType.fvar x α))
   | assume hp =>
-    refine ⟨?_, hp⟩
+    refine And.intro ?_ hp
     intro q hq
     simp at hq
     subst hq
     exact hp
   | eqMp _h1 _h2 ih1 ih2 =>
-    refine ⟨?hyps, ?concl⟩
-    · intro r hr
-      cases mem_append_elim hr with
-      | inl hmem => exact ih1.1 r hmem
-      | inr hmem => exact ih2.1 r hmem
-    · obtain ⟨_, _, hq⟩ := HasType.dest_mkEq ih1.2
-      exact hq
+    refine And.intro (hyps_append ih1.1 ih2.1) ?_
+    obtain ⟨_, _hp, hq⟩ := HasType.dest_mkEq ih1.2
+    exact hq
   | deductAntisym _h1 _h2 ih1 ih2 =>
-    refine ⟨?hyps, HasType.mkEq ih1.2 ih2.2⟩
-    · intro r hr
-      have hr' : r ∈ hypsErase _ _ ++ hypsErase _ _ := hr
-      cases mem_append_elim hr' with
-      | inl hmem =>
-        simp [hypsErase] at hmem
-        exact ih1.1 r hmem.1
-      | inr hmem =>
-        simp [hypsErase] at hmem
-        exact ih2.1 r hmem.1
+    rename_i Γ Δ p q
+    refine And.intro ?_ (HasType.mkEq ih1.2 ih2.2)
+    intro r hr
+    match List.mem_append.1 hr with
+    | Or.inl hmem =>
+      have : r ∈ Γ ∧ r ≠ q := by simpa [hypsErase] using hmem
+      exact ih1.1 r this.1
+    | Or.inr hmem =>
+      have : r ∈ Δ ∧ r ≠ p := by simpa [hypsErase] using hmem
+      exact ih2.1 r this.1
   | instType θ _h ih =>
-    refine ⟨?hyps, ?concl⟩
+    refine And.intro ?_ ?_
     · intro q hq
       obtain ⟨q', hq', rfl⟩ := List.mem_map.1 hq
       simpa [Ty.inst_bool] using (ih.1 q' hq').instTy θ
     · simpa [Ty.inst_bool] using ih.2.instTy θ
   | inst hσ _h ih =>
-    refine ⟨?hyps, ?concl⟩
+    refine And.intro ?_ ?_
     · intro q hq
       obtain ⟨q', hq', rfl⟩ := List.mem_map.1 hq
       exact (ih.1 q' hq').applySubst hσ

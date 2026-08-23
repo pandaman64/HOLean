@@ -32,7 +32,8 @@ inductive Ty where
   deriving DecidableEq, Repr, Inhabited
 
 @[inherit_doc Ty.arrow]
-scoped infixr:35 " ↝ " => Ty.arrow
+-- Bind tighter than `=` (50) so `t = α ↝ β` means `t = (α ↝ β)`.
+scoped infixr:51 " ↝ " => Ty.arrow
 
 /-- A type substitution: the first matching pair wins. Non-variable leftovers
 are ignored, matching HOL Light's `type_subst`. -/
@@ -69,9 +70,9 @@ def inst (θ : TySubst) : Ty → Ty
 @[simp] theorem inst_bool (θ : TySubst) : bool.inst θ = bool := rfl
 @[simp] theorem inst_ind (θ : TySubst) : ind.inst θ = ind := rfl
 @[simp] theorem inst_arrow (θ : TySubst) (α β : Ty) :
-    (α ↝ β).inst θ = α.inst θ ↝ β.inst θ := rfl
+    (α ↝ β).inst θ = (α.inst θ ↝ β.inst θ) := rfl
 
-@[simp] theorem inst_nil : ∀ α, α.inst [] = α
+@[simp] theorem inst_nil : ∀ α : Ty, inst [] α = α
   | var _ => rfl
   | bool => rfl
   | ind => rfl
@@ -133,6 +134,6 @@ theorem Ctx.get_snoc (Δ : List Ty) (α : Ty) (i : Nat) :
     | zero =>
       simp [List.length]
     | succ n =>
-      simpa [ih n, Nat.succ_inj] using rfl
+      simp [ih n]
 
 end HOLean

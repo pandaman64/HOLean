@@ -12,14 +12,15 @@ import HOLean.Syntax.Tm
 the context `Γ` (innermost binder first).  Free variables carry their own
 types, so they need no context entry.
 
-A term that is well-typed in the empty bound context is locally closed: there
-is no constructor for an out-of-scope `bvar`.
+A term that is well-typed in the empty bound context is automatically locally
+closed: there is no way to type an unbound `bvar`.
 -/
 
 namespace HOLean
 
 /-- Algorithmic type inference. -/
-def Tm.infer (Γ : List Ty) : Tm → Option Ty
+def Tm.infer (t : Tm) (Γ : List Ty) : Option Ty :=
+  match t with
   | bvar i => Ctx.get Γ i
   | fvar _ α => some α
   | const c α => some (c.inst α)
@@ -34,16 +35,18 @@ def Tm.infer (Γ : List Ty) : Tm → Option Ty
 
 /-- Declarative typing judgment. -/
 inductive HasType : List Ty → Tm → Ty → Prop where
-  | bvar {Γ i α} (h : Ctx.get Γ i = some α) :
+  | bvar {Γ α} {i : Nat} (h : Ctx.get Γ i = some α) :
       HasType Γ (.bvar i) α
-  | fvar {Γ x α} :
+  | fvar {Γ} (x : Name) (α : Ty) :
       HasType Γ (.fvar x α) α
-  | const {Γ c α} :
+  | const {Γ} (c : Const) (α : Ty) :
       HasType Γ (.const c α) (c.inst α)
-  | app {Γ f a α β} :
-      HasType Γ f (α ↝ β) → HasType Γ a α → HasType Γ (.app f a) β
-  | lam {Γ t α β} :
-      HasType (α :: Γ) t β → HasType Γ (.lam α t) (α ↝ β)
+  | app {Γ α β} {f a : Tm}
+      (hf : HasType Γ f (α ↝ β)) (ha : HasType Γ a α) :
+      HasType Γ (.app f a) β
+  | lam {Γ α β} {t : Tm}
+      (ht : HasType (α :: Γ) t β) :
+      HasType Γ (.lam α t) (α ↝ β)
 
 /-- Unique typing: a term has at most one type in a given context. -/
 theorem HasType.unique {Γ t α} (h : HasType Γ t α) :
@@ -53,22 +56,19 @@ theorem HasType.unique {Γ t α} (h : HasType Γ t α) :
     intro β hβ
     cases hβ with
     | bvar hi' => exact Ctx.get_eq_some_unique hi hi'
-  | fvar =>
+  | fvar x α =>
     intro β hβ
     cases hβ
     rfl
-  | const =>
+  | const c α =>
     intro β hβ
     cases hβ
     rfl
-  | app _ _ ihf iha =>
+  | app _ _ ihf _iha =>
     intro γ hγ
     cases hγ with
-    | app hf' ha' =>
-      have hfEq := ihf hf'
-      injection hfEq with hα hβ
-      have haEq := iha (hα ▸ ha')
-      exact hβ
+    | app hf' _ha' =>
+      injection ihf hf'
   | lam _ ih =>
     intro γ hγ
     cases hγ with
@@ -80,13 +80,13 @@ theorem HasType.infer_of {Γ t α} (h : HasType Γ t α) : t.infer Γ = some α 
   induction h with
   | bvar hi =>
     simpa [Tm.infer] using hi
-  | fvar =>
+  | fvar x α =>
     simp [Tm.infer]
-  | const =>
+  | const c α =>
     simp [Tm.infer]
-  | app hf ha ihf iha =>
+  | app _ _ ihf iha =>
     simp [Tm.infer, ihf, iha]
-  | lam ht ih =>
+  | lam _ ih =>
     simp [Tm.infer, ih]
 
 theorem HasType.of_infer {Γ : List Ty} :
@@ -98,12 +98,12 @@ theorem HasType.of_infer {Γ : List Ty} :
     exact HasType.bvar (by simpa [Tm.infer] using h)
   | fvar x β =>
     intro α h
-    have : α = β := by simpa [Tm.infer] using h
-    exact this ▸ HasType.fvar
+    simp [Tm.infer] at h
+    exact h ▸ HasType.fvar x β
   | const c β =>
     intro α h
-    have : α = c.inst β := by simpa [Tm.infer] using h
-    exact this ▸ HasType.const
+    simp [Tm.infer] at h
+    exact h ▸ HasType.const c β
   | app f a ihf iha =>
     intro α h
     cases hf : f.infer Γ with
@@ -117,10 +117,8 @@ theorem HasType.of_infer {Γ : List Ty} :
         cases σ with
         | arrow γ β =>
           simp [Tm.infer, hf, ha] at h
-          split_ifs at h with hγ
-          · cases h
-            exact HasType.app (ihf hf) (hγ ▸ iha ha)
-          · cases h
+          obtain ⟨hγ, rfl⟩ := h
+          exact HasType.app (ihf hf) (hγ ▸ iha ha)
         | var _ => simp [Tm.infer, hf, ha] at h
         | bool => simp [Tm.infer, hf, ha] at h
         | ind => simp [Tm.infer, hf, ha] at h
@@ -144,10 +142,10 @@ theorem HasType.weaken {Γ Δ t α} (h : HasType Γ t α) :
   induction h with
   | bvar hi =>
     exact HasType.bvar (Ctx.get_append_left hi)
-  | fvar =>
-    exact HasType.fvar
-  | const =>
-    exact HasType.const
+  | fvar x α =>
+    exact HasType.fvar x α
+  | const c α =>
+    exact HasType.const c α
   | app _ _ ihf iha =>
     exact HasType.app ihf iha
   | lam _ ih =>
@@ -155,7 +153,7 @@ theorem HasType.weaken {Γ Δ t α} (h : HasType Γ t α) :
 
 /-- A term typed in the empty bound context remains typed in any context. -/
 theorem HasType.of_closed {Γ t α} (h : HasType [] t α) : HasType Γ t α := by
-  simpa using h.weaken (Δ := Γ)
+  simpa using (HasType.weaken (Γ := []) (Δ := Γ) h)
 
 /-- Type instantiation preserves typing. -/
 theorem HasType.instTy {Γ t α} (h : HasType Γ t α) (θ : TySubst) :
@@ -163,11 +161,11 @@ theorem HasType.instTy {Γ t α} (h : HasType Γ t α) (θ : TySubst) :
   induction h with
   | bvar hi =>
     exact HasType.bvar (by simpa [Ctx.get_map] using congrArg (Option.map (Ty.inst θ)) hi)
-  | fvar =>
-    exact HasType.fvar
+  | fvar x α =>
+    exact HasType.fvar x (α.inst θ)
   | const c α =>
-    simpa [Const.inst_tyInst] using
-      (HasType.const (Γ := Γ.map (Ty.inst θ)) (c := c) (α := α.inst θ))
+    rw [Const.inst_tyInst]
+    exact HasType.const c (α.inst θ)
   | app _ _ ihf iha =>
     exact HasType.app ihf iha
   | lam _ ih =>
@@ -183,13 +181,15 @@ theorem HasType.substFvar {Γ t β x α u}
     exact HasType.bvar hi
   | fvar y γ =>
     by_cases h : y = x ∧ γ = α
-    · have hγ : γ = α := h.2
-      simp [Tm.substFvar, h]
-      exact hγ ▸ hu.of_closed
-    · simp [Tm.substFvar, h]
-      exact HasType.fvar
-  | const =>
-    exact HasType.const
+    · have hs : (Tm.fvar y γ).substFvar x α u = u := by simp [Tm.substFvar, h]
+      rw [hs]
+      exact h.2 ▸ hu.of_closed
+    · have hs : (Tm.fvar y γ).substFvar x α u = Tm.fvar y γ := by
+        simp [Tm.substFvar, h]
+      rw [hs]
+      exact HasType.fvar y γ
+  | const c α' =>
+    exact HasType.const c α'
   | app _ _ ihf iha =>
     exact HasType.app ihf iha
   | lam _ ih =>
@@ -206,48 +206,47 @@ theorem HasType.applySubst {Γ t β σ} (ht : HasType Γ t β) (hσ : σ.Ok) :
   | bvar hi =>
     exact HasType.bvar hi
   | fvar x α =>
+    simp [Tm.applySubst]
     cases hlook : σ.lookup x α with
     | none =>
-      simp [Tm.applySubst, hlook]
-      exact HasType.fvar
+      exact HasType.fvar x α
     | some u =>
-      simp [Tm.applySubst, hlook]
       exact (hσ x α u hlook).of_closed
-  | const =>
-    simp [Tm.applySubst]
-    exact HasType.const
+  | const c α =>
+    exact HasType.const c α
   | app _ _ ihf iha =>
     exact HasType.app ihf iha
   | lam _ ih =>
     exact HasType.lam ih
 
+theorem Ctx.get_length_snoc (Γ : List Ty) (α : Ty) :
+    Ctx.get (Γ ++ [α]) Γ.length = some α := by
+  induction Γ with
+  | nil => simp
+  | cons _ Γ ih => simpa [List.length] using ih
+
 /-- Closing a free variable introduces a binder of that variable's type. -/
 theorem HasType.closeAt {Γ t β x α} (ht : HasType Γ t β) :
     HasType (Γ ++ [α]) (t.closeAt Γ.length x α) β := by
   induction ht with
-  | bvar i hi =>
+  | bvar hi =>
     exact HasType.bvar (Ctx.get_append_left hi)
   | fvar y γ =>
+    rename_i Γ
     by_cases h : y = x ∧ γ = α
-    · have hγ : γ = α := h.2
-      simp [Tm.closeAt, h]
-      apply HasType.bvar
-      -- `bvar Γ.length` looks up the newly appended `α`
-      have : Ctx.get (Γ ++ [α]) Γ.length = some α := by
-        clear ht h hγ y
-        induction Γ with
-        | nil => simp
-        | cons _ Γ ih =>
-          simpa [List.length] using ih
-      exact hγ ▸ this
-    · simp [Tm.closeAt, h]
-      exact HasType.fvar
-  | const =>
-    exact HasType.const
+    · have hs : (Tm.fvar y γ).closeAt Γ.length x α = Tm.bvar Γ.length := by
+        simp [Tm.closeAt, h]
+      rw [hs]
+      exact HasType.bvar (h.2 ▸ Ctx.get_length_snoc Γ α)
+    · have hs : (Tm.fvar y γ).closeAt Γ.length x α = Tm.fvar y γ := by
+        simp [Tm.closeAt, h]
+      rw [hs]
+      exact HasType.fvar y γ
+  | const c α' =>
+    exact HasType.const c α'
   | app _ _ ihf iha =>
     exact HasType.app ihf iha
-  | lam δ t β ih =>
-    -- IH: HasType ((δ :: Γ) ++ [α]) (t.closeAt (δ :: Γ).length x α) β
+  | lam _ ih =>
     simpa [Tm.closeAt, List.length] using HasType.lam ih
 
 theorem HasType.close {t β x α} (ht : HasType [] t β) :
@@ -260,11 +259,12 @@ theorem HasType.abstract {t β x α} (ht : HasType [] t β) :
 
 /-- Opening the outermost extra binder at a closed term of that binder's type. -/
 theorem HasType.openAt_aux {α u} (hu : HasType [] u α) :
-    ∀ {Γ t β} (ht : HasType Γ t β) (Δ : List Ty),
+    ∀ {Γ t β} (_h : HasType Γ t β) (Δ : List Ty),
       Γ = Δ ++ [α] → HasType Δ (t.openAt Δ.length u) β := by
-  intro Γ t β ht
-  induction ht with
-  | bvar i hi =>
+  intro Γ t β h
+  induction h with
+  | bvar hi =>
+    rename_i i
     intro Δ hΓ
     subst hΓ
     rw [Ctx.get_snoc] at hi
@@ -276,24 +276,25 @@ theorem HasType.openAt_aux {α u} (hu : HasType [] u α) :
     · simp [hlen] at hi
       simp [Tm.openAt, hlen]
       exact HasType.bvar hi
-  | fvar =>
+  | fvar x α' =>
     intro Δ hΓ
     subst hΓ
     simp [Tm.openAt]
-    exact HasType.fvar
-  | const =>
+    exact HasType.fvar x α'
+  | const c α' =>
     intro Δ hΓ
     subst hΓ
     simp [Tm.openAt]
-    exact HasType.const
+    exact HasType.const c α'
   | app _ _ ihf iha =>
     intro Δ hΓ
     exact HasType.app (ihf Δ hΓ) (iha Δ hΓ)
-  | lam δ _ _ ih =>
+  | lam _ht ih =>
     intro Δ hΓ
     subst hΓ
-    refine HasType.lam (ih (δ :: Δ) ?_)
-    simp [Tm.openAt, List.length]
+    apply HasType.lam
+    apply ih
+    simp [List.cons_append]
 
 theorem HasType.openAt {Γ t β α u} (ht : HasType (Γ ++ [α]) t β)
     (hu : HasType [] u α) :
@@ -307,7 +308,7 @@ theorem HasType.open' {t β α u} (ht : HasType [α] t β) (hu : HasType [] u α
 /-- Equations are booleans when both sides share a type. -/
 theorem HasType.mkEq {Γ s t α} (hs : HasType Γ s α) (ht : HasType Γ t α) :
     HasType Γ (Tm.mkEq α s t) .bool :=
-  HasType.app (HasType.app HasType.const hs) ht
+  HasType.app (HasType.app (HasType.const .eq α) hs) ht
 
 /-- Inversion for `s = t`. -/
 theorem HasType.dest_mkEq {Γ s t α β} (h : HasType Γ (Tm.mkEq α s t) β) :
