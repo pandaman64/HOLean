@@ -393,6 +393,24 @@ theorem HasType.lc {Γ t α} (h : HasType env Γ t α) : t.LC Γ.length = true :
 theorem HasType.lc0 {t α} (h : HasType env [] t α) : t.LC 0 = true :=
   h.lc
 
+/-- A well-typed term never mentions a constant that is not in the signature. -/
+theorem HasType.not_hasConst_of_fresh {Γ t α n}
+    (h : HasType env Γ t α) (hn : env.constants n = none) :
+    t.hasConst n = false := by
+  induction h with
+  | bvar hi =>
+    rfl
+  | fvar x α =>
+    rfl
+  | const hconst hinst =>
+    simp [Tm.hasConst]
+    rintro rfl
+    simp [hn] at hconst
+  | app _ _ ihf iha =>
+    simp [Tm.hasConst, ihf, iha]
+  | lam _ ih =>
+    simpa [Tm.hasConst] using ih
+
 /-- Place a term under one extra binder at de Bruijn index `c`. -/
 theorem HasType.shift_at {Γ t α} (h : HasType env Γ t α) (γ : Ty) :
     ∀ c, HasType env (Γ.insertIdx c γ) (t.shift 1 c) α := by

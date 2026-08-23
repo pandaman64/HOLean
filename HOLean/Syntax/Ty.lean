@@ -103,6 +103,25 @@ theorem mem_tyvars_arrow {x : Name} {α β : Ty} :
       · exact Or.inl hx
       · exact Or.inr ⟨h, hx⟩
 
+/-- Substitutions that agree on the free type variables of `α` instantiate it
+the same way. -/
+theorem inst_eq_of {α : Ty} {θ σ : TySubst}
+    (h : ∀ x ∈ α.tyvars, (θ.lookup x).getD (var x) = (σ.lookup x).getD (var x)) :
+    α.inst θ = α.inst σ := by
+  induction α with
+  | var x =>
+    exact h x (by simp [tyvars])
+  | bool =>
+    rfl
+  | ind =>
+    rfl
+  | arrow α β ihα ihβ =>
+    rw [inst_arrow, inst_arrow, ihα, ihβ]
+    · intro x hx
+      exact h x (mem_tyvars_arrow.2 (Or.inr hx))
+    · intro x hx
+      exact h x (mem_tyvars_arrow.2 (Or.inl hx))
+
 end Ty
 
 namespace TySubst

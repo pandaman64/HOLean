@@ -872,4 +872,73 @@ instance : Env.HasConnectives holLogic where
       Env.addDef_axioms_self envEx oneOneName oneOneTy Tm.oneOneDef
   onto_ax := Env.addDef_axioms_self envOneOne ontoName ontoTy Tm.ontoDef
 
+/-! Public typing of each defining right-hand side in the environment
+that introduces it (for model transport along the `addDef` chain). -/
+
+theorem HasType.truDef_holCore : HasType holCore [] Tm.truDef truTy :=
+  hasType_truDef holCore
+
+theorem HasType.andDef_envTru : HasType envTru [] Tm.andDef andTy :=
+  hasType_andDef envTru envTru_tru
+
+theorem HasType.impDef_envAnd : HasType envAnd [] Tm.impDef impTy :=
+  hasType_impDef envAnd envAnd_constants_and
+
+theorem HasType.allDef_envImp : HasType envImp [] Tm.allDef allTy :=
+  hasType_allDef envImp envImp_tru
+
+theorem HasType.falsumDef_envAll : HasType envAll [] Tm.falsumDef falsumTy :=
+  hasType_falsumDef envAll envAll_constants_all
+
+theorem HasType.notDef_envFalsum : HasType envFalsum [] Tm.notDef notTy :=
+  hasType_notDef envFalsum envFalsum_imp envFalsum_constants_falsum
+
+theorem HasType.orDef_envNot : HasType envNot [] Tm.orDef orTy :=
+  hasType_orDef envNot envNot_all envNot_imp
+
+theorem HasType.exDef_envOr : HasType envOr [] Tm.exDef exTy :=
+  hasType_exDef envOr envOr_all envOr_imp
+
+theorem HasType.oneOneDef_envEx : HasType envEx [] Tm.oneOneDef oneOneTy :=
+  hasType_oneOneDef envEx envEx_all envEx_imp
+
+theorem HasType.ontoDef_envOneOne : HasType envOneOne [] Tm.ontoDef ontoTy :=
+  hasType_ontoDef envOneOne envOneOne_all envOneOne_ex
+
+theorem truName_fresh_core : holCore.constants truName = none :=
+  fresh_core (by decide) (by decide)
+
+theorem andName_fresh_envTru : envTru.constants andName = none :=
+  envTru_fresh (by decide) (by decide) (by decide)
+
+theorem impName_fresh_envAnd : envAnd.constants impName = none :=
+  envAnd_fresh (by decide) (by decide) (by decide) (by decide)
+
+theorem allName_fresh_envImp : envImp.constants allName = none :=
+  envImp_fresh (by decide) (by decide) (by decide) (by decide) (by decide)
+
+theorem falsumName_fresh_envAll : envAll.constants falsumName = none :=
+  envAll_fresh (by decide) (by decide) (by decide) (by decide) (by decide)
+    (by decide)
+
+theorem notName_fresh_envFalsum : envFalsum.constants notName = none :=
+  envFalsum_fresh (by decide) (by decide) (by decide) (by decide) (by decide)
+    (by decide) (by decide)
+
+theorem orName_fresh_envNot : envNot.constants orName = none :=
+  envNot_fresh (by decide) (by decide) (by decide) (by decide) (by decide)
+    (by decide) (by decide) (by decide)
+
+theorem exName_fresh_envOr : envOr.constants exName = none :=
+  envOr_fresh (by decide) (by decide) (by decide) (by decide) (by decide)
+    (by decide) (by decide) (by decide) (by decide)
+
+theorem oneOneName_fresh_envEx : envEx.constants oneOneName = none :=
+  envEx_fresh (by decide) (by decide) (by decide) (by decide) (by decide)
+    (by decide) (by decide) (by decide) (by decide) (by decide)
+
+theorem ontoName_fresh_envOneOne : envOneOne.constants ontoName = none :=
+  envOneOne_fresh (by decide) (by decide) (by decide) (by decide) (by decide)
+    (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
+
 end HOLean
