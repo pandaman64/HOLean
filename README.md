@@ -52,6 +52,7 @@ HOLean/
   Model/Tm.lean        `Tm.denote`, `HasType.denote_mem`, `EnvInterp.holCore`
   Model/Commute.lean   denotation commutes with open / close / `instTy` / subst
   Model/Sound.lean     `EnvModel`, `Provable.sound`, `Provable.sound_holCore`
+  Model/Def.lean       `EnvModel.addDef`, `EnvModel.holLogic`
 ```
 
 See `docs/MODEL.md` for the full standard-model plan.
@@ -219,8 +220,8 @@ theorems *about* `Env.LE` — still ahead of the `ZFSet` model.
 
 ### Phase 3 — Standard model in `ZFSet`
 
-Plan: [`docs/MODEL.md`](docs/MODEL.md).  Types, terms, and kernel soundness
-for axiom-free environments (`holCore`) are in; `addDef` transport and
+Plan: [`docs/MODEL.md`](docs/MODEL.md).  Types, terms, kernel soundness, and
+`addDef` transport through `holLogic` are in; `holEnv` axioms and
 `¬ ⊢ ⊥` come next.
 
 Fix a type valuation `ρ : Name → ZFSet`.
@@ -237,7 +238,7 @@ Fix a type valuation `ρ : Name → ZFSet`.
 - [x] Term denotation (`HasType` → element of `⟦α⟧`)
 - [x] `eq` / `select` as graphs; `EnvInterp.holCore`
 - [x] soundness of the ten rules (`Provable.sound` / `sound_holCore`)
-- [ ] `addDef` preservation; model of `holLogic`
+- [x] `addDef` preservation; model of `holLogic`
 - [ ] `holEnv` axioms; `⟦⊥⟧ = zfFalse`; `¬ [] ⊩[holEnv] ⊥`
 
 **Soundness.**  If `Γ ⊩[env] p` and a valuation satisfies every hypothesis,

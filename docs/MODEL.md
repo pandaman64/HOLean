@@ -139,11 +139,12 @@ HOLean/Model/Const.lean   I for eq / select (later: connectives)
 HOLean/Model/Tm.lean      denote on raw terms; HasType.denote_mem
 HOLean/Model/Commute.lean open / close / instTy / subst commute with denote
 HOLean/Model/Sound.lean   EnvModel; Provable.sound; sound_holCore
+HOLean/Model/Def.lean     addDef transport; EnvModel.holLogic
 HOLean/Model/Axiom.lean   holEnv axioms; consistency
 ```
 
-`Basic`, `Ty`, `Const`, `Tm`, `Commute`, and `Sound` are in this PR.
-`addDef` transport and the `holEnv` consistency argument are next.
+`Basic` through `Def` (including `holLogic` as a model) are in this PR.
+The `holEnv` consistency argument is next.
 
 ## PR series (after this one)
 
@@ -154,7 +155,7 @@ Each slice should `lake build HOLean` and add theorems, not scaffolding alone.
    `holCore` (no axioms) is the first instance.  **Done in this PR.**
 3. **Definitions** — `addDef` preservation: if `I` models `env` and
    `HasType env [] rhs ty`, the extension models `env.addDef n ty rhs`.
-   Then `holLogic` is a model.
+   Then `holLogic` is a model.  **Done in this PR.**
 4. **Axioms and consistency** — η, SELECT, INFINITY in `holEnv`;
    `⟦falsum⟧ = zfFalse`; `¬ [] ⊩[holEnv] ⊥`.
 

@@ -354,4 +354,50 @@ theorem Tm.denote_no_fvars (t : Tm) (I : EnvInterp env ρ) (ξ ξ' : FVarVal ρ)
     t.denote I ξ vs = t.denote I ξ' vs :=
   Tm.denote_fvarVal t I ξ ξ' vs fun x α => Or.inl (h x α)
 
+/-- Denotation ignores the environment name: only the interp table matters. -/
+theorem Tm.denote_interp_eq_env {env' : Env} (t : Tm)
+    (I : EnvInterp env ρ) (I' : EnvInterp env' ρ) (ξ : FVarVal ρ)
+    (vs : List ZFSet) (h : ∀ n α, I.interp n α = I'.interp n α) :
+    t.denote I ξ vs = t.denote I' ξ vs := by
+  induction t generalizing vs with
+  | bvar i =>
+    rfl
+  | fvar x α =>
+    rfl
+  | const n α =>
+    exact h n α
+  | app f a ihf iha =>
+    simp [Tm.denote, ihf vs, iha vs]
+  | lam α t ih =>
+    simp [Tm.denote]
+    apply map_congr
+    intro x hx
+    simp [lamFn, hx]
+    exact ih (x :: vs)
+
+/-- Tables that agree off a missing constant give the same denotation. -/
+theorem Tm.denote_interp_except {env' : Env} {n : Name} (t : Tm)
+    (I : EnvInterp env ρ) (I' : EnvInterp env' ρ) (ξ : FVarVal ρ)
+    (vs : List ZFSet) (hne : t.hasConst n = false)
+    (h : ∀ m α, m ≠ n → I.interp m α = I'.interp m α) :
+    t.denote I ξ vs = t.denote I' ξ vs := by
+  induction t generalizing vs with
+  | bvar i =>
+    rfl
+  | fvar x α =>
+    rfl
+  | const c α =>
+    simp [Tm.hasConst] at hne
+    exact h c α hne
+  | app f a ihf iha =>
+    simp [Tm.hasConst, Bool.or_eq_false_iff] at hne
+    simp [Tm.denote, ihf vs hne.1, iha vs hne.2]
+  | lam α t ih =>
+    simp [Tm.hasConst] at hne
+    simp [Tm.denote]
+    apply map_congr
+    intro x hx
+    simp [lamFn, hx]
+    exact ih (x :: vs) hne
+
 end HOLean

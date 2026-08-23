@@ -5,3 +5,4 @@ import HOLean.Model.Const
 import HOLean.Model.Tm
 import HOLean.Model.Commute
 import HOLean.Model.Sound
+import HOLean.Model.Def

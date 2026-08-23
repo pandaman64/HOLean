@@ -68,6 +68,13 @@ def closeAt (t : Tm) (k : Nat) (x : Name) (α : Ty) : Tm :=
 def abstract (t : Tm) (x : Name) (α : Ty) : Tm :=
   lam α (t.close x α)
 
+/-- Does `t` mention the constant `n`? -/
+def hasConst : Tm → Name → Bool
+  | const c _, n => decide (c = n)
+  | app f a, n => f.hasConst n || a.hasConst n
+  | lam _ t, n => t.hasConst n
+  | _, _ => false
+
 /-- Is the HOL variable `(x, α)` free in `t`?  Binders do not shadow free
 variables (locally nameless). -/
 def freeIn (t : Tm) (x : Name) (α : Ty) : Bool :=
