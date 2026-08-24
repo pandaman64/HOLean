@@ -4,6 +4,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 -/
 
 import HOLean.Model.Commute
+import HOLean.Syntax.Logic
 
 /-!
 # Soundness of the HOL Light kernel
@@ -276,5 +277,23 @@ theorem Provable.sound_holCore {ρ : TyVal} {Γ p} (h : Γ ⊩[holCore] p)
     (hΓ : HypsTrue (EnvInterp.holCore ρ hρ) ξ Γ) :
     p.denote (EnvInterp.holCore ρ hρ) ξ [] = zfTrue :=
   Provable.sound h (EnvModel.holCore ρ hρ) ξ hΓ
+
+/-- If `M` models `env` and `⟦⊥⟧ = zfFalse`, then `⊥` is not provable. -/
+theorem Provable.not_falsum_of [Env.HasEq env] (M : EnvModel env ρ) (hρ : ρ.Nonempty)
+    (hfalsum : Tm.falsum.denote M.interp (FVarVal.ofNonempty hρ) [] = zfFalse) :
+    ¬ [] ⊩[env] Tm.falsum := by
+  intro h
+  have hT := Provable.sound h M (FVarVal.ofNonempty hρ) (fun _ hq => nomatch hq)
+  exact zfFalse_ne_zfTrue (hfalsum ▸ hT)
+
+theorem Provable.sound_of_model [Env.HasEq env] (M : EnvModel env ρ) {Γ p} (h : Γ ⊩[env] p)
+    (ξ : FVarVal ρ) (hΓ : HypsTrue M.interp ξ Γ) :
+    p.denote M.interp ξ [] = zfTrue :=
+  Provable.sound h M ξ hΓ
+
+theorem Provable.sound_with_model [Env.HasEq env] (M : EnvModel env ρ) {Γ p}
+    (h : Γ ⊩[env] p) (ξ : FVarVal ρ) (hΓ : HypsTrue M.interp ξ Γ) :
+    p.denote M.interp ξ [] = zfTrue :=
+  Provable.sound_of_model M h ξ hΓ
 
 end HOLean

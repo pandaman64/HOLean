@@ -36,7 +36,8 @@ theorem HasType.notDef [Env.HasConnectives env] :
 
 theorem HasType.orDef [Env.HasConnectives env] :
     HasType env [] Tm.orDef orTy := by
-  unfold Tm.orDef orTy
+  rw [Tm.orDef_eq]
+  unfold orTy
   refine HasType.lam (HasType.lam ?_)
   refine HasType.all (HasType.lam ?_)
   refine HasType.imp (HasType.imp (HasType.bvar (by simp)) (HasType.bvar (by simp))) ?_
@@ -55,7 +56,8 @@ private theorem htBvar2 {δ γ α : Ty} {Γ} :
 
 theorem HasType.exDef [Env.HasConnectives env] :
     HasType env [] Tm.exDef exTy := by
-  unfold Tm.exDef exTy
+  rw [Tm.exDef_eq]
+  unfold exTy
   refine HasType.lam ?_
   refine HasType.all (HasType.lam ?_)
   refine HasType.imp ?_ (HasType.bvar (by simp))
@@ -64,7 +66,8 @@ theorem HasType.exDef [Env.HasConnectives env] :
 
 theorem HasType.oneOneDef [Env.HasConnectives env] :
     HasType env [] Tm.oneOneDef oneOneTy := by
-  unfold Tm.oneOneDef oneOneTy
+  rw [Tm.oneOneDef_eq]
+  unfold oneOneTy
   refine HasType.lam ?_
   refine HasType.all (HasType.lam ?_)
   refine HasType.all (HasType.lam ?_)
@@ -75,7 +78,8 @@ theorem HasType.oneOneDef [Env.HasConnectives env] :
 
 theorem HasType.ontoDef [Env.HasConnectives env] :
     HasType env [] Tm.ontoDef ontoTy := by
-  unfold Tm.ontoDef ontoTy
+  rw [Tm.ontoDef_eq]
+  unfold ontoTy
   refine HasType.lam ?_
   refine HasType.all (HasType.lam ?_)
   refine HasType.ex (HasType.lam ?_)
@@ -380,7 +384,7 @@ theorem Tm.exDef_instTy (α : Ty) :
         (Tm.all .bool (.lam .bool
           (Tm.imp (Tm.all α (.lam α (Tm.imp (Tm.app (Tm.bvar 2) (Tm.bvar 0)) (.bvar 1))))
             (.bvar 0)))) := by
-  simp [Tm.exDef, Tm.all, Tm.imp, Tm.instTy, Ty.inst, TySubst.lookup, primTyVar,
+  simp [Tm.exDef_eq, Tm.all, Tm.imp, Tm.instTy, Ty.inst, TySubst.lookup, primTyVar,
     impTy]
 
 theorem Tm.oneOneDef_instTy (α β : Ty) :
@@ -390,7 +394,7 @@ theorem Tm.oneOneDef_instTy (α β : Ty) :
           (Tm.all α (.lam α
             (Tm.imp (Tm.mkEq β (Tm.app (Tm.bvar 2) (Tm.bvar 1)) (Tm.app (Tm.bvar 2) (Tm.bvar 0)))
               (Tm.mkEq α (.bvar 1) (.bvar 0))))))) := by
-  simp [Tm.oneOneDef, Tm.all, Tm.imp, Tm.mkEq, Tm.eqConst, Tm.instTy, Ty.inst,
+  simp [Tm.oneOneDef_eq, Tm.all, Tm.imp, Tm.mkEq, Tm.eqConst, Tm.instTy, Ty.inst,
     TySubst.lookup, primTyVar, primTyVarB, impTy]
 
 theorem Tm.ontoDef_instTy (α β : Ty) :
@@ -399,7 +403,7 @@ theorem Tm.ontoDef_instTy (α β : Ty) :
         (Tm.all β (.lam β
           (Tm.ex α (.lam α
             (Tm.mkEq β (.bvar 1) (Tm.app (Tm.bvar 2) (Tm.bvar 0))))))) := by
-  simp [Tm.ontoDef, Tm.all, Tm.ex, Tm.mkEq, Tm.eqConst, Tm.instTy, Ty.inst,
+  simp [Tm.ontoDef_eq, Tm.all, Tm.ex, Tm.mkEq, Tm.eqConst, Tm.instTy, Ty.inst,
     TySubst.lookup, primTyVar, primTyVarB]
 
 theorem EnvModel.denote_lam_tru [Env.HasConnectives env]
@@ -509,7 +513,7 @@ theorem EnvModel.denote_falsum [Env.HasConnectives env]
     intro hT
     exact zfFalse_ne_zfTrue (hF ▸ (hiff.1 hT) zfFalse zfFalse_mem_zfBool)
   have hB := HasType.falsumDef.denote_bool_mem M.interp ξ (CtxVal.nil ρ)
-  simp [CtxVal.nil, Tm.falsumDef] at hB
+  simp [CtxVal.nil, Tm.falsumDef_eq] at hB
   have : (Tm.all .bool (Tm.lam .bool (Tm.bvar 0))).denote M.interp ξ [] =
       zfFalse :=
     zfBool_eq_false_of_ne_true hB hne
@@ -544,7 +548,7 @@ theorem EnvModel.denote_not [Env.HasConnectives env]
       zfApp (Tm.notDef.denote M.interp ξ []) (p.denote M.interp ξ vs.vals) =
         (Tm.imp (Tm.bvar 0) Tm.falsum).denote M.interp ξ
           [p.denote M.interp ξ vs.vals] := by
-    simpa [Tm.notDef, CtxVal.nil] using happ
+    simpa [Tm.notDef_eq, CtxVal.nil] using happ
   have hp' : HasType env [.bool] (Tm.bvar 0) .bool :=
     htBvar0 (α := .bool) (Γ := [])
   let vs' : CtxVal ρ [.bool] :=

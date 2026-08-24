@@ -164,6 +164,10 @@ theorem addDef_axioms_of {env : Env} {n : Name} {ty : Ty} {rhs ax : Tm}
     (env.addDef n ty rhs).axioms ax :=
   Or.inr h
 
+theorem addAxiom_axioms_of {env : Env} (ax p : Tm) (h : env.axioms p) :
+    (env.addAxiom ax).axioms p :=
+  Or.inr h
+
 end Env
 
 /-- Primitive constants, no axioms.  The connective chain (`holLogic`) and
