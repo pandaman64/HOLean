@@ -52,14 +52,14 @@ htheorem and_tt_eq_T : (True ∧ True) = True :=
 
 /-! ## Tactic scripts -/
 
-htheorem true_eq_true_tac : True = True by h_refl
+htheorem true_eq_true_tac : True = True by hrefl
 
-htheorem true_intro_tac : True by h_truth
+htheorem true_intro_tac : True by htruth
 
-htheorem and_tt_again : True ∧ True by h_exact and_tt
+htheorem and_tt_again : True ∧ True by hexact and_tt
 
-htheorem true_via_eqmp : True by h_apply and_tt_eq_T, h_exact and_tt
+htheorem true_via_eqmp : True by happly and_tt_eq_T, hexact and_tt
 
-htheorem true_eq_true_sym : True = True by h_sym, h_refl
+htheorem true_eq_true_sym : True = True by hsym, hrefl
 
 end Examples.Tactics

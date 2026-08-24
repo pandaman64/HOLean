@@ -16,24 +16,24 @@ HolM certificate path (WF / connectives only).
 
 ## Tactics
 
-* `h_refl` / `h_rfl` — close `t = t`
-* `h_truth` — close `True`
-* `h_assumption` — close when the conclusion is among the hypotheses
-* `h_sym` — turn `s = t` into `t = s`
-* `h_exact n` — close with a named `htheorem` (type-instantiated)
-* `h_apply n` — close if possible; otherwise use `EQ_MP` / `SYM` when `n`
+* `hrefl` / `hrfl` — close `t = t`
+* `htruth` — close `True`
+* `hassumption` — close when the conclusion is among the hypotheses
+* `hsym` — turn `s = t` into `t = s`
+* `hexact n` — close with a named `htheorem` (type-instantiated)
+* `happly n` — close if possible; otherwise use `EQ_MP` / `SYM` when `n`
   proves an equation matching the goal
-* `h_eq_mp n` — require an equation theorem and replace the goal via `EQ_MP`
+* `heqmp n` — require an equation theorem and replace the goal via `EQ_MP`
 
-Atoms are prefixed with `h_` so they do not steal Lean keywords such as
+Names are prefixed with `h` so they do not steal Lean keywords such as
 `rfl` / `exact` / `apply`.
 
 ## Syntax
 
 ```
-htheorem foo : True = True by h_refl
+htheorem foo : True = True by hrefl
 
-htheorem bar : True by h_apply and_tt_eq, h_exact and_tt
+htheorem bar : True by happly and_tt_eq, hexact and_tt
 ```
 -/
 
@@ -257,14 +257,14 @@ def runHolTactics (stmt : Tm) (script : HolTacM Unit) : HolM Thm := do
 
 declare_syntax_cat hol_tac
 
-syntax "h_refl" : hol_tac
-syntax "h_rfl" : hol_tac
-syntax "h_truth" : hol_tac
-syntax "h_assumption" : hol_tac
-syntax "h_sym" : hol_tac
-syntax "h_exact " ident : hol_tac
-syntax "h_apply " ident : hol_tac
-syntax "h_eq_mp " ident : hol_tac
+syntax "hrefl" : hol_tac
+syntax "hrfl" : hol_tac
+syntax "htruth" : hol_tac
+syntax "hassumption" : hol_tac
+syntax "hsym" : hol_tac
+syntax "hexact " ident : hol_tac
+syntax "happly " ident : hol_tac
+syntax "heqmp " ident : hol_tac
 
 /-- Parse a tactic name from an identifier (uses the short HOL name). -/
 def holTacName (id : TSyntax `ident) : HOLean.Name :=
@@ -272,13 +272,13 @@ def holTacName (id : TSyntax `ident) : HOLean.Name :=
 
 def elabHolTac (stx : Syntax) : HolTacM Unit := do
   match stx with
-  | `(hol_tac| h_refl) | `(hol_tac| h_rfl) => tacRefl
-  | `(hol_tac| h_truth) => tacTruth
-  | `(hol_tac| h_assumption) => tacAssumption
-  | `(hol_tac| h_sym) => tacSym
-  | `(hol_tac| h_exact $n:ident) => tacExact (holTacName n)
-  | `(hol_tac| h_apply $n:ident) => tacApply (holTacName n)
-  | `(hol_tac| h_eq_mp $n:ident) => tacEqMp (holTacName n)
+  | `(hol_tac| hrefl) | `(hol_tac| hrfl) => tacRefl
+  | `(hol_tac| htruth) => tacTruth
+  | `(hol_tac| hassumption) => tacAssumption
+  | `(hol_tac| hsym) => tacSym
+  | `(hol_tac| hexact $n:ident) => tacExact (holTacName n)
+  | `(hol_tac| happly $n:ident) => tacApply (holTacName n)
+  | `(hol_tac| heqmp $n:ident) => tacEqMp (holTacName n)
   | _ => HolTacM.throw s!"unsupported HOL tactic: {stx}"
 
 def elabHolTacSeq (stxs : Array Syntax) : HolTacM Unit :=
