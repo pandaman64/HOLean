@@ -68,11 +68,28 @@ def addLeanDefn (leanN : Lean.Name) (type value : Expr) : CommandElabM Unit := d
     safety := .safe
   }
 
-def addLeanThm (leanN : Lean.Name) (thm : Thm) : CommandElabM Unit := do
+/-- Lean name suffix for the checked `Thm` value of an `htheorem`. -/
+def holThmValName (leanN : Lean.Name) : Lean.Name :=
+  leanN.appendAfter "_hthm"
+
+def addLeanThmStmt (leanN : Lean.Name) (propType : Expr) : CommandElabM Unit := do
+  let propType ← liftTermElabM <| instantiateMVars propType
+  if propType.hasExprMVar then
+    throwError "HOLean: theorem statement still has metavariables"
+  let ls := (collectLevelParams {} propType).params
+  liftCoreM <| addDecl <| .axiomDecl {
+    name := leanN
+    levelParams := ls.toList
+    type := propType
+    isUnsafe := false
+  }
+
+def addLeanThmVal (leanN : Lean.Name) (thm : Thm) : CommandElabM Unit := do
+  let valN := holThmValName leanN
   let type := mkConst ``Thm
   let value := toExpr thm
   liftCoreM <| addDecl <| .defnDecl {
-    name := leanN
+    name := valN
     levelParams := []
     type
     value
@@ -132,10 +149,11 @@ unsafe def elabHTheorem : CommandElab := fun stx => do
     let leanN := (← getCurrNamespace) ++ short
     let holN := holName short
     checkFresh holN leanN
-    let (stmt, thm) ← liftTermElabM do
+    let (stmt, propType, thm) ← liftTermElabM do
       let e ← elabLean propStx (mkSort 0)
       unless (← Meta.isProp e) do
         throwError "HOLean: expected a proposition{indentExpr e}"
+      let propType ← instantiateMVars (← inferType e)
       let stmt ← exprToTm e
       let env ← currentHolEnv
       unless stmt.infer env [] == some .bool do
@@ -154,8 +172,9 @@ unsafe def elabHTheorem : CommandElab := fun stx => do
           throwError "HOLean: theorem still has hypotheses {repr thm.hyps}"
         unless thm.concl == stmt do
           throwError "HOLean: proved {repr thm.concl}, expected {repr stmt}"
-        pure (stmt, thm)
-    addLeanThm leanN thm
+        pure (stmt, propType, thm)
+    addLeanThmStmt leanN propType
+    addLeanThmVal leanN thm
     addHolDecl (.thm leanN holN stmt)
     logInfo m!"htheorem {holN}"
   | _ => throwUnsupportedSyntax

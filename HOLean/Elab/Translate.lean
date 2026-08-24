@@ -188,6 +188,11 @@ partial def translateConst (n : Lean.Name) (args : Array Expr) : MetaM (Option T
   | n =>
     if let some (holName, gen) := findUserDef? (← getEnv) n then
       some <$> applyUserConst holName gen args
+    else if args.isEmpty then
+      if let some stmt := findUserThmByLean? (← getEnv) n then
+        return some stmt
+      else
+        return none
     else
       return none
 

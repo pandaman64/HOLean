@@ -65,6 +65,12 @@ def findUserDefByHol? (decls : HolState) (holName : HOLean.Name) : Option (Ty ×
     | .defn _ hn ty rhs => if hn == holName then some (ty, rhs) else none
     | .thm .. => none
 
+/-- Look up a user `htheorem` by its Lean stand-in name. -/
+def findUserThmByLean? (env : Environment) (leanName : Lean.Name) : Option Tm :=
+  (holStateExt.getState env).findSome? fun
+    | .thm ln _ stmt => if ln == leanName then some stmt else none
+    | .defn .. => none
+
 /-- Look up an installed theorem by HOL or Lean name. -/
 def findUserThm? (decls : HolState) (n : HOLean.Name) : Option Tm :=
   decls.findSome? fun

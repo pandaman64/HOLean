@@ -150,10 +150,19 @@ hdef myId := fun {A : Type} (x : A) => x
 
 hdef myNot : Prop → Prop := fun (p : Prop) => p → False
 
+hdef myTwice := fun (n : Nat) => myId (myId n)
+
+hdef myNotTrue := myNot True
+
 variable (n : Nat)
 
 example : hol_tm(myId n) =
     Tm.app (Tm.const "myId" (Ty.ind ↝ Ty.ind)) (Tm.fvar "n" .ind) := rfl
+
+example : hol_tm(myTwice n) =
+    Tm.app (Tm.const "myTwice" (Ty.ind ↝ Ty.ind)) (Tm.fvar "n" .ind) := rfl
+
+example : hol_prop(myNotTrue) = Tm.const "myNotTrue" .bool := rfl
 
 example : hol_tm(myNot) = Tm.const "myNot" (.bool ↝ .bool) := rfl
 
@@ -180,11 +189,24 @@ htheorem true_eq_true : True = True :=
 htheorem tru_intro : True :=
   Hol.truth
 
-example : true_eq_true.concl = Tm.mkEq .bool Tm.tru Tm.tru := rfl
-example : tru_intro.concl = Tm.tru := rfl
+htheorem myNot_true_eq : myNot True = myNot True :=
+  Hol.refl (hol_tm(myNot True))
 
-htheorem tru_intro_again : True :=
+htheorem tru_intro_again : tru_intro :=
   Hol.thm "tru_intro"
+
+example : true_eq_true_hthm.concl = Tm.mkEq .bool Tm.tru Tm.tru := rfl
+example : tru_intro_hthm.concl = Tm.tru := rfl
+example : myNot_true_eq_hthm.concl =
+    Tm.mkEq .bool
+      (Tm.app (Tm.const "myNot" (.bool ↝ .bool)) Tm.tru)
+      (Tm.app (Tm.const "myNot" (.bool ↝ .bool)) Tm.tru) := rfl
+
+example : hol_prop(tru_intro) = Tm.tru := rfl
+example : hol_prop(myNot_true_eq) =
+    Tm.mkEq .bool
+      (Tm.app (Tm.const "myNot" (.bool ↝ .bool)) Tm.tru)
+      (Tm.app (Tm.const "myNot" (.bool ↝ .bool)) Tm.tru) := rfl
 
 end HDef
 

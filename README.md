@@ -168,10 +168,14 @@ htheorem tru_intro : True := Hol.truth
 
 `hdef` type-checks the RHS and calls `Env.addDef`.  The type and RHS are
 elaborated separately, so write binders on the RHS (`fun {A} (x : A) => x`)
-rather than mentioning them only in the ascription.  `htheorem` runs a
-`HolM Thm` script — the ten kernel rules plus a few derived combinators,
-as Lean functions — and installs the closed boolean as an axiom.  That
-is a Lean metaprogram, not a tactic language; tactics can come later.
+rather than mentioning them only in the ascription.  Later `hdef`s see
+earlier ones as Lean constants and as HOL constants in `hol_tm` / `hol_prop`.
+
+`htheorem` runs a `HolM Thm` script and installs the closed boolean as an
+axiom.  The statement is also registered as a Lean `Prop` axiom (same name)
+so later `hdef` / `htheorem` statements can mention it.  The checked proof
+value lives at `name_hthm` (a `Thm`).  In proof scripts, `Hol.thm "…"` and
+`Hol.defn "…"` refer to earlier user declarations.
 
 ### Lists as hypothesis sets
 
