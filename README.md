@@ -52,7 +52,7 @@ HOLean/
   Elab/Term.lean       `hol_ty(…)` / `hol_tm(…)` / `hol_prop(…)` / `hol(…)`
   Elab/Kernel.lean     executable LCF layer (`Thm`, `Hol.refl`, …)
   Elab/Decl.lean       `hdef` / `htheorem` / `hby` / `#hol_env`
-  Elab/Tactic.lean     Lean-style `hby` tactics and Candle-style goal stack
+  Elab/Tactic.lean     Lean-style `hby` tactics
   Elab/Command.lean    `#hol` (infers in the current HOL environment)
   Model/Basic.lean     `zfBool`, graph application, `succ` on `omega`
   Model/Ty.lean        `Ty.denote`, `INST_TYPE` commutation

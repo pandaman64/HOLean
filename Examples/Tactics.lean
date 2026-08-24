@@ -12,8 +12,7 @@ import HOLean.Elab.Decl
 `htheorem … := hby …` scripts rebuild LCF `Thm` values and assemble a
 `ProvTrace` into a kernel `Provable` proof (`buildProvable`).  Incomplete
 scripts report remaining subgoals at the `hby` block (the cursor after
-the last tactic).  `hbegin` / `htac` / `#hol_goals` / `hend` is the same
-goal stack, one command at a time.
+the last tactic).
 -/
 
 namespace Examples.Tactics
@@ -78,17 +77,6 @@ hdef constLeft {A : Type} (x : A) (_y : A) := x
 htheorem eq_refl {A : Type} (x : A) : x = x := hby
   hrefl
 
-/-! ## Stepwise goal stack (`hbegin` / `htac` / `hend`) -/
-
-hbegin stepwise_true : True
-#hol_goals
-htac happly and_tt_eq_T
-#hol_goals
-htac hexact and_tt
-#hol_goals
-hend
-
-#check stepwise_true_hol_prov
 #check true_eq_true_tac_hol_prov
 #check true_intro_tac_hol_prov
 #check and_tt_again_hol_prov

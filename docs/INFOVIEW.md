@@ -53,8 +53,6 @@ a text dump of `Γ ⊢ P`.  It is **not** InfoView Goals:
 
 * no clickable hypotheses
 * no per-tactic goal snapshot as you move the cursor through the script
-* `hbegin` / `htac` / `#hol_goals` are a second command-level session
-  (not persisted in `.olean`)
 
 The LCF proof (`ProvTrace` → `Replay.buildProvable`) is independent of
 display.  Any InfoView work should keep that split: **pretty-print a
@@ -245,8 +243,7 @@ than Approach A.  Use B when A cannot express the interaction.
 A practical split used elsewhere:
 
 * **A** for the default sequent (Goals panel, cursor tracking)
-* **B** for optional views (trace of `ProvTrace`, term explorer,
-  Candle-style goal stack inspector)
+* **B** for optional views (trace of `ProvTrace`, term explorer)
 
 The HOL kernel proof stays on `ProvTrace`.  The widget, if any, should
 RPC the same sequents the delaborator already pretty-prints, not a
@@ -293,9 +290,6 @@ to SPred or BI.
 6. **Unsolved goals** are unsolved Lean mvars.  `throwError` is then
    the standard “unsolved goals” path, not a hand-rolled
    `logInfoAt` + `throwErrorAt`.
-7. **`hbegin` / `htac`** can keep using a command session, or share
-   the same marker encoding so `#hol_goals` is redundant with
-   InfoView.
 
 Multiple HOL subgoals should be **multiple Lean mvars** (mvcgen-style),
 not one mvar whose type is a list.  The Goals panel already knows how
@@ -325,7 +319,7 @@ to list them; the delaborator only has to render one sequent.
 2. Marker + delaborator for a single sequent (`Γ ⊢ P`).
 3. One Lean mvar per HOL subgoal; tactics replace the focused mvar.
 4. `addHypInfo` for named hypotheses.
-5. (Optional) ProofWidgets panel for `ProvTrace` / the Candle stack.
+5. (Optional) ProofWidgets panel for `ProvTrace`.
 
 Step 1 is the actual architectural change (`CommandElab` → tactic
 info).  Steps 2–4 are what mvcgen/iris-lean did for display.  Step 5

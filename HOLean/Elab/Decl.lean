@@ -21,8 +21,6 @@ Both commands extend the current HOL environment stored in
 * `htheorem n binders : p := script` — a `HolM Thm` script or kernel
   `Provable` proof
 * `htheorem n binders : p := hby tacs` — indented HOL tactic script
-* `hbegin n binders : p` / `htac` / `#hol_goals` / `hend` — stepwise goal stack
-  (Candle-style); `hend` installs the theorem like `htheorem`
 -/
 
 open Lean Meta Elab Command
@@ -130,7 +128,7 @@ def finishHTheorem (leanN : Lean.Name) (holN : HOLean.Name) (stmt : Tm)
   addHolDecl (.thm leanN holN stmt)
   logInfo m!"htheorem {holN}"
 
-/-- Left-side telescope of `htheorem` / `hbegin`.
+/-- Left-side telescope of `htheorem`.
 
 Type binders (`{α : Type}`) are schematic HOL type variables.  Term
 binders of a non-propositional type are value parameters (later `GEN`).
@@ -223,11 +221,6 @@ syntax (name := htheoremHByCmd) (priority := high)
 syntax (name := htheoremCmd)
   "htheorem " ident (ppSpace bracketedBinder)* " : " term " := " term : command
 syntax (name := holEnvCmd) "#hol_env" : command
-syntax (name := hbeginCmd) "hbegin " ident (ppSpace bracketedBinder)* " : " term : command
-syntax (name := htacCmd) "htac " holTacSeq : command
-syntax (name := hgoalsCmd) "#hol_goals" : command
-syntax (name := hendCmd) "hend" : command
-syntax (name := habortCmd) "habort" : command
 
 def finishTacticTheorem (leanN : Lean.Name) (holN : HOLean.Name)
     (stmt : Tm) (propType : Expr) (ct : CertifiedThm) : CommandElabM Unit := do
@@ -370,61 +363,5 @@ def elabHolEnv : CommandElab := fun _ => do
       | .thm _ n _ => s!"thm {n}"
     let body := lines.foldl (init := "") fun acc l => acc ++ "  " ++ l ++ "\n"
     logInfo m!"HOL environment ({decls.size} user declaration(s)):\n{body}"
-
-def requireSession : CommandElabM HolSession := do
-  match ← getHolSession with
-  | some s => return s
-  | none => throwError "HOLean: no proof in progress (use `hbegin`)"
-
-@[command_elab hbeginCmd]
-def elabHBegin : CommandElab := fun stx => do
-  if let some s := (← getHolSession) then
-    throwError "HOLean: a proof of `{s.holN}` is already in progress \
-      (use `hend` or `habort`)"
-  let short := stx[1].getId
-  let binders := binderSyntaxes stx[2]
-  let propStx := stx[4]
-  let leanN := (← getCurrNamespace) ++ short
-  let holN := holName short
-  checkFresh holN leanN
-  let decls ← getHolDecls
-  let tel ← liftTermElabM do
-    elabHolTelescope binders propStx decls
-  setHolSession (some { leanN, holN, propType := tel.propType, tac := tel.tacState })
-  logInfo m!"hbegin {holN}\n{formatGoalsString tel.tacState.goals}"
-
-@[command_elab htacCmd]
-def elabHTac : CommandElab := fun stx => do
-  let s ← requireSession
-  let tacs := holTacsOfSeq stx[1]
-  let ctx ← currentHolCtx
-  let tac ← applyHolTacsLocated s.tac tacs ctx
-  setHolSession (some { s with tac })
-  logInfo m!"{formatGoalsString tac.goals}"
-
-@[command_elab hgoalsCmd]
-def elabHGoals : CommandElab := fun _ => do
-  match ← getHolSession with
-  | none => logInfo "no HOL proof in progress"
-  | some s =>
-    logInfo m!"proving {s.holN}\n{formatGoalsString s.tac.goals}"
-
-@[command_elab hendCmd]
-def elabHEnd : CommandElab := fun _ => do
-  let s ← requireSession
-  let ctx ← currentHolCtx
-  let ct ← match HolM.run (finishTacState s.tac) ctx with
-    | .error msg => throwError "HOLean: {msg}"
-    | .ok ct => pure ct
-  finishTacticTheorem s.leanN s.holN s.tac.stmt s.propType ct
-  setHolSession none
-
-@[command_elab habortCmd]
-def elabHAbort : CommandElab := fun _ => do
-  match ← getHolSession with
-  | none => logInfo "no HOL proof in progress"
-  | some s =>
-    setHolSession none
-    logInfo m!"aborted proof of {s.holN}"
 
 end HOLean.Elab

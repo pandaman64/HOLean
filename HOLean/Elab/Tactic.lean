@@ -16,8 +16,7 @@ A HOL Light / Candle-style goal stack: remaining sequents plus a
 an LCF theorem once those subgoals are solved.
 
 Tactics act on the *current* (first) goal.  `htheorem … := hby …`
-requires the stack to be empty; `hbegin` / `htac` / `#hol_goals` /
-`hend` expose the same state across commands.
+requires the stack to be empty.
 
 Closed traces are assembled into `Provable` by `HOLean.Elab.Replay.buildProvable`.
 
@@ -50,12 +49,6 @@ htheorem bar : True := hby
 
 htheorem eq_refl {A : Type} (x : A) : x = x := hby
   hrefl
-
-hbegin baz : True
-htac happly and_tt_eq
-#hol_goals
-htac hexact and_tt
-hend
 ```
 -/
 
@@ -455,23 +448,5 @@ def throwUnsolvedGoals (goalsRef : Syntax) (st : HolTacState) : CommandElabM Uni
   unless st.goals.isEmpty do
     logInfoAt goalsRef m!"{formatGoalsString st.goals}"
     throwErrorAt goalsRef m!"HOLean: unsolved goals\n{formatGoalsString st.goals}"
-
-/-! ## Interactive session (Candle-style `g` / `e`) -/
-
-/-- In-progress `hbegin` proof.  Not persisted to `.olean`. -/
-structure HolSession where
-  leanN : Lean.Name
-  holN : HOLean.Name
-  propType : Lean.Expr
-  tac : HolTacState
-
-initialize holSessionExt : EnvExtension (Option HolSession) ←
-  registerEnvExtension (pure none)
-
-def getHolSession [Monad m] [MonadEnv m] : m (Option HolSession) := do
-  return holSessionExt.getState (← getEnv)
-
-def setHolSession [Monad m] [MonadEnv m] (s : Option HolSession) : m Unit :=
-  modifyEnv (holSessionExt.setState · s)
 
 end HOLean.Elab
