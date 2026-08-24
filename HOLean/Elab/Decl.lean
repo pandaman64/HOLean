@@ -8,6 +8,7 @@ import Lean.Util.CollectLevelParams
 import HOLean.Elab.Term
 import HOLean.Elab.Kernel
 import HOLean.Elab.Cert
+import HOLean.Elab.Tactic
 
 /-!
 # `hdef` / `htheorem`
@@ -16,11 +17,12 @@ Both commands extend the current HOL environment stored in
 `holStateExt`.
 
 * `hdef c : τ := rhs` — type-check `rhs` at `τ` and `Env.addDef`
-* `htheorem n : p := script` — run a `HolM Thm` script (Lean
-  metaprogram / kernel combinators) and install `p` as an axiom
+* `htheorem n : p := script` — run a `HolM Thm` script, a kernel
+  `Provable` proof, or (via `by`) an uncertified HOL tactic script
 
-A tactic language can replace the script later; for now the body is an
-ordinary Lean term of type `HolM Thm`.
+Tactic scripts rebuild a `Thm` through the LCF kernel but do not yet
+produce `Provable` certificates; consistency / soundness certs are
+emitted only for kernel `Provable` proofs.
 -/
 
 open Lean Meta Elab Command
@@ -95,8 +97,41 @@ def addLeanThmVal (leanN : Lean.Name) (thm : Thm) : CommandElabM Unit := do
     safety := .safe
   }
 
+/-- Shared finishing steps after a successful `htheorem` proof. -/
+def finishHTheorem (leanN : Lean.Name) (holN : HOLean.Name) (stmt : Tm)
+    (propType : Expr) (thm : Thm) (provProof? : Option Expr) : CommandElabM Unit := do
+  unless thm.hyps.isEmpty do
+    throwError "HOLean: theorem still has hypotheses {repr thm.hyps}"
+  unless thm.concl == stmt do
+    throwError "HOLean: proved {repr thm.concl}, expected {repr stmt}"
+  match provProof? with
+  | some prov =>
+    emitHTheoremCertProvable leanN stmt prov
+  | none =>
+    emitHTheoremCertWf leanN stmt
+  addLeanThmStmt leanN propType
+  addLeanThmVal leanN thm
+  addHolDecl (.thm leanN holN stmt)
+  logInfo m!"htheorem {holN}"
+
+/-- Elaborate the statement of an `htheorem` to a HOL boolean. -/
+def elabHTheoremStmt (propStx : Syntax) (decls : HolState) :
+    TermElabM (Tm × Expr) := do
+  let e ← elabLean propStx (mkSort 0)
+  unless (← Meta.isProp e) do
+    throwError "HOLean: expected a proposition{indentExpr e}"
+  let propType ← instantiateMVars (← inferType e)
+  let stmt ← exprToTm e
+  let env := decls.foldl HolDecl.apply holEnv
+  unless stmt.infer env [] == some .bool do
+    throwError "HOLean: statement is not a closed boolean"
+  unless stmt.LC 0 do
+    throwError "HOLean: statement is not locally closed"
+  pure (stmt, propType)
+
 syntax (name := hdefCmd) "hdef " ident (" : " term)? " := " term : command
 syntax (name := htheoremCmd) "htheorem " ident " : " term " := " term : command
+syntax (name := htheoremByCmd) "htheorem " ident " : " term " by " hol_tac,+ : command
 syntax (name := holEnvCmd) "#hol_env" : command
 
 @[command_elab hdefCmd]
@@ -150,16 +185,7 @@ unsafe def elabHTheorem : CommandElab := fun stx => do
     checkFresh holN leanN
     let decls ← getHolDecls
     let (stmt, propType, thm, provProof?) ← liftTermElabM do
-      let e ← elabLean propStx (mkSort 0)
-      unless (← Meta.isProp e) do
-        throwError "HOLean: expected a proposition{indentExpr e}"
-      let propType ← instantiateMVars (← inferType e)
-      let stmt ← exprToTm e
-      let env := decls.foldl HolDecl.apply holEnv
-      unless stmt.infer env [] == some .bool do
-        throwError "HOLean: statement is not a closed boolean"
-      unless stmt.LC 0 do
-        throwError "HOLean: statement is not locally closed"
+      let (stmt, propType) ← elabHTheoremStmt propStx decls
       let envExpr := envExprFromDecls decls
       let provProof? ← try
         let provTy ← liftMetaM do
@@ -190,20 +216,27 @@ unsafe def elabHTheorem : CommandElab := fun stx => do
         match HolM.run tac ctx with
         | .error msg => throwError "HOLean: {msg}"
         | .ok thm => pure thm
-      unless thm.hyps.isEmpty do
-        throwError "HOLean: theorem still has hypotheses {repr thm.hyps}"
-      unless thm.concl == stmt do
-        throwError "HOLean: proved {repr thm.concl}, expected {repr stmt}"
       pure (stmt, propType, thm, provProof?)
-    match provProof? with
-    | some prov =>
-      emitHTheoremCertProvable leanN stmt prov
-    | none =>
-      emitHTheoremCertWf leanN stmt
-    addLeanThmStmt leanN propType
-    addLeanThmVal leanN thm
-    addHolDecl (.thm leanN holN stmt)
-    logInfo m!"htheorem {holN}"
+    finishHTheorem leanN holN stmt propType thm provProof?
+  | _ => throwUnsupportedSyntax
+
+@[command_elab htheoremByCmd]
+def elabHTheoremBy : CommandElab := fun stx => do
+  match stx with
+  | `(htheorem $n:ident : $propStx by $[$tacs:hol_tac],*) =>
+    let short := n.getId
+    let leanN := (← getCurrNamespace) ++ short
+    let holN := holName short
+    checkFresh holN leanN
+    let decls ← getHolDecls
+    let (stmt, propType) ← liftTermElabM do
+      elabHTheoremStmt propStx decls
+    let ctx ← currentHolCtx
+    let thm ← match evalHolTacProof stmt tacs ctx with
+    | .error msg => throwError "HOLean: {msg}"
+    | .ok thm => pure thm
+    -- Uncertified tactic scripts: WF / connectives only.
+    finishHTheorem leanN holN stmt propType thm none
   | _ => throwUnsupportedSyntax
 
 @[command_elab holEnvCmd]
