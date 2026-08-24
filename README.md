@@ -66,6 +66,8 @@ HOLean/
 ```
 
 See `docs/MODEL.md` for the full standard-model plan.
+See `docs/INFOVIEW.md` for how Lean InfoView could show HOL sequents
+(mvcgen / iris-lean proof-mode delaborators vs ProofWidgets; not implemented).
 
 Syntax through `Axiom` do not import Mathlib.  `HOLean.Elab` imports the Lean
 compiler library (not Mathlib).  `HOLean.Model` is the first module that
@@ -181,6 +183,9 @@ script, a kernel `Provable` term, or an `hby` tactic block (newline or
 value parameters (`GEN`'d at the end), or hypotheses (`DISCH`'d).
 An unfinished `hby` reports the remaining sequents at that block
 (the cursor after the last tactic), not a literal `_`.
+Those sequents currently go to **Messages** (`logInfoAt`), not the
+Goals panel; `docs/INFOVIEW.md` records how mvcgen and iris-lean get
+a custom Goals view without a widget panel.
 
 The statement is also registered as a Lean `Prop` axiom (same name)
 so later `hdef` / `htheorem` statements can mention it.  The checked proof
@@ -332,6 +337,9 @@ should satisfy η (functions *are* graphs), `SELECT` (`Classical.epsilon` /
 - **A verified checker / Candle-style kernel.**  `Provable` is still the
   metatheoretic predicate.  `Thm` / `Hol.*` is an executable LCF layer
   used by `htheorem`; it is not yet proved sound w.r.t. `Provable`.
+- **InfoView Goals for `hby`.**  Unsolved sequents are Messages, not
+  tactic `MVarId`s.  Approaches (proof-mode delaborators vs widgets)
+  are in `docs/INFOVIEW.md`; none of them is implemented.
 - **Isabelle locales, HOL4 type operators, higher-rank polymorphism.**
   User type constructors (`Ty.app name args`) are the natural extension
   once the core model works — they become extra `ρ`-data in the signature.
