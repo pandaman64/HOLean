@@ -10,9 +10,9 @@ import HOLean.Elab.Decl
 # Backward HOL tactics (examples)
 
 `htheorem … by …` scripts rebuild LCF `Thm` values and assemble a
-`ProvTrace` into a kernel `Provable` proof (`buildProvable`).  Each
-theorem emits `{n}_hol_prov` plus consistency certificates.  The path
-does not use `sorry`, extra Lean `axiom`s, or `native_decide`.
+`ProvTrace` into a kernel `Provable` proof (`buildProvable`).  Incomplete
+scripts report remaining subgoals.  `hbegin` / `htac` / `#hol_goals` /
+`hend` is the same goal stack, one command at a time.
 -/
 
 namespace Examples.Tactics
@@ -63,6 +63,17 @@ htheorem true_via_eqmp : True by happly and_tt_eq_T, hexact and_tt
 
 htheorem true_eq_true_sym : True = True by hsym, hrefl
 
+/-! ## Stepwise goal stack (`hbegin` / `htac` / `hend`) -/
+
+hbegin stepwise_true : True
+#hol_goals
+htac happly and_tt_eq_T
+#hol_goals
+htac hexact and_tt
+#hol_goals
+hend
+
+#check stepwise_true_hol_prov
 #check true_eq_true_tac_hol_prov
 #check true_intro_tac_hol_prov
 #check and_tt_again_hol_prov

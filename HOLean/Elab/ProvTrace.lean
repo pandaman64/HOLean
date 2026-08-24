@@ -35,6 +35,9 @@ inductive ProvTrace where
   | instType (θ : TySubst) (h : ProvTrace)
   /-- `ASSUME p`.  Closed `htheorem` scripts never replay this. -/
   | assume (p : Tm)
+  /-- Unsolved subgoal.  Present in an intermediate goal stack; forbidden
+  in a closed certificate. -/
+  | hole
   deriving Inhabited, Repr
 
 /-- `true` if the trace mentions `ASSUME` (not a closed-theorem certificate). -/
@@ -42,6 +45,32 @@ def ProvTrace.usesAssume : ProvTrace → Bool
   | .assume _ => true
   | .eqMp a b => a.usesAssume || b.usesAssume
   | .eqSym h | .instType _ h => h.usesAssume
-  | .refl .. | .truth | .named _ => false
+  | .refl .. | .truth | .named _ | .hole => false
+
+/-- `true` if any subgoal has not been filled. -/
+def ProvTrace.hasHole : ProvTrace → Bool
+  | .hole => true
+  | .eqMp a b => a.hasHole || b.hasHole
+  | .eqSym h | .instType _ h => h.hasHole
+  | .refl .. | .truth | .named _ | .assume _ => false
+
+/-- Number of unsolved subgoals in this (possibly partial) derivation. -/
+def ProvTrace.countHoles : ProvTrace → Nat
+  | .hole => 1
+  | .eqMp a b => a.countHoles + b.countHoles
+  | .eqSym h | .instType _ h => h.countHoles
+  | .refl .. | .truth | .named _ | .assume _ => 0
+
+/-- Replace the leftmost `hole` with `new`. -/
+def ProvTrace.fillHole (t new : ProvTrace) : Option ProvTrace :=
+  match t with
+  | .hole => some new
+  | .eqMp a b =>
+    match fillHole a new with
+    | some a' => some (.eqMp a' b)
+    | none => (fillHole b new).map (.eqMp a)
+  | .eqSym h => (fillHole h new).map eqSym
+  | .instType θ h => (fillHole h new).map (instType θ)
+  | .refl .. | .truth | .named _ | .assume _ => none
 
 end HOLean.Elab

@@ -10,11 +10,15 @@ import HOLean.Elab.ProvTrace
 /-!
 # Backward HOL tactics
 
-A small goal-directed front-end over the executable LCF kernel (`Hol.*`).
-Tactics rebuild a `Thm` by composing kernel rules and record a `ProvTrace`.
-`htheorem … by …` then assembles a kernel `Provable` proof from that trace
-(`HOLean.Elab.Replay.buildProvable`) so consistency / soundness certificates
-keep emitting.
+A HOL Light / Candle-style goal stack: remaining sequents plus a
+`ProvTrace` with `hole`s (left-to-right) that record how to reassemble
+an LCF theorem once those subgoals are solved.
+
+Tactics act on the *current* (first) goal.  `htheorem … by …` requires
+the stack to be empty; `hbegin` / `htac` / `#hol_goals` / `hend` expose
+the same state across commands.
+
+Closed traces are assembled into `Provable` by `HOLean.Elab.Replay.buildProvable`.
 
 ## Tactics
 
@@ -28,15 +32,18 @@ keep emitting.
   proves an equation matching the goal
 * `heqmp n` — require an equation theorem and replace the goal via `EQ_MP`
 
-Names are prefixed with `h` so they do not steal Lean keywords such as
-`rfl` / `exact` / `apply`.
-
 ## Syntax
 
 ```
 htheorem foo : True = True by hrefl
 
 htheorem bar : True by happly and_tt_eq, hexact and_tt
+
+hbegin baz : True
+htac happly and_tt_eq
+#hol_goals
+htac hexact and_tt
+hend
 ```
 -/
 
@@ -80,13 +87,42 @@ structure CertifiedThm where
   trace : ProvTrace
   deriving Inhabited
 
-/-- Goal-directed proof state. `cont ct` lifts a proof of the current
-conclusion to a proof of the original statement. -/
-structure HolTacState where
+/-- One open HOL sequent. -/
+structure HolGoal where
   hyps : List Tm
   concl : Tm
-  cont : CertifiedThm → HolM CertifiedThm
-  done? : Option CertifiedThm := none
+  deriving Inhabited, Repr, BEq
+
+def formatGoalString (g : HolGoal) : String :=
+  match g.hyps with
+  | [] => s!"⊢ {repr g.concl}"
+  | hyps =>
+    let hs := String.intercalate ", " (hyps.map fun p => s!"{repr p}")
+    s!"{hs} ⊢ {repr g.concl}"
+
+def formatGoalsString (gs : List HolGoal) : String :=
+  match gs with
+  | [] => "No subgoals"
+  | gs =>
+    let n := gs.length
+    Id.run do
+      let mut s := s!"{n} subgoal(s)"
+      let mut i := 1
+      for g in gs do
+        s := s ++ s!"\n[{i}/{n}] {formatGoalString g}"
+        i := i + 1
+      return s
+
+/-- Goal stack in the HOL Light style: remaining goals plus a (possibly
+partial) derivation whose holes, left to right, match `goals`. -/
+structure HolTacState where
+  stmt : Tm
+  goals : List HolGoal
+  frame : ProvTrace
+  deriving Inhabited
+
+def HolTacState.init (stmt : Tm) : HolTacState :=
+  { stmt, goals := [{ hyps := [], concl := stmt }], frame := .hole }
 
 abbrev HolTacM := StateT HolTacState HolM
 
@@ -96,83 +132,115 @@ def HolTacM.run (x : HolTacM α) (st : HolTacState) : HolM (α × HolTacState) :
 def HolTacM.throw (msg : String) : HolTacM α :=
   fun _ => .error msg
 
-def getGoal : HolTacM (List Tm × Tm) := do
-  let st ← get
-  match st.done? with
-  | some _ => HolTacM.throw "no goals to be solved"
-  | none => return (st.hyps, st.concl)
-
-def closeWith (ct : CertifiedThm) : HolTacM Unit := do
-  let st ← get
-  match st.done? with
-  | some _ => HolTacM.throw "no goals to be solved"
-  | none =>
-    unless ct.thm.concl == st.concl do
-      HolTacM.throw s!"tactic produced {repr ct.thm.concl}, expected {repr st.concl}"
-    unless ct.thm.hyps == st.hyps do
-      HolTacM.throw s!"hypothesis mismatch: theorem has {repr ct.thm.hyps}, \
-        goal has {repr st.hyps}"
-    let final ← liftM <| st.cont ct
-    set { st with done? := some final, concl := ct.thm.concl }
-
-def replaceConcl (newConcl : Tm)
-    (step : CertifiedThm → HolM CertifiedThm) : HolTacM Unit := do
-  let st ← get
-  match st.done? with
-  | some _ => HolTacM.throw "no goals to be solved"
-  | none =>
-    set {
-      st with
-      concl := newConcl
-      cont := fun ct => do
-        let ct ← step ct
-        st.cont ct
-    }
-
 def ensureOpen : HolTacM Unit := do
   let st ← get
-  if st.done?.isSome then
+  if st.goals.isEmpty then
     HolTacM.throw "no goals to be solved"
+
+def getGoal : HolTacM HolGoal := do
+  ensureOpen
+  let st ← get
+  match st.goals with
+  | g :: _ => return g
+  | [] => HolTacM.throw "no goals to be solved"
+
+/-- Replace the current goal with `news`, plugging `filled` (whose holes
+equal `news.length`) into the leftmost hole of the frame. -/
+def applyStep (news : List HolGoal) (filled : ProvTrace) : HolTacM Unit := do
+  let st ← get
+  match st.goals with
+  | [] => HolTacM.throw "no goals to be solved"
+  | _ :: rest =>
+    unless filled.countHoles == news.length do
+      HolTacM.throw s!"internal: step has {filled.countHoles} holes, \
+        but {news.length} new goal(s)"
+    let some frame := st.frame.fillHole filled
+      | HolTacM.throw "internal: no hole in the derivation frame"
+    unless frame.countHoles == rest.length + news.length do
+      HolTacM.throw "internal: hole/goal mismatch after tactic"
+    set { st with goals := news ++ rest, frame }
+
+def closeWith (ct : CertifiedThm) : HolTacM Unit := do
+  let g ← getGoal
+  unless ct.thm.concl == g.concl do
+    HolTacM.throw s!"tactic produced {repr ct.thm.concl}, expected {repr g.concl}"
+  unless ct.thm.hyps == g.hyps do
+    HolTacM.throw s!"hypothesis mismatch: theorem has {repr ct.thm.hyps}, \
+      goal has {repr g.hyps}"
+  applyStep [] ct.trace
+
+/-- Refine the current goal to a single new conclusion. `wrap hole` is
+the derivation fragment for this step. -/
+def replaceConcl (newConcl : Tm) (wrap : ProvTrace → ProvTrace) : HolTacM Unit := do
+  let g ← getGoal
+  applyStep [{ g with concl := newConcl }] (wrap .hole)
+
+/-- Replay a closed trace through the executable LCF kernel. -/
+partial def evalTrace : ProvTrace → HolM Thm
+  | .refl t _ => Hol.refl t
+  | .truth => Hol.truth
+  | .named leanN =>
+    let n :=
+      match leanN with
+      | .str _ s => s
+      | _ => leanN.toString
+    Hol.thm n
+  | .eqMp hEq hP => do
+    Hol.eqMp (← evalTrace hEq) (← evalTrace hP)
+  | .eqSym h => do
+    Hol.sym (← evalTrace h)
+  | .instType θ h => do
+    Hol.instType θ (← evalTrace h)
+  | .assume p => Hol.assume p
+  | .hole => HolM.throw "unsolved HOL goal"
+
+def finishTacState (st : HolTacState) : HolM CertifiedThm := do
+  match st.goals with
+  | _ :: _ =>
+    HolM.throw s!"unsolved HOL goals:\n{formatGoalsString st.goals}"
+  | [] =>
+    if st.frame.hasHole then
+      HolM.throw "internal: derivation still has holes after the goal stack emptied"
+    let thm ← evalTrace st.frame
+    unless thm.hyps.isEmpty do
+      HolM.throw s!"unsolved hypotheses: {repr thm.hyps}"
+    unless thm.concl == st.stmt do
+      HolM.throw s!"proved {repr thm.concl}, expected {repr st.stmt}"
+    return { thm, trace := st.frame }
 
 /-- `REFL`: close `t = t`. -/
 def tacRefl : HolTacM Unit := do
-  ensureOpen
-  let (_, concl) ← getGoal
-  match Tm.destEq concl with
+  let g ← getGoal
+  match Tm.destEq g.concl with
   | some (α, s, t) =>
     unless s == t do
       HolTacM.throw s!"refl: sides differ\n  {repr s}\n  {repr t}"
     closeWith { thm := ← liftM <| Hol.refl s, trace := .refl s α }
-  | none => HolTacM.throw s!"refl: expected an equation, got {repr concl}"
+  | none => HolTacM.throw s!"refl: expected an equation, got {repr g.concl}"
 
 /-- Close `True`. -/
 def tacTruth : HolTacM Unit := do
-  ensureOpen
-  let (_, concl) ← getGoal
-  unless concl == Tm.tru do
-    HolTacM.throw s!"truth: expected True, got {repr concl}"
+  let g ← getGoal
+  unless g.concl == Tm.tru do
+    HolTacM.throw s!"truth: expected True, got {repr g.concl}"
   closeWith { thm := ← liftM <| Hol.truth, trace := .truth }
 
 /-- Close when the conclusion is an assumed hypothesis. -/
 def tacAssumption : HolTacM Unit := do
-  ensureOpen
-  let (hyps, concl) ← getGoal
-  unless hyps.contains concl do
-    HolTacM.throw s!"assumption: {repr concl} is not among the hypotheses"
-  unless hyps == [concl] do
+  let g ← getGoal
+  unless g.hyps.contains g.concl do
+    HolTacM.throw s!"assumption: {repr g.concl} is not among the hypotheses"
+  unless g.hyps == [g.concl] do
     HolTacM.throw "assumption: weakening of hypotheses is not implemented yet"
-  closeWith { thm := ← liftM <| Hol.assume concl, trace := .assume concl }
+  closeWith { thm := ← liftM <| Hol.assume g.concl, trace := .assume g.concl }
 
 /-- Turn goal `s = t` into `t = s`. -/
 def tacSym : HolTacM Unit := do
-  ensureOpen
-  let (_, concl) ← getGoal
-  match Tm.destEq concl with
+  let g ← getGoal
+  match Tm.destEq g.concl with
   | some (α, s, t) =>
-    replaceConcl (Tm.mkEq α t s) fun ct => do
-      let thm ← Hol.sym ct.thm
-      return { thm, trace := .eqSym ct.trace }
-  | none => HolTacM.throw s!"sym: expected an equation, got {repr concl}"
+    replaceConcl (Tm.mkEq α t s) ProvTrace.eqSym
+  | none => HolTacM.throw s!"sym: expected an equation, got {repr g.concl}"
 
 /-- Look up a user theorem and its Lean `htheorem` name (for `_hol_prov`). -/
 def resolveNamed (n : HOLean.Name) : HolTacM (Thm × Lean.Name) := do
@@ -198,32 +266,27 @@ def instantiateCertified (ct : CertifiedThm) (goal : Tm) : HolM CertifiedThm := 
 
 /-- Close with a named theorem, instantiating type variables if needed. -/
 def tacExact (n : HOLean.Name) : HolTacM Unit := do
-  ensureOpen
-  let (_, concl) ← getGoal
+  let g ← getGoal
   let (th, provN) ← resolveNamed n
-  let ct ← liftM <| instantiateCertified { thm := th, trace := .named provN } concl
+  let ct ← liftM <| instantiateCertified { thm := th, trace := .named provN } g.concl
   closeWith ct
 
-def namedEqMp (eqTh : Thm) (leanN : Lean.Name)
-    (useSym : Bool) (θ? : Option TySubst) (hp : CertifiedThm) : HolM CertifiedThm := do
-  let mut eqCt : CertifiedThm := { thm := eqTh, trace := .named leanN }
-  if let some θ := θ? then
-    let th ← Hol.instType θ eqTh
-    eqCt := { thm := th, trace := .instType θ (.named leanN) }
-  if useSym then
-    let thm ← Hol.sym eqCt.thm
-    eqCt := { thm, trace := .eqSym eqCt.trace }
-  let thm ← Hol.eqMp eqCt.thm hp.thm
-  return { thm, trace := .eqMp eqCt.trace hp.trace }
+def eqMpFragment (leanN : Lean.Name) (useSym : Bool) (θ? : Option TySubst) :
+    ProvTrace → ProvTrace := fun hp =>
+  let eqTr : ProvTrace :=
+    match θ? with
+    | some θ => .instType θ (.named leanN)
+    | none => .named leanN
+  let eqTr := if useSym then .eqSym eqTr else eqTr
+  .eqMp eqTr hp
 
 /-- Prefer closing; otherwise `EQ_MP` / `SYM` when `n` is an equation. -/
 def tacApply (n : HOLean.Name) : HolTacM Unit := do
-  ensureOpen
-  let (_, concl) ← getGoal
+  let g ← getGoal
   let (th0, provN) ← resolveNamed n
   let closed ← liftM do
     try
-      let ct ← instantiateCertified { thm := th0, trace := .named provN } concl
+      let ct ← instantiateCertified { thm := th0, trace := .named provN } g.concl
       pure (some ct)
     catch _ =>
       pure none
@@ -232,66 +295,57 @@ def tacApply (n : HOLean.Name) : HolTacM Unit := do
   | none =>
     match Tm.destEq th0.concl with
     | some (_, p, q) =>
-      if q == concl then
-        replaceConcl p fun hp => namedEqMp th0 provN false none hp
-      else if p == concl then
-        replaceConcl q fun hp => namedEqMp th0 provN true none hp
+      if q == g.concl then
+        replaceConcl p (eqMpFragment provN false none)
+      else if p == g.concl then
+        replaceConcl q (eqMpFragment provN true none)
       else
-        match matchTm q concl, matchTm p concl with
+        match matchTm q g.concl, matchTm p g.concl with
         | some θ, _ =>
           let th ← liftM <| Hol.instType θ th0
           match Tm.destEq th.concl with
           | some (_, p', q') =>
-            unless q' == concl do
-              HolTacM.throw s!"apply: instantiated RHS {repr q'} ≠ {repr concl}"
-            replaceConcl p' fun hp => namedEqMp th0 provN false (some θ) hp
+            unless q' == g.concl do
+              HolTacM.throw s!"apply: instantiated RHS {repr q'} ≠ {repr g.concl}"
+            replaceConcl p' (eqMpFragment provN false (some θ))
           | none => HolTacM.throw "apply: expected equation after INST_TYPE"
         | none, some θ =>
           let th ← liftM <| Hol.instType θ th0
           let th ← liftM <| Hol.sym th
           match Tm.destEq th.concl with
           | some (_, p', q') =>
-            unless q' == concl do
-              HolTacM.throw s!"apply: instantiated RHS {repr q'} ≠ {repr concl}"
-            replaceConcl p' fun hp => namedEqMp th0 provN true (some θ) hp
+            unless q' == g.concl do
+              HolTacM.throw s!"apply: instantiated RHS {repr q'} ≠ {repr g.concl}"
+            replaceConcl p' (eqMpFragment provN true (some θ))
           | none => HolTacM.throw "apply: expected equation after SYM"
         | none, none =>
-          HolTacM.throw s!"apply: theorem {n} does not match goal {repr concl}"
+          HolTacM.throw s!"apply: theorem {n} does not match goal {repr g.concl}"
     | none =>
-      HolTacM.throw s!"apply: theorem {n} does not match goal {repr concl}"
+      HolTacM.throw s!"apply: theorem {n} does not match goal {repr g.concl}"
 
 /-- Require an equation theorem and replace the goal via `EQ_MP`. -/
 def tacEqMp (n : HOLean.Name) : HolTacM Unit := do
-  ensureOpen
-  let (_, concl) ← getGoal
+  let g ← getGoal
   let (th0, provN) ← resolveNamed n
   match Tm.destEq th0.concl with
   | some (_, p, q) =>
-    if q == concl then
-      replaceConcl p fun hp => namedEqMp th0 provN false none hp
-    else if p == concl then
-      replaceConcl q fun hp => namedEqMp th0 provN true none hp
+    if q == g.concl then
+      replaceConcl p (eqMpFragment provN false none)
+    else if p == g.concl then
+      replaceConcl q (eqMpFragment provN true none)
     else
-      HolTacM.throw s!"eq_mp: neither side of {repr th0.concl} is the goal {repr concl}"
+      HolTacM.throw s!"eq_mp: neither side of {repr th0.concl} is the goal {repr g.concl}"
   | none => HolTacM.throw s!"eq_mp: expected an equation theorem, got {repr th0.concl}"
 
-/-- Run a tactic script against a closed goal `⊢ stmt`. -/
-def runHolTactics (stmt : Tm) (script : HolTacM Unit) : HolM CertifiedThm := do
-  let st : HolTacState := {
-    hyps := []
-    concl := stmt
-    cont := pure
-  }
+/-- Apply a tactic script to an existing goal stack. -/
+def execHolTactics (st : HolTacState) (script : HolTacM Unit) : HolM HolTacState := do
   let (_, st) ← HolTacM.run script st
-  match st.done? with
-  | some ct =>
-    unless ct.thm.hyps.isEmpty do
-      HolM.throw s!"unsolved hypotheses: {repr ct.thm.hyps}"
-    unless ct.thm.concl == stmt do
-      HolM.throw s!"proved {repr ct.thm.concl}, expected {repr stmt}"
-    return ct
-  | none =>
-    HolM.throw s!"unsolved goal: {repr st.concl}"
+  return st
+
+/-- Run a tactic script against a closed goal `⊢ stmt` and demand no subgoals. -/
+def runHolTactics (stmt : Tm) (script : HolTacM Unit) : HolM CertifiedThm := do
+  let st ← execHolTactics (HolTacState.init stmt) script
+  finishTacState st
 
 /-! ## Syntax -/
 
@@ -328,5 +382,28 @@ def elabHolTacSeq (stxs : Array Syntax) : HolTacM Unit :=
 def evalHolTacProof (stmt : Tm) (tacs : Array Syntax) (ctx : HolCtx) :
     Except String CertifiedThm :=
   HolM.run (runHolTactics stmt (elabHolTacSeq tacs)) ctx
+
+/-- Apply tactics to an existing stack (does not require the proof to be finished). -/
+def evalHolTacs (st : HolTacState) (tacs : Array Syntax) (ctx : HolCtx) :
+    Except String HolTacState :=
+  HolM.run (execHolTactics st (elabHolTacSeq tacs)) ctx
+
+/-! ## Interactive session (Candle-style `g` / `e`) -/
+
+/-- In-progress `hbegin` proof.  Not persisted to `.olean`. -/
+structure HolSession where
+  leanN : Lean.Name
+  holN : HOLean.Name
+  propType : Lean.Expr
+  tac : HolTacState
+
+initialize holSessionExt : EnvExtension (Option HolSession) ←
+  registerEnvExtension (pure none)
+
+def getHolSession [Monad m] [MonadEnv m] : m (Option HolSession) := do
+  return holSessionExt.getState (← getEnv)
+
+def setHolSession [Monad m] [MonadEnv m] (s : Option HolSession) : m Unit :=
+  modifyEnv (holSessionExt.setState · s)
 
 end HOLean.Elab

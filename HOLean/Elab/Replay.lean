@@ -230,6 +230,8 @@ partial def buildProvable (decls : Array HolDecl) (envE connE : Expr) :
     liftMetaM do mkAppM ``Provable.instType #[toExpr θ, p]
   | .assume p =>
     throwError "HOLean: ASSUME is not certified for closed theorems ({repr p})"
+  | .hole =>
+    throwError "HOLean: incomplete proof (unsolved HOL goal)"
 
 /-- Type-check a reconstructed `Provable` proof of `⊢ stmt` in `envE`. -/
 def elabProvable (decls : Array HolDecl) (envE connE : Expr) (stmt : Tm)
@@ -237,6 +239,8 @@ def elabProvable (decls : Array HolDecl) (envE connE : Expr) (stmt : Tm)
   if tr.usesAssume then
     throwError "HOLean: tactic script uses `hassumption`; closed theorems cannot \
       emit a `Provable` certificate for ASSUME"
+  if tr.hasHole then
+    throwError "HOLean: incomplete proof (unsolved HOL goal)"
   let goalType := mkApp3 (mkConst ``Provable) envE mkNilTmList (toExpr stmt)
   let proof ← buildProvable decls envE connE tr
   liftMetaM do assertKernelProof proof

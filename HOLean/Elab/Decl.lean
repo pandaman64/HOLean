@@ -19,8 +19,9 @@ Both commands extend the current HOL environment stored in
 
 * `hdef c : τ := rhs` — type-check `rhs` at `τ` and `Env.addDef`
 * `htheorem n : p := script` — run a `HolM Thm` script, a kernel
-  `Provable` proof, or (via `by`) a HOL tactic script that records a
-  `ProvTrace` and is assembled into `Provable` by `buildProvable`
+  `Provable` proof, or (via `by`) a HOL tactic script
+* `hbegin n : p` / `htac` / `#hol_goals` / `hend` — stepwise goal stack
+  (Candle-style); `hend` installs the theorem like `htheorem`
 -/
 
 open Lean Meta Elab Command
@@ -146,6 +147,11 @@ syntax (name := hdefCmd) "hdef " ident (" : " term)? " := " term : command
 syntax (name := htheoremCmd) "htheorem " ident " : " term " := " term : command
 syntax (name := htheoremByCmd) "htheorem " ident " : " term " by " hol_tac,+ : command
 syntax (name := holEnvCmd) "#hol_env" : command
+syntax (name := hbeginCmd) "hbegin " ident " : " term : command
+syntax (name := htacCmd) "htac " hol_tac,+ : command
+syntax (name := hgoalsCmd) "#hol_goals" : command
+syntax (name := hendCmd) "hend" : command
+syntax (name := habortCmd) "habort" : command
 
 @[command_elab hdefCmd]
 def elabHDef : CommandElab := fun stx => do
@@ -265,5 +271,71 @@ def elabHolEnv : CommandElab := fun _ => do
       | .thm _ n _ => s!"thm {n}"
     let body := lines.foldl (init := "") fun acc l => acc ++ "  " ++ l ++ "\n"
     logInfo m!"HOL environment ({decls.size} user declaration(s)):\n{body}"
+
+def requireSession : CommandElabM HolSession := do
+  match ← getHolSession with
+  | some s => return s
+  | none => throwError "HOLean: no proof in progress (use `hbegin`)"
+
+@[command_elab hbeginCmd]
+def elabHBegin : CommandElab := fun stx => do
+  match stx with
+  | `(hbegin $n:ident : $propStx) =>
+    if let some s := (← getHolSession) then
+      throwError "HOLean: a proof of `{s.holN}` is already in progress \
+        (use `hend` or `habort`)"
+    let short := n.getId
+    let leanN := (← getCurrNamespace) ++ short
+    let holN := holName short
+    checkFresh holN leanN
+    let decls ← getHolDecls
+    let (stmt, propType) ← liftTermElabM do
+      elabHTheoremStmt propStx decls
+    let tac := HolTacState.init stmt
+    setHolSession (some { leanN, holN, propType, tac })
+    logInfo m!"hbegin {holN}\n{formatGoalsString tac.goals}"
+  | _ => throwUnsupportedSyntax
+
+@[command_elab htacCmd]
+def elabHTac : CommandElab := fun stx => do
+  match stx with
+  | `(htac $[$tacs:hol_tac],*) =>
+    let s ← requireSession
+    let ctx ← currentHolCtx
+    match evalHolTacs s.tac tacs ctx with
+    | .error msg => throwError "HOLean: {msg}"
+    | .ok tac =>
+      setHolSession (some { s with tac })
+      logInfo m!"{formatGoalsString tac.goals}"
+  | _ => throwUnsupportedSyntax
+
+@[command_elab hgoalsCmd]
+def elabHGoals : CommandElab := fun _ => do
+  match ← getHolSession with
+  | none => logInfo "no HOL proof in progress"
+  | some s =>
+    logInfo m!"proving {s.holN}\n{formatGoalsString s.tac.goals}"
+
+@[command_elab hendCmd]
+def elabHEnd : CommandElab := fun _ => do
+  let s ← requireSession
+  let ctx ← currentHolCtx
+  let ct ← match HolM.run (finishTacState s.tac) ctx with
+    | .error msg => throwError "HOLean: {msg}"
+    | .ok ct => pure ct
+  let decls ← getHolDecls
+  let cert ← getHolCert
+  let proof ← liftTermElabM do
+    elabProvable decls (envExprFromDecls decls) (prevConnExpr cert) s.tac.stmt ct.trace
+  finishHTheorem s.leanN s.holN s.tac.stmt s.propType ct.thm (some proof)
+  setHolSession none
+
+@[command_elab habortCmd]
+def elabHAbort : CommandElab := fun _ => do
+  match ← getHolSession with
+  | none => logInfo "no HOL proof in progress"
+  | some s =>
+    setHolSession none
+    logInfo m!"aborted proof of {s.holN}"
 
 end HOLean.Elab
