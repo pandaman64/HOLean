@@ -14,7 +14,7 @@ with `htheorem` by giving a `[] ⊩[holEnv] …` proof.  Use parentheses in
 statements: `∧` binds tighter than `=`, so write `(True ∧ True) = True`.
 -/
 
-namespace HOLean.Elab.LogicProofs
+namespace Examples.LogicProofs
 
 open HOLean
 open HOLean.Elab
@@ -67,4 +67,4 @@ htheorem and_tt_left_again : and_tt_left :=
 instances also do not follow from kernel `refl` alone because `∧`/`∨`/`¬` unfold
 to combinator definitions rather than truth-table values. -/
 
-end HOLean.Elab.LogicProofs
+end Examples.LogicProofs

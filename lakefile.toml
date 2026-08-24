@@ -10,6 +10,10 @@ rev = "v4.33.1"
 [[lean_lib]]
 name = "HOLean"
 
+[[lean_lib]]
+name = "Examples"
+globs = ["Examples.+"]
+
 [[lean_exe]]
 name = "holean"
 root = "Main"
