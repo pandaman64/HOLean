@@ -9,6 +9,7 @@ import HOLean.Elab.Term
 import HOLean.Elab.Kernel
 import HOLean.Elab.Cert
 import HOLean.Elab.Tactic
+import HOLean.Elab.Replay
 
 /-!
 # `hdef` / `htheorem`
@@ -18,11 +19,8 @@ Both commands extend the current HOL environment stored in
 
 * `hdef c : τ := rhs` — type-check `rhs` at `τ` and `Env.addDef`
 * `htheorem n : p := script` — run a `HolM Thm` script, a kernel
-  `Provable` proof, or (via `by`) an uncertified HOL tactic script
-
-Tactic scripts rebuild a `Thm` through the LCF kernel but do not yet
-produce `Provable` certificates; consistency / soundness certs are
-emitted only for kernel `Provable` proofs.
+  `Provable` proof, or (via `by`) a HOL tactic script that records a
+  `ProvTrace` and is replayed as `Provable` (backends B and C)
 -/
 
 open Lean Meta Elab Command
@@ -97,16 +95,40 @@ def addLeanThmVal (leanN : Lean.Name) (thm : Thm) : CommandElabM Unit := do
     safety := .safe
   }
 
-/-- Shared finishing steps after a successful `htheorem` proof. -/
+/-- Shared finishing steps after a successful `htheorem` proof.
+
+When a kernel `Provable` proof is supplied it is stored as `{leanN}_hol_prov`
+and used to emit WF / model / consistency / soundness certificates.  An
+optional C-backend proof is stored as `{leanN}_hol_prov_C`. -/
 def finishHTheorem (leanN : Lean.Name) (holN : HOLean.Name) (stmt : Tm)
-    (propType : Expr) (thm : Thm) (provProof? : Option Expr) : CommandElabM Unit := do
+    (propType : Expr) (thm : Thm) (provProof? : Option Expr)
+    (provC? : Option Expr := none) : CommandElabM Unit := do
   unless thm.hyps.isEmpty do
     throwError "HOLean: theorem still has hypotheses {repr thm.hyps}"
   unless thm.concl == stmt do
     throwError "HOLean: proved {repr thm.concl}, expected {repr stmt}"
   match provProof? with
   | some prov =>
-    emitHTheoremCertProvable leanN stmt prov
+    let decls ← getHolDecls
+    let cert ← getHolCert
+    let envE := envExprFromDecls decls
+    let connE := prevConnExpr cert
+    let (provVal, provTy, inferProof) ← liftTermElabM do
+      let p ← mkProvInEnvBefore decls prov
+      liftMetaM do assertKernelProof p
+      let ty ← inferType p
+      let inf ← mkInferBoolProof envE connE stmt
+      liftMetaM do assertKernelProof inf
+      pure (p, ty, inf)
+    addCertThm (holProvName leanN) provTy provVal
+    if let some pc := provC? then
+      let (cVal, cTy) ← liftTermElabM do
+        let p ← instantiateMVars pc
+        liftMetaM do assertKernelProof p
+        let ty ← inferType p
+        pure (p, ty)
+      addCertThm (holProvCName leanN) cTy cVal
+    emitHTheoremCertProvable leanN stmt (mkConst (holProvName leanN)) inferProof
   | none =>
     emitHTheoremCertWf leanN stmt
   addLeanThmStmt leanN propType
@@ -232,11 +254,18 @@ def elabHTheoremBy : CommandElab := fun stx => do
     let (stmt, propType) ← liftTermElabM do
       elabHTheoremStmt propStx decls
     let ctx ← currentHolCtx
-    let thm ← match evalHolTacProof stmt tacs ctx with
+    let ct ← match evalHolTacProof stmt tacs ctx with
     | .error msg => throwError "HOLean: {msg}"
-    | .ok thm => pure thm
-    -- Uncertified tactic scripts: WF / connectives only.
-    finishHTheorem leanN holN stmt propType thm none
+    | .ok ct => pure ct
+    let decls ← getHolDecls
+    let cert ← getHolCert
+    let envE := envExprFromDecls decls
+    let connE := prevConnExpr cert
+    let result ← liftTermElabM do
+      replayCertified decls envE connE stmt ct.trace
+    logInfo m!"htheorem {holN} replay: B size {result.sizeB}, C size {result.sizeC}, \
+      C fallback to B: {result.fallbackToB}"
+    finishHTheorem leanN holN stmt propType ct.thm (some result.proofB) (some result.proofC)
   | _ => throwUnsupportedSyntax
 
 @[command_elab holEnvCmd]
