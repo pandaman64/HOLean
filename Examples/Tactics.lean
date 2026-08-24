@@ -9,10 +9,11 @@ import HOLean.Elab.Decl
 /-!
 # Backward HOL tactics (examples)
 
-`htheorem … by …` scripts rebuild LCF `Thm` values and assemble a
+`htheorem … := hby …` scripts rebuild LCF `Thm` values and assemble a
 `ProvTrace` into a kernel `Provable` proof (`buildProvable`).  Incomplete
-scripts report remaining subgoals.  `hbegin` / `htac` / `#hol_goals` /
-`hend` is the same goal stack, one command at a time.
+scripts report remaining subgoals at `_` (and as info on each tactic).
+`hbegin` / `htac` / `#hol_goals` / `hend` is the same goal stack, one
+command at a time.
 -/
 
 namespace Examples.Tactics
@@ -51,17 +52,31 @@ htheorem and_tt : True ∧ True :=
 htheorem and_tt_eq_T : (True ∧ True) = True :=
   prov_and_tt_eq
 
-/-! ## Tactic scripts -/
+/-! ## Tactic scripts (`:= hby`) -/
 
-htheorem true_eq_true_tac : True = True by hrefl
+htheorem true_eq_true_tac : True = True := hby
+  hrefl
 
-htheorem true_intro_tac : True by htruth
+htheorem true_intro_tac : True := hby
+  htruth
 
-htheorem and_tt_again : True ∧ True by hexact and_tt
+htheorem and_tt_again : True ∧ True := hby
+  hexact and_tt
 
-htheorem true_via_eqmp : True by happly and_tt_eq_T, hexact and_tt
+htheorem true_via_eqmp : True := hby
+  happly and_tt_eq_T
+  hexact and_tt
 
-htheorem true_eq_true_sym : True = True by hsym, hrefl
+htheorem true_eq_true_sym : True = True := hby
+  hsym
+  hrefl
+
+/-! ## Left binders (Lean-style telescope) -/
+
+hdef constLeft {A : Type} (x : A) (_y : A) := x
+
+htheorem eq_refl {A : Type} (x : A) : x = x := hby
+  hrefl
 
 /-! ## Stepwise goal stack (`hbegin` / `htac` / `hend`) -/
 
@@ -79,10 +94,17 @@ hend
 #check and_tt_again_hol_prov
 #check true_via_eqmp_hol_prov
 #check true_eq_true_sym_hol_prov
+#check eq_refl_hol_prov
 
 #print axioms true_eq_true_tac_hol_prov
 #print axioms true_via_eqmp_hol_prov
+#print axioms eq_refl_hol_prov
 
 #hol_cert
+
+/-! Hypothesis binders (`DISCH`) are executable but not yet `Provable`-replayed. -/
+
+htheorem true_of_true (_h : True) : True := hby
+  hassumption
 
 end Examples.Tactics

@@ -51,7 +51,8 @@ HOLean/
   Elab/State.lean      `EnvExtension` for user `hdef` / `htheorem`
   Elab/Term.lean       `hol_ty(…)` / `hol_tm(…)` / `hol_prop(…)` / `hol(…)`
   Elab/Kernel.lean     executable LCF layer (`Thm`, `Hol.refl`, …)
-  Elab/Decl.lean       `hdef` / `htheorem` / `#hol_env`
+  Elab/Decl.lean       `hdef` / `htheorem` / `hby` / `#hol_env`
+  Elab/Tactic.lean     Lean-style `hby` tactics and Candle-style goal stack
   Elab/Command.lean    `#hol` (infers in the current HOL environment)
   Model/Basic.lean     `zfBool`, graph application, `succ` on `omega`
   Model/Ty.lean        `Ty.denote`, `INST_TYPE` commutation
@@ -158,21 +159,29 @@ stay as functions on `Tm` — they would need antiquotation.
 User declarations grow a Lean `EnvExtension` stacked on `holEnv`:
 
 ```lean
-hdef myId : {A : Type} → A → A := fun (x : A) => x
+hdef myId {A : Type} (x : A) := x
 
 htheorem true_eq_true : True = True :=
   Hol.refl (hol_tm(True))
 
 htheorem tru_intro : True := Hol.truth
+
+htheorem eq_refl {A : Type} (x : A) : x = x := hby
+  hrefl
 ```
 
-`hdef` type-checks the RHS and calls `Env.addDef`.  The type and RHS are
-elaborated separately, so write binders on the RHS (`fun {A} (x : A) => x`)
-rather than mentioning them only in the ascription.  Later `hdef`s see
-earlier ones as Lean constants and as HOL constants in `hol_tm` / `hol_prop`.
+`hdef` type-checks the RHS and calls `Env.addDef`.  Binders may be written
+on the left, Lean-style (`hdef f {A : Type} (x : A) := x`), or as a
+lambda on the RHS.  Later `hdef`s see earlier ones as Lean constants and
+as HOL constants in `hol_tm` / `hol_prop`.
 
-`htheorem` runs a `HolM Thm` script and installs the closed boolean as an
-axiom.  The statement is also registered as a Lean `Prop` axiom (same name)
+`htheorem` installs a closed boolean.  The proof may be a `HolM Thm`
+script, a kernel `Provable` term, or an `hby` tactic block (newline or
+`;`-separated, like Lean `by`).  Left binders are type variables,
+value parameters (`GEN`'d at the end), or hypotheses (`DISCH`'d).
+A `_` tactic reports the current sequents (InfoView MVP).
+
+The statement is also registered as a Lean `Prop` axiom (same name)
 so later `hdef` / `htheorem` statements can mention it.  The checked proof
 value lives at `name_hthm` (a `Thm`).  In proof scripts, `Hol.thm "…"` and
 `Hol.defn "…"` refer to earlier user declarations.

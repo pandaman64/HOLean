@@ -220,6 +220,30 @@ def truth : HolM Thm := do
   let r ← refl (.lam .bool (.bvar 0))
   eqMp s r
 
+/-- Discharge: from `Γ ⊢ q` conclude `Γ \ {p} ⊢ p ⇒ q`.
+
+This is the standard HOL `DISCH`.  The executable kernel applies it as a
+sequent update; `Provable` replay of `DISCH` is not yet implemented. -/
+def disch (p : Tm) (th : Thm) : HolM Thm := do
+  let α ← infer p
+  unless α == .bool do
+    HolM.throw "DISCH: expected a boolean antecedent"
+  unless p.LC 0 do
+    HolM.throw "DISCH: antecedent is not locally closed"
+  return { hyps := th.hyps.filter (· != p), concl := Tm.imp p th.concl }
+
+/-- Generalize: from `Γ ⊢ t` with `x` not free in `Γ`, conclude
+`Γ ⊢ ∀ x. t`.  Matches `Provable.gen`. -/
+def gen (x : HOLean.Name) (α : Ty) (th : Thm) : HolM Thm := do
+  if th.hyps.any (fun p => p.freeIn x α) then
+    HolM.throw s!"GEN: variable {x} is free in the hypotheses"
+  if th.hyps.contains Tm.tru then
+    HolM.throw "GEN: T is a hypothesis"
+  let τ ← infer th.concl
+  unless τ == .bool do
+    HolM.throw "GEN: expected a boolean conclusion"
+  return { hyps := th.hyps, concl := Tm.all α (th.concl.abstract x α) }
+
 end Hol
 
 end Elab

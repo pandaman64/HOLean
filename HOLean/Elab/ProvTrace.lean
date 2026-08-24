@@ -35,6 +35,11 @@ inductive ProvTrace where
   | instType (θ : TySubst) (h : ProvTrace)
   /-- `ASSUME p`.  Closed `htheorem` scripts never replay this. -/
   | assume (p : Tm)
+  /-- `GEN x α`: wrap the conclusion as `∀ x. t`. -/
+  | gen (x : HOLean.Name) (α : Ty) (h : ProvTrace)
+  /-- `DISCH p`: wrap the conclusion as `p ⇒ q`.  Not yet replayed as
+  `Provable`. -/
+  | disch (p : Tm) (h : ProvTrace)
   /-- Unsolved subgoal.  Present in an intermediate goal stack; forbidden
   in a closed certificate. -/
   | hole
@@ -44,21 +49,28 @@ inductive ProvTrace where
 def ProvTrace.usesAssume : ProvTrace → Bool
   | .assume _ => true
   | .eqMp a b => a.usesAssume || b.usesAssume
-  | .eqSym h | .instType _ h => h.usesAssume
+  | .eqSym h | .instType _ h | .gen _ _ h | .disch _ h => h.usesAssume
   | .refl .. | .truth | .named _ | .hole => false
+
+/-- `true` if this trace discharges a binder hypothesis. -/
+def ProvTrace.usesDisch : ProvTrace → Bool
+  | .disch _ _ => true
+  | .eqMp a b => a.usesDisch || b.usesDisch
+  | .eqSym h | .instType _ h | .gen _ _ h => h.usesDisch
+  | .assume _ | .refl .. | .truth | .named _ | .hole => false
 
 /-- `true` if any subgoal has not been filled. -/
 def ProvTrace.hasHole : ProvTrace → Bool
   | .hole => true
   | .eqMp a b => a.hasHole || b.hasHole
-  | .eqSym h | .instType _ h => h.hasHole
+  | .eqSym h | .instType _ h | .gen _ _ h | .disch _ h => h.hasHole
   | .refl .. | .truth | .named _ | .assume _ => false
 
 /-- Number of unsolved subgoals in this (possibly partial) derivation. -/
 def ProvTrace.countHoles : ProvTrace → Nat
   | .hole => 1
   | .eqMp a b => a.countHoles + b.countHoles
-  | .eqSym h | .instType _ h => h.countHoles
+  | .eqSym h | .instType _ h | .gen _ _ h | .disch _ h => h.countHoles
   | .refl .. | .truth | .named _ | .assume _ => 0
 
 /-- Replace the leftmost `hole` with `new`. -/
@@ -71,6 +83,8 @@ def ProvTrace.fillHole (t new : ProvTrace) : Option ProvTrace :=
     | none => (fillHole b new).map (.eqMp a)
   | .eqSym h => (fillHole h new).map eqSym
   | .instType θ h => (fillHole h new).map (instType θ)
+  | .gen x α h => (fillHole h new).map (gen x α)
+  | .disch p h => (fillHole h new).map (disch p)
   | .refl .. | .truth | .named _ | .assume _ => none
 
 end HOLean.Elab

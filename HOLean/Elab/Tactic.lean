@@ -4,6 +4,7 @@ Released under Apache 2.0 license as described in the file LICENSE.
 -/
 
 import Lean
+import Lean.Elab.Command
 import HOLean.Elab.Kernel
 import HOLean.Elab.ProvTrace
 
@@ -14,9 +15,9 @@ A HOL Light / Candle-style goal stack: remaining sequents plus a
 `ProvTrace` with `hole`s (left-to-right) that record how to reassemble
 an LCF theorem once those subgoals are solved.
 
-Tactics act on the *current* (first) goal.  `htheorem … by …` requires
-the stack to be empty; `hbegin` / `htac` / `#hol_goals` / `hend` expose
-the same state across commands.
+Tactics act on the *current* (first) goal.  `htheorem … := hby …`
+requires the stack to be empty; `hbegin` / `htac` / `#hol_goals` /
+`hend` expose the same state across commands.
 
 Closed traces are assembled into `Provable` by `HOLean.Elab.Replay.buildProvable`.
 
@@ -31,13 +32,22 @@ Closed traces are assembled into `Provable` by `HOLean.Elab.Replay.buildProvable
 * `happly n` — close if possible; otherwise use `EQ_MP` / `SYM` when `n`
   proves an equation matching the goal
 * `heqmp n` — require an equation theorem and replace the goal via `EQ_MP`
+* `_` — proof hole: report the current sequents (InfoView MVP)
 
 ## Syntax
 
 ```
-htheorem foo : True = True by hrefl
+hdef foobar {A : Type} (x : A) := x
 
-htheorem bar : True by happly and_tt_eq, hexact and_tt
+htheorem foo : True = True := hby
+  hrefl
+
+htheorem bar : True := hby
+  happly and_tt_eq
+  hexact and_tt
+
+htheorem eq_refl {A : Type} (x : A) : x = x := hby
+  hrefl
 
 hbegin baz : True
 htac happly and_tt_eq
@@ -47,7 +57,7 @@ hend
 ```
 -/
 
-open Lean
+open Lean Elab Command
 
 namespace HOLean.Elab
 
@@ -121,8 +131,19 @@ structure HolTacState where
   frame : ProvTrace
   deriving Inhabited
 
+def wrapClosedFrame (hyps : List Tm) (params : List (HOLean.Name × Ty))
+    (inner : ProvTrace) : ProvTrace :=
+  params.foldr (fun (n, α) t => ProvTrace.gen n α t)
+    (hyps.foldr (fun p t => ProvTrace.disch p t) inner)
+
+def HolTacState.initGoal (stmt : Tm) (hyps : List Tm) (concl : Tm)
+    (params : List (HOLean.Name × Ty) := []) : HolTacState :=
+  { stmt
+    goals := [{ hyps, concl }]
+    frame := wrapClosedFrame hyps params .hole }
+
 def HolTacState.init (stmt : Tm) : HolTacState :=
-  { stmt, goals := [{ hyps := [], concl := stmt }], frame := .hole }
+  HolTacState.initGoal stmt [] stmt
 
 abbrev HolTacM := StateT HolTacState HolM
 
@@ -164,7 +185,7 @@ def closeWith (ct : CertifiedThm) : HolTacM Unit := do
   let g ← getGoal
   unless ct.thm.concl == g.concl do
     HolTacM.throw s!"tactic produced {repr ct.thm.concl}, expected {repr g.concl}"
-  unless ct.thm.hyps == g.hyps do
+  unless ct.thm.hyps.all g.hyps.contains do
     HolTacM.throw s!"hypothesis mismatch: theorem has {repr ct.thm.hyps}, \
       goal has {repr g.hyps}"
   applyStep [] ct.trace
@@ -192,6 +213,10 @@ partial def evalTrace : ProvTrace → HolM Thm
   | .instType θ h => do
     Hol.instType θ (← evalTrace h)
   | .assume p => Hol.assume p
+  | .gen x α h => do
+    Hol.gen x α (← evalTrace h)
+  | .disch p h => do
+    Hol.disch p (← evalTrace h)
   | .hole => HolM.throw "unsolved HOL goal"
 
 def finishTacState (st : HolTacState) : HolM CertifiedThm := do
@@ -359,10 +384,32 @@ syntax "hsym" : hol_tac
 syntax "hexact " ident : hol_tac
 syntax "happly " ident : hol_tac
 syntax "heqmp " ident : hol_tac
+syntax (name := holTacHole) "_" : hol_tac
+
+/-- Indented / semicolon-separated tactic sequence (Lean `by` style). -/
+syntax holTacSeq := sepBy1IndentSemicolon(hol_tac)
 
 /-- Parse a tactic name from an identifier (uses the short HOL name). -/
 def holTacName (id : TSyntax `ident) : HOLean.Name :=
   holName id.getId
+
+/-- `sepBy1IndentSemicolon` elements of a `holTacSeq`. -/
+def holTacsOfSeq (stx : Syntax) : Array Syntax :=
+  let args :=
+    if stx.getNumArgs > 0 && stx[0].getKind == `null then
+      stx[0].getArgs
+    else
+      stx.getArgs
+  Id.run do
+    let mut out := #[]
+    for arg in args, i in [0:args.size] do
+      if i % 2 == 0 && !arg.isMissing then
+        out := out.push arg
+    return out
+
+def isHolHole : Syntax → Bool
+  | `(hol_tac| _) => true
+  | _ => false
 
 def elabHolTac (stx : Syntax) : HolTacM Unit := do
   match stx with
@@ -373,12 +420,14 @@ def elabHolTac (stx : Syntax) : HolTacM Unit := do
   | `(hol_tac| hexact $n:ident) => tacExact (holTacName n)
   | `(hol_tac| happly $n:ident) => tacApply (holTacName n)
   | `(hol_tac| heqmp $n:ident) => tacEqMp (holTacName n)
+  | `(hol_tac| _) =>
+    HolTacM.throw s!"unsolved HOL goals:\n{formatGoalsString (← get).goals}"
   | _ => HolTacM.throw s!"unsupported HOL tactic: {stx}"
 
 def elabHolTacSeq (stxs : Array Syntax) : HolTacM Unit :=
   stxs.forM elabHolTac
 
-/-- Evaluate a `by …` tactic script for `⊢ stmt`. -/
+/-- Evaluate a `hby` tactic script for `⊢ stmt` and demand no subgoals. -/
 def evalHolTacProof (stmt : Tm) (tacs : Array Syntax) (ctx : HolCtx) :
     Except String CertifiedThm :=
   HolM.run (runHolTactics stmt (elabHolTacSeq tacs)) ctx
@@ -387,6 +436,26 @@ def evalHolTacProof (stmt : Tm) (tacs : Array Syntax) (ctx : HolCtx) :
 def evalHolTacs (st : HolTacState) (tacs : Array Syntax) (ctx : HolCtx) :
     Except String HolTacState :=
   HolM.run (execHolTactics st (elabHolTacSeq tacs)) ctx
+
+/-- Run tactics one at a time, logging the incoming sequent at each syntax
+node so the InfoView can show the intermediate state (MVP). `_` stops and
+reports the current goals. -/
+def applyHolTacsLocated (st : HolTacState) (tacs : Array Syntax) (ctx : HolCtx) :
+    CommandElabM HolTacState := do
+  let mut st := st
+  for tac in tacs do
+    logInfoAt tac m!"{formatGoalsString st.goals}"
+    if isHolHole tac then
+      throwErrorAt tac m!"HOLean: unsolved goals\n{formatGoalsString st.goals}"
+    match evalHolTacs st #[tac] ctx with
+    | .error msg =>
+      throwErrorAt tac m!"HOLean: {msg}\n{formatGoalsString st.goals}"
+    | .ok st' =>
+      st := st'
+  if st.goals.isEmpty then
+    if let some last := tacs.back? then
+      logInfoAt last m!"{formatGoalsString st.goals}"
+  return st
 
 /-! ## Interactive session (Candle-style `g` / `e`) -/
 

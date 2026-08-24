@@ -21,6 +21,29 @@ open Lean Meta Elab Term
 
 namespace HOLean.Elab
 
+theorem listGetElem?_zero (α : Ty) (Γ : List Ty) :
+    (α :: Γ)[0]? = some α :=
+  rfl
+
+theorem listGetElem?_succ (α : Ty) (Γ : List Ty) (n : Nat) (β : Ty)
+    (h : Γ[n]? = some β) : (α :: Γ)[n + 1]? = some β := by
+  simpa [List.getElem?_cons_succ] using h
+
+/-- Proof of `Γ[i]? = some α` for a concrete context, used to replay `HasType.bvar`. -/
+partial def mkListGetElem? (Γ : List Ty) (i : Nat) : MetaM (Expr × Ty) := do
+  match Γ, i with
+  | [], _ =>
+    throwError "HOLean: unbound bvar {i}"
+  | α :: rest, 0 =>
+    let pf ← mkAppOptM ``listGetElem?_zero
+      #[some (toExpr α), some (toExpr rest)]
+    return (pf, α)
+  | α :: rest, n + 1 =>
+    let (ih, β) ← mkListGetElem? rest n
+    let pf ← mkAppOptM ``listGetElem?_succ
+      #[some (toExpr α), some (toExpr rest), some (toExpr n), some (toExpr β), some ih]
+    return (pf, β)
+
 /-- Reject `sorry` and `native_decide` (`ofReduceBool` / `ofReduceNat`). -/
 def assertKernelProof (e : Expr) : MetaM Unit := do
   if e.hasSorry then
@@ -70,6 +93,33 @@ partial def elabHasType (envE connE : Expr) (t : Tm) (Γ : List Ty) :
       | _ => throwError "HOLean: cannot type `{n}` at {repr τ}"
     else
       throwError "HOLean: no HasType lemma for constant `{n}`"
+  | .app (.const n τ) P =>
+    if n == allName then
+      match τ with
+      | (α ↝ .bool) ↝ .bool =>
+        let (hP, tP) ← elabHasType envE connE P Γ
+        unless tP == α ↝ .bool do
+          throwError "HOLean: ∀-predicate type mismatch"
+        let pf ← tryConn ``HasType.all #[some (toExpr α), some (toExpr P), some hP]
+        return (pf, .bool)
+      | _ => throwError "HOLean: malformed `all` constant type {repr τ}"
+    else if n == exName then
+      match τ with
+      | (α ↝ .bool) ↝ .bool =>
+        let (hP, tP) ← elabHasType envE connE P Γ
+        unless tP == α ↝ .bool do
+          throwError "HOLean: ∃-predicate type mismatch"
+        let pf ← tryConn ``HasType.ex #[some (toExpr α), some (toExpr P), some hP]
+        return (pf, .bool)
+      | _ => throwError "HOLean: malformed `ex` constant type {repr τ}"
+    else
+      let (hf, tf) ← elabHasType envE connE (.const n τ) Γ
+      let (ha, _) ← elabHasType envE connE P Γ
+      match tf with
+      | .arrow _ β =>
+        let pf ← mkAppM ``HasType.app #[hf, ha]
+        return (pf, β)
+      | _ => throwError "HOLean: expected a function type"
   | .app (.app (.const n τ) p) q =>
     if n == andName then
       let (hp, _) ← elabHasType envE connE p Γ
@@ -130,8 +180,11 @@ partial def elabHasType (envE connE : Expr) (t : Tm) (Γ : List Ty) :
     let pf ← mkAppOptM ``HasType.fvar
       #[some envE, some ΓE, some (toExpr x), some (toExpr α)]
     return (pf, α)
-  | .bvar _ =>
-    throwError "HOLean: HasType for bvar is not replayed (open term)"
+  | .bvar i =>
+    let (hEq, α) ← mkListGetElem? Γ i
+    let pf ← mkAppOptM ``HasType.bvar
+      #[some envE, some ΓE, some (toExpr α), some (toExpr i), some hEq]
+    return (pf, α)
 
 /-- `t.infer env [] = some .bool` from a connective `HasType` derivation. -/
 def mkInferBoolProof (envE connE : Expr) (stmt : Tm) : TermElabM Expr := do
@@ -228,6 +281,13 @@ partial def buildProvable (decls : Array HolDecl) (envE connE : Expr) :
   | .instType θ h => do
     let p ← buildProvable decls envE connE h
     liftMetaM do mkAppM ``Provable.instType #[toExpr θ, p]
+  | .gen x α h => do
+    let p ← buildProvable decls envE connE h
+    liftMetaM do
+      mkAppOptM ``Provable.gen_nil
+        #[some envE, some connE, none, some (toExpr x), some (toExpr α), some p]
+  | .disch p _ =>
+    throwError "HOLean: DISCH is not certified for closed theorems ({repr p})"
   | .assume p =>
     throwError "HOLean: ASSUME is not certified for closed theorems ({repr p})"
   | .hole =>
@@ -239,6 +299,9 @@ def elabProvable (decls : Array HolDecl) (envE connE : Expr) (stmt : Tm)
   if tr.usesAssume then
     throwError "HOLean: tactic script uses `hassumption`; closed theorems cannot \
       emit a `Provable` certificate for ASSUME"
+  if tr.usesDisch then
+    throwError "HOLean: tactic script uses DISCH; closed theorems cannot yet \
+      emit a `Provable` certificate for discharged hypotheses"
   if tr.hasHole then
     throwError "HOLean: incomplete proof (unsolved HOL goal)"
   let goalType := mkApp3 (mkConst ``Provable) envE mkNilTmList (toExpr stmt)
