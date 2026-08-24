@@ -3,7 +3,7 @@ Copyright (c) 2026 HOLean authors.
 Released under Apache 2.0 license as described in the file LICENSE.
 -/
 
-import Lean.Elab.Tactic
+import Lean.Elab.Term
 import HOLean.Derived
 import HOLean.Elab.Cert
 import HOLean.Elab.ProvTrace
@@ -11,29 +11,15 @@ import HOLean.Elab.ProvTrace
 /-!
 # Replay HOL traces into Lean `Provable` proofs
 
-Two backends, neither of which uses `sorry`, axioms, or `native_decide`:
-
-* **B** (`buildProvB`): assemble a `Provable` term with `mkApp*`
-* **C** (`buildProvC`): start from a metavariable and run Lean `MVarId.apply`
-  / `assignIfDefEq`, mirroring the HOL steps
-
-`HasType` side conditions are built from connective lemmas (`HasType.tru`,
-`HasType.mkEq`, …), not from `infer = some` reduction.
+`buildProvable` walks a `ProvTrace` and assembles a kernel `Provable` term
+with `mkApp*` of LCF constructors / derived rules.  Side conditions use
+connective `HasType` lemmas (`HasType.tru`, `HasType.mkEq`, …), not
+`infer = some` reduction, `sorry`, extra axioms, or `native_decide`.
 -/
 
 open Lean Meta Elab Term
 
 namespace HOLean.Elab
-
-/-- Count nodes in a proof term (olean-size proxy). -/
-partial def exprSize : Expr → Nat
-  | .app f a => 1 + exprSize f + exprSize a
-  | .lam _ d b _ => 1 + exprSize d + exprSize b
-  | .forallE _ d b _ => 1 + exprSize d + exprSize b
-  | .letE _ t v b _ => 1 + exprSize t + exprSize v + exprSize b
-  | .mdata _ e => exprSize e
-  | .proj _ _ e => 1 + exprSize e
-  | _ => 1
 
 /-- Reject `sorry` and `native_decide` (`ofReduceBool` / `ofReduceNat`). -/
 def assertKernelProof (e : Expr) : MetaM Unit := do
@@ -208,23 +194,15 @@ def weakenTraceProof (decls : Array HolDecl) (proof : Expr) : TermElabM Expr := 
 def holProvName (leanN : Lean.Name) : Lean.Name :=
   leanN.appendAfter "_hol_prov"
 
-def holProvCName (leanN : Lean.Name) : Lean.Name :=
-  leanN.appendAfter "_hol_prov_C"
+/-- Lean name of a previously emitted `{leanN}_hol_prov` theorem. -/
+def resolveNamedProv (leanN : Lean.Name) : MetaM Lean.Name := do
+  let n := holProvName leanN
+  unless (← getEnv).find? n |>.isSome do
+    throwError "HOLean: no `_hol_prov` certificate for `{leanN}`"
+  return n
 
-/-- Resolve a previously emitted `_hol_prov` / `_hol_prov_C` constant. -/
-def resolveNamedProv (leanN : Lean.Name) (preferC : Bool) : MetaM Lean.Name := do
-  let env ← getEnv
-  if preferC then
-    let cN := holProvCName leanN
-    if env.find? cN |>.isSome then
-      return cN
-  let bN := holProvName leanN
-  if env.find? bN |>.isSome then
-    return bN
-  throwError "HOLean: no `_hol_prov` certificate for `{leanN}`"
-
-/-- Proof-producing backend: `mkApp*` of `Provable` constructors / derived rules. -/
-partial def buildProvB (decls : Array HolDecl) (envE connE : Expr) :
+/-- Assemble a `Provable` term from an LCF derivation trace. -/
+partial def buildProvable (decls : Array HolDecl) (envE connE : Expr) :
     ProvTrace → TermElabM Expr
   | .refl t α => do
     let (ht, α') ← liftMetaM do elabHasType envE connE t []
@@ -236,150 +214,35 @@ partial def buildProvB (decls : Array HolDecl) (envE connE : Expr) :
   | .truth => do
     liftMetaM do mkAppOptM ``Provable.tru_intro #[some envE, some connE]
   | .named n => do
-    let thmN ← liftMetaM do resolveNamedProv n false
+    let thmN ← liftMetaM do resolveNamedProv n
     weakenTraceProof decls (mkConst thmN)
   | .eqMp hEq hP => do
-    let pEq ← buildProvB decls envE connE hEq
-    let pP ← buildProvB decls envE connE hP
+    let pEq ← buildProvable decls envE connE hEq
+    let pP ← buildProvable decls envE connE hP
     liftMetaM do mkAppM ``Provable.eqMp #[pEq, pP]
   | .eqSym h => do
-    let p ← buildProvB decls envE connE h
+    let p ← buildProvable decls envE connE h
     liftMetaM do
       mkAppOptM ``Provable.eq_sym
         #[some envE, some connE, none, none, none, none, some p]
   | .instType θ h => do
-    let p ← buildProvB decls envE connE h
+    let p ← buildProvable decls envE connE h
     liftMetaM do mkAppM ``Provable.instType #[toExpr θ, p]
   | .assume p =>
     throwError "HOLean: ASSUME is not certified for closed theorems ({repr p})"
 
-/-- `apply e` expecting `expected` subgoals; reverts the metavariable context on failure. -/
-def tryApplyN (g : MVarId) (e : Expr) (expected : Nat) : MetaM (Option (List MVarId)) :=
-  observing? do
-    let gs ← g.apply e
-    unless gs.length == expected do
-      throwError "HOLean: apply produced {gs.length} goals, expected {expected}"
-    pure gs
-
-/-- Lean tactic-replay backend: `MVarId.apply` / `assignIfDefEq`.
-
-Returns whether any step fell back to the B constructor (`mkApp*`). -/
-partial def replayApply (envE connE : Expr) (decls : Array HolDecl) (g : MVarId) :
-    ProvTrace → TermElabM Bool
-  | .truth => do
-    let e ← liftMetaM do mkAppOptM ``Provable.tru_intro #[some envE, some connE]
-    liftMetaM do g.assignIfDefEq e
-    return false
-  | .named n => do
-    let thmN ← liftMetaM do resolveNamedProv n true
-    let proof ← weakenTraceProof decls (mkConst thmN)
-    liftMetaM do g.assignIfDefEq proof
-    return false
-  | .refl t α => do
-    let (ht, _) ← liftMetaM do elabHasType envE connE t []
-    let e ← liftMetaM do
-      mkAppOptM ``Provable.refl
-        #[some envE, some (toExpr t), some (toExpr α), some ht]
-    liftMetaM do g.assignIfDefEq e
-    return false
-  | .eqMp hEq hP => do
-    let hinted ← liftMetaM do
-      mkAppOptM ``Provable.eqMp #[some envE, some mkNilTmList, some mkNilTmList]
-    let gs? ← liftMetaM do
-      match ← tryApplyN g hinted 2 with
-      | some gs => pure (some gs)
-      | none => tryApplyN g (mkConst ``Provable.eqMp) 2
-    match gs? with
-    | some [gEq, gP] =>
-      let fb1 ← replayApply envE connE decls gEq hEq
-      let fb2 ← replayApply envE connE decls gP hP
-      return fb1 || fb2
-    | _ =>
-      -- `apply Provable.eqMp` does not unify `Γ ++ Δ` with `[]`.
-      let pEq ← buildProvB decls envE connE hEq
-      let pP ← buildProvB decls envE connE hP
-      let e ← liftMetaM do mkAppM ``Provable.eqMp #[pEq, pP]
-      liftMetaM do g.assignIfDefEq e
-      return true
-  | .eqSym h => do
-    let hinted ← liftMetaM do
-      mkAppOptM ``Provable.eq_sym #[some envE, some connE, some mkNilTmList]
-    let gs? ← liftMetaM do
-      match ← tryApplyN g hinted 1 with
-      | some gs => pure (some gs)
-      | none => tryApplyN g (mkConst ``Provable.eq_sym) 1
-    match gs? with
-    | some [g'] => replayApply envE connE decls g' h
-    | _ =>
-      let p ← buildProvB decls envE connE h
-      let e ← liftMetaM do
-        mkAppOptM ``Provable.eq_sym
-          #[some envE, some connE, none, none, none, none, some p]
-      liftMetaM do g.assignIfDefEq e
-      return true
-  | .instType θ h => do
-    let eθ := toExpr θ
-    let hinted ← liftMetaM do
-      mkAppOptM ``Provable.instType
-        #[some envE, some mkNilTmList, none, some eθ]
-    let gs? ← liftMetaM do
-      match ← tryApplyN g hinted 1 with
-      | some gs => pure (some gs)
-      | none =>
-        try
-          let e ← mkAppM ``Provable.instType #[eθ]
-          tryApplyN g e 1
-        catch _ =>
-          tryApplyN g (mkConst ``Provable.instType) 1
-    match gs? with
-    | some [g'] => replayApply envE connE decls g' h
-    | _ =>
-      let p ← buildProvB decls envE connE h
-      let e ← liftMetaM do mkAppM ``Provable.instType #[eθ, p]
-      liftMetaM do g.assignIfDefEq e
-      return true
-  | .assume p =>
-    throwError "HOLean: ASSUME is not certified for closed theorems ({repr p})"
-
-def buildProvC (decls : Array HolDecl) (envE connE : Expr) (goalType : Expr)
-    (tr : ProvTrace) : TermElabM (Expr × Bool) := do
-  let mvar ← mkFreshExprMVar goalType
-  let fallback ← replayApply envE connE decls mvar.mvarId! tr
-  let val ← instantiateMVars mvar
-  if val.hasExprMVar then
-    throwError "HOLean: tactic replay left metavariables"
-  return (val, fallback)
-
-/-- Result of replaying a tactic script as `Provable` proofs. -/
-structure ReplayResult where
-  proofB : Expr
-  proofC : Expr
-  sizeB : Nat
-  sizeC : Nat
-  fallbackToB : Bool
-
-def replayCertified (decls : Array HolDecl) (envE connE : Expr) (stmt : Tm)
-    (tr : ProvTrace) : TermElabM ReplayResult := do
+/-- Type-check a reconstructed `Provable` proof of `⊢ stmt` in `envE`. -/
+def elabProvable (decls : Array HolDecl) (envE connE : Expr) (stmt : Tm)
+    (tr : ProvTrace) : TermElabM Expr := do
   if tr.usesAssume then
     throwError "HOLean: tactic script uses `hassumption`; closed theorems cannot \
       emit a `Provable` certificate for ASSUME"
   let goalType := mkApp3 (mkConst ``Provable) envE mkNilTmList (toExpr stmt)
-  let proofB ← buildProvB decls envE connE tr
-  liftMetaM do assertKernelProof proofB
-  unless ← isDefEq (← inferType proofB) goalType do
-    throwError "HOLean: B proof has the wrong type{indentExpr (← inferType proofB)}\n\
-      expected{indentExpr goalType}"
-  let (proofC, fallbackToB) ← buildProvC decls envE connE goalType tr
-  liftMetaM do assertKernelProof proofC
-  unless ← isDefEq (← inferType proofC) goalType do
-    throwError "HOLean: C proof has the wrong type{indentExpr (← inferType proofC)}\n\
-      expected{indentExpr goalType}"
-  return {
-    proofB
-    proofC
-    sizeB := exprSize (← instantiateMVars proofB)
-    sizeC := exprSize (← instantiateMVars proofC)
-    fallbackToB
-  }
+  let proof ← buildProvable decls envE connE tr
+  liftMetaM do assertKernelProof proof
+  unless ← isDefEq (← inferType proof) goalType do
+    throwError "HOLean: reconstructed proof has the wrong type\
+      {indentExpr (← inferType proof)}\nexpected{indentExpr goalType}"
+  return proof
 
 end HOLean.Elab

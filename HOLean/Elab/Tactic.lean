@@ -12,9 +12,9 @@ import HOLean.Elab.ProvTrace
 
 A small goal-directed front-end over the executable LCF kernel (`Hol.*`).
 Tactics rebuild a `Thm` by composing kernel rules and record a `ProvTrace`.
-`htheorem … by …` then replays the trace as a kernel `Provable` proof
-(backends B and C in `HOLean.Elab.Replay`) so consistency / soundness
-certificates keep emitting.
+`htheorem … by …` then assembles a kernel `Provable` proof from that trace
+(`HOLean.Elab.Replay.buildProvable`) so consistency / soundness certificates
+keep emitting.
 
 ## Tactics
 

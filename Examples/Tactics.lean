@@ -9,10 +9,10 @@ import HOLean.Elab.Decl
 /-!
 # Backward HOL tactics (examples)
 
-`htheorem … by …` scripts rebuild LCF `Thm` values and replay a `ProvTrace`
-as kernel `Provable` proofs (B: `mkApp*`, C: Lean `apply` / `exact`).
-Both backends emit `{n}_hol_prov` / `{n}_hol_prov_C` plus consistency
-certificates.  Neither uses `sorry`, Lean `axiom`, or `native_decide`.
+`htheorem … by …` scripts rebuild LCF `Thm` values and assemble a
+`ProvTrace` into a kernel `Provable` proof (`buildProvable`).  Each
+theorem emits `{n}_hol_prov` plus consistency certificates.  The path
+does not use `sorry`, extra Lean `axiom`s, or `native_decide`.
 -/
 
 namespace Examples.Tactics
@@ -64,17 +64,13 @@ htheorem true_via_eqmp : True by happly and_tt_eq_T, hexact and_tt
 htheorem true_eq_true_sym : True = True by hsym, hrefl
 
 #check true_eq_true_tac_hol_prov
-#check true_eq_true_tac_hol_prov_C
 #check true_intro_tac_hol_prov
 #check and_tt_again_hol_prov
 #check true_via_eqmp_hol_prov
-#check true_via_eqmp_hol_prov_C
-#check true_eq_true_sym_hol_prov_C
+#check true_eq_true_sym_hol_prov
 
 #print axioms true_eq_true_tac_hol_prov
-#print axioms true_eq_true_tac_hol_prov_C
 #print axioms true_via_eqmp_hol_prov
-#print axioms true_via_eqmp_hol_prov_C
 
 #hol_cert
 
