@@ -32,7 +32,9 @@ Closed traces are assembled into `Provable` by `HOLean.Elab.Replay.buildProvable
 * `happly n` — close if possible; otherwise use `EQ_MP` / `SYM` when `n`
   proves an equation matching the goal
 * `heqmp n` — require an equation theorem and replace the goal via `EQ_MP`
-* `_` — proof hole: report the current sequents (InfoView MVP)
+
+An unfinished `hby` block reports the remaining sequents at `hby`
+(Lean-style: the cursor sits after the last tactic, not a literal `_`).
 
 ## Syntax
 
@@ -384,10 +386,11 @@ syntax "hsym" : hol_tac
 syntax "hexact " ident : hol_tac
 syntax "happly " ident : hol_tac
 syntax "heqmp " ident : hol_tac
-syntax (name := holTacHole) "_" : hol_tac
 
-/-- Indented / semicolon-separated tactic sequence (Lean `by` style). -/
-syntax holTacSeq := sepBy1IndentSemicolon(hol_tac)
+/-- Indented / semicolon-separated tactic sequence (Lean `by` style).
+Empty is allowed so an unfinished `hby` still elaborates and can show
+the current sequents. -/
+syntax holTacSeq := sepByIndentSemicolon(hol_tac)
 
 /-- Parse a tactic name from an identifier (uses the short HOL name). -/
 def holTacName (id : TSyntax `ident) : HOLean.Name :=
@@ -407,10 +410,6 @@ def holTacsOfSeq (stx : Syntax) : Array Syntax :=
         out := out.push arg
     return out
 
-def isHolHole : Syntax → Bool
-  | `(hol_tac| _) => true
-  | _ => false
-
 def elabHolTac (stx : Syntax) : HolTacM Unit := do
   match stx with
   | `(hol_tac| hrefl) | `(hol_tac| hrfl) => tacRefl
@@ -420,8 +419,6 @@ def elabHolTac (stx : Syntax) : HolTacM Unit := do
   | `(hol_tac| hexact $n:ident) => tacExact (holTacName n)
   | `(hol_tac| happly $n:ident) => tacApply (holTacName n)
   | `(hol_tac| heqmp $n:ident) => tacEqMp (holTacName n)
-  | `(hol_tac| _) =>
-    HolTacM.throw s!"unsolved HOL goals:\n{formatGoalsString (← get).goals}"
   | _ => HolTacM.throw s!"unsupported HOL tactic: {stx}"
 
 def elabHolTacSeq (stxs : Array Syntax) : HolTacM Unit :=
@@ -437,25 +434,27 @@ def evalHolTacs (st : HolTacState) (tacs : Array Syntax) (ctx : HolCtx) :
     Except String HolTacState :=
   HolM.run (execHolTactics st (elabHolTacSeq tacs)) ctx
 
-/-- Run tactics one at a time, logging the incoming sequent at each syntax
-node so the InfoView can show the intermediate state (MVP). `_` stops and
-reports the current goals. -/
+/-- Run tactics one at a time.  Each tactic node is annotated with the
+sequent *before* it (cursor on that line) and *after* it (cursor past
+that step). -/
 def applyHolTacsLocated (st : HolTacState) (tacs : Array Syntax) (ctx : HolCtx) :
     CommandElabM HolTacState := do
   let mut st := st
   for tac in tacs do
     logInfoAt tac m!"{formatGoalsString st.goals}"
-    if isHolHole tac then
-      throwErrorAt tac m!"HOLean: unsolved goals\n{formatGoalsString st.goals}"
     match evalHolTacs st #[tac] ctx with
     | .error msg =>
       throwErrorAt tac m!"HOLean: {msg}\n{formatGoalsString st.goals}"
     | .ok st' =>
       st := st'
-  if st.goals.isEmpty then
-    if let some last := tacs.back? then
-      logInfoAt last m!"{formatGoalsString st.goals}"
+      logInfoAt tac m!"{formatGoalsString st.goals}"
   return st
+
+/-- Fail at `goalsRef` (typically `hby` / the tactic block) if sequents remain. -/
+def throwUnsolvedGoals (goalsRef : Syntax) (st : HolTacState) : CommandElabM Unit := do
+  unless st.goals.isEmpty do
+    logInfoAt goalsRef m!"{formatGoalsString st.goals}"
+    throwErrorAt goalsRef m!"HOLean: unsolved goals\n{formatGoalsString st.goals}"
 
 /-! ## Interactive session (Candle-style `g` / `e`) -/
 

@@ -11,9 +11,9 @@ import HOLean.Elab.Decl
 
 `htheorem … := hby …` scripts rebuild LCF `Thm` values and assemble a
 `ProvTrace` into a kernel `Provable` proof (`buildProvable`).  Incomplete
-scripts report remaining subgoals at `_` (and as info on each tactic).
-`hbegin` / `htac` / `#hol_goals` / `hend` is the same goal stack, one
-command at a time.
+scripts report remaining subgoals at the `hby` block (the cursor after
+the last tactic).  `hbegin` / `htac` / `#hol_goals` / `hend` is the same
+goal stack, one command at a time.
 -/
 
 namespace Examples.Tactics

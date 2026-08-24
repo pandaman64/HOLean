@@ -344,6 +344,7 @@ def elabHTheoremHBy : CommandElab := fun stx => do
   let binders := binderSyntaxes stx[2]
   let propStx := stx[4]
   let tacs := holTacsOfSeq stx[7]
+  let goalsRef := if tacs.isEmpty then stx[6] else stx[7]
   let leanN := (← getCurrNamespace) ++ short
   let holN := holName short
   checkFresh holN leanN
@@ -352,6 +353,7 @@ def elabHTheoremHBy : CommandElab := fun stx => do
     elabHolTelescope binders propStx decls
   let ctx ← currentHolCtx
   let st ← applyHolTacsLocated tel.tacState tacs ctx
+  throwUnsolvedGoals goalsRef st
   let ct ← match HolM.run (finishTacState st) ctx with
   | .error msg => throwError "HOLean: {msg}"
   | .ok ct => pure ct

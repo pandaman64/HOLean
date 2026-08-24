@@ -186,8 +186,7 @@ error: HOLean: unsolved goals
 [1/1] ⊢ HOLean.Tm.const "tru" (HOLean.Ty.bool)
 -/
 #guard_msgs in
-htheorem hole_shows_state : True := hby
-  _
+htheorem unfinished_hby : True := hby
 
 /--
 info: HOL term:

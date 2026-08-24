@@ -179,7 +179,8 @@ as HOL constants in `hol_tm` / `hol_prop`.
 script, a kernel `Provable` term, or an `hby` tactic block (newline or
 `;`-separated, like Lean `by`).  Left binders are type variables,
 value parameters (`GEN`'d at the end), or hypotheses (`DISCH`'d).
-A `_` tactic reports the current sequents (InfoView MVP).
+An unfinished `hby` reports the remaining sequents at that block
+(the cursor after the last tactic), not a literal `_`.
 
 The statement is also registered as a Lean `Prop` axiom (same name)
 so later `hdef` / `htheorem` statements can mention it.  The checked proof
