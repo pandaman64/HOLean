@@ -160,19 +160,26 @@ unsafe def elabHTheorem : CommandElab := fun stx => do
         throwError "HOLean: statement is not a closed boolean"
       unless stmt.LC 0 do
         throwError "HOLean: statement is not locally closed"
-      let expected ← Term.elabTerm (← `(HolM Thm)) none
-      let prf ← Term.withoutErrToSorry <| Term.elabTermAndSynthesize prfStx expected
-      let prf ← instantiateMVars prf
-      let tac ← evalHolMThm expected prf
-      let ctx ← currentHolCtx
-      match HolM.run tac ctx with
-      | .error msg => throwError "HOLean: {msg}"
-      | .ok thm =>
-        unless thm.hyps.isEmpty do
-          throwError "HOLean: theorem still has hypotheses {repr thm.hyps}"
-        unless thm.concl == stmt do
-          throwError "HOLean: proved {repr thm.concl}, expected {repr stmt}"
-        pure (stmt, propType, thm)
+      let thm ← try
+        let provTy ← liftMetaM do
+          let nil ← Meta.mkListLit (mkConst ``Tm) []
+          return mkApp3 (mkConst ``Provable []) (mkConst ``holEnv []) nil (toExpr stmt)
+        let _ ← Term.elabTermAndSynthesize prfStx provTy
+        pure { hyps := [], concl := stmt }
+      catch _ =>
+        let expected ← Term.elabTerm (← `(HolM Thm)) none
+        let prf ← Term.elabTermAndSynthesize prfStx expected
+        let prf ← instantiateMVars prf
+        let tac ← evalHolMThm expected prf
+        let ctx ← currentHolCtx
+        match HolM.run tac ctx with
+        | .error msg => throwError "HOLean: {msg}"
+        | .ok thm => pure thm
+      unless thm.hyps.isEmpty do
+        throwError "HOLean: theorem still has hypotheses {repr thm.hyps}"
+      unless thm.concl == stmt do
+        throwError "HOLean: proved {repr thm.concl}, expected {repr stmt}"
+      pure (stmt, propType, thm)
     addLeanThmStmt leanN propType
     addLeanThmVal leanN thm
     addHolDecl (.thm leanN holN stmt)

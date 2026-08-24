@@ -208,6 +208,10 @@ theorem concl_bool [Env.HasEq env] {Γ p} (h : Γ ⊩[env] p) : HasType env [] p
 theorem hyps_bool [Env.HasEq env] {Γ p} (h : Γ ⊩[env] p) : ∀ q ∈ Γ, HasType env [] q .bool :=
   (bool_typed h).1
 
+/-- Cast a proof along a hypothesis list being empty. -/
+theorem cast_nil {Γ p} (hΓ : Γ = []) (h : Provable env Γ p) : Provable env [] p :=
+  hΓ ▸ h
+
 /-- Boolean reflexivity is also derivable from `ASSUME` + `DEDUCT_ANTISYM`. -/
 theorem bool_refl [Env.HasEq env] {p} (hp : HasType env [] p .bool) :
     [] ⊩[env] Tm.mkEq .bool p p := by

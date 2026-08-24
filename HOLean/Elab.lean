@@ -9,4 +9,5 @@ import HOLean.Elab.Term
 import HOLean.Elab.Kernel
 import HOLean.Elab.Decl
 import HOLean.Elab.Command
+import HOLean.Elab.LogicProofs
 import HOLean.Elab.Tests
