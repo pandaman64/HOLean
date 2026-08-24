@@ -20,6 +20,22 @@ namespace HOLean
 
 variable {env : Env} {ρ : TyVal}
 
+private noncomputable def EnvModel.interpAddAxiom [Env.HasEq env] (M : EnvModel env ρ) (ax : Tm) :
+    EnvInterp (env.addAxiom ax) ρ where
+  interp := M.interp.interp
+  mem := fun hconst => M.interp.mem (Env.addAxiom_constants env ax ▸ hconst)
+
+private theorem EnvModel.interpAddAxiom_interp [Env.HasEq env] (M : EnvModel env ρ) (ax : Tm)
+    (n : Name) (α : Ty) :
+    (M.interpAddAxiom ax).interp n α = M.interp.interp n α := rfl
+
+private theorem EnvModel.interpAddAxiom_denote [Env.HasEq env] (M : EnvModel env ρ) (ax : Tm)
+    (θ : TySubst) (ξ : FVarVal (ρ.inst θ)) (p : Tm) :
+    p.denote ((M.interpAddAxiom ax).inst θ) ξ [] = p.denote (M.interp.inst θ) ξ [] := by
+  refine Tm.denote_interp_eq_env p _ _ ξ [] ?_
+  intro n α
+  simp [EnvInterp.inst, EnvModel.interpAddAxiom_interp]
+
 /-- Interpret a defined constant at an instance of its generic type. -/
 noncomputable def interpDef (I : EnvInterp env ρ) (ξ : FVarVal ρ)
     (ty : Ty) (rhs : Tm) (inst : Ty) : ZFSet :=
@@ -236,6 +252,49 @@ noncomputable def EnvModel.addDef [Env.HasEq env] (n : Name) {ty : Ty} {rhs : Tm
       heq ▸ EnvModel.addDef_ax_new n M hρ hn hne_eq hrhs hclosed hvars θ ξ
     | Or.inr hold =>
       EnvModel.addDef_ax_old n M hρ hn hwf hrhs hold ξ
+
+/-- Transport a model along `addAxiom`, given a kernel proof of the new sentence. -/
+noncomputable def EnvModel.addAxiom [Env.HasEq env] (M : EnvModel env ρ) (_hρ : ρ.Nonempty)
+    (ax : Tm) (hax : [] ⊩[env] ax) : EnvModel (env.addAxiom ax) ρ where
+  interp := M.interpAddAxiom ax
+  eq_ok := fun α => by
+    simp [EnvModel.interpAddAxiom_interp]
+    exact M.eq_ok α
+  ax_ok := fun θ p hp ξ =>
+    match hp with
+    | Or.inl heq =>
+      have hT := Provable.sound hax (M.inst θ) ξ (fun _ hq => nomatch hq)
+      have hden := EnvModel.interpAddAxiom_denote M ax θ ξ p
+      (hden.trans (heq ▸ hT))
+    | Or.inr hold =>
+      (EnvModel.interpAddAxiom_denote M ax θ ξ p).trans (M.ax_ok θ p hold ξ)
+
+theorem EnvModel.addAxiom_interp [Env.HasEq env] (M : EnvModel env ρ) (_hρ : ρ.Nonempty)
+    (ax : Tm) (hax : [] ⊩[env] ax) :
+    (M.addAxiom _hρ ax hax).interp = M.interpAddAxiom ax := rfl
+
+noncomputable def EnvModel.addDef_checked [Env.HasConnectives env] (n : Name)
+    {ty : Ty} {rhs : Tm} (M : EnvModel env ρ) (hρ : ρ.Nonempty)
+    (hfresh : env.constants n = none) (hne_eq : n ≠ eqName) (hwf : env.WF)
+    (hinfer : rhs.infer env [] = some ty) (_hLC : rhs.LC 0 = true)
+    (hvars : ∀ x ∈ rhs.tyvars, x ∈ ty.tyvars)
+    (hfree : ∀ x α, rhs.freeIn x α = false) :
+    EnvModel (env.addDef n ty rhs) ρ :=
+  M.addDef n hρ hfresh hne_eq hwf (HasType.of_infer hinfer) hfree hvars
+
+noncomputable def EnvModel.addDef_cert [Env.HasConnectives env] (n : Name)
+    {ty : Ty} {rhs : Tm} (M : EnvModel env ρ) (hρ : ρ.Nonempty)
+    (hfresh : env.constants n = none) (hne_eq : n ≠ eqName) (hwf : env.WF)
+    (hinfer : rhs.infer env [] = some ty) (_hLC : rhs.LC 0 = true)
+    (hvars : ∀ x ∈ rhs.tyvars, x ∈ ty.tyvars)
+    (hfree : ∀ x α, rhs.freeIn x α = false) :
+    EnvModel (env.addDef n ty rhs) ρ :=
+  EnvModel.addDef_checked n M hρ hfresh hne_eq hwf hinfer _hLC hvars hfree
+
+noncomputable def EnvModel.addAxiom_cert [Env.HasEq env] (M : EnvModel env ρ) (hρ : ρ.Nonempty)
+    (ax : Tm) (hax : [] ⊩[env] ax) :
+    EnvModel (env.addAxiom ax) ρ :=
+  M.addAxiom hρ ax hax
 
 theorem Tm.not_free {t : Tm} (h : ∀ x α, t.freeIn x α = false := by intros; rfl)
     (x : Name) (α : Ty) : t.freeIn x α = false :=

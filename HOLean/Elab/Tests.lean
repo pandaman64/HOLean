@@ -108,7 +108,7 @@ example : (hol_tm(fun (x : Nat) => x = x)).infer holEnv [] =
 
 /--
 error: HOLean: dependent type is not a HOL type
-  (n : Nat) → Fin (n + 1)
+  (n : ℕ) → Fin (n + 1)
 -/
 #guard_msgs in
 #check hol_ty(∀ n : Nat, Fin (n + 1))

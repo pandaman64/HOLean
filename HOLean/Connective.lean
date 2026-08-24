@@ -905,4 +905,149 @@ theorem ontoName_fresh_envOneOne : envOneOne.constants ontoName = none :=
   envOneOne_fresh (by decide) (by decide) (by decide) (by decide) (by decide)
     (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
 
+/-! Names reserved for primitives and defined connectives (used by the elaborator). -/
+
+def connectiveAndPrimNames : List Name :=
+  [eqName, selectName, truName, andName, impName, allName, falsumName,
+    notName, orName, exName, oneOneName, ontoName]
+
+/-- A user constant name is not one of the primitive / connective names. -/
+def nameNotInConnectiveAndPrim (n : Name) : Prop :=
+  ∀ m ∈ connectiveAndPrimNames, n ≠ m
+
+theorem nameNotInConnectiveAndPrim_of_decide (n : Name)
+    (h : decide (∀ m ∈ connectiveAndPrimNames, n ≠ m) = true) :
+    nameNotInConnectiveAndPrim n := by
+  simp [nameNotInConnectiveAndPrim, List.all_eq_true] at h
+  exact h
+
+theorem mem_connectiveAndPrimNames_tru :
+    truName ∈ connectiveAndPrimNames := by simp [connectiveAndPrimNames]
+
+theorem mem_connectiveAndPrimNames_and :
+    andName ∈ connectiveAndPrimNames := by simp [connectiveAndPrimNames]
+
+theorem mem_connectiveAndPrimNames_imp :
+    impName ∈ connectiveAndPrimNames := by simp [connectiveAndPrimNames]
+
+theorem mem_connectiveAndPrimNames_all :
+    allName ∈ connectiveAndPrimNames := by simp [connectiveAndPrimNames]
+
+theorem mem_connectiveAndPrimNames_falsum :
+    falsumName ∈ connectiveAndPrimNames := by simp [connectiveAndPrimNames]
+
+theorem mem_connectiveAndPrimNames_not :
+    notName ∈ connectiveAndPrimNames := by simp [connectiveAndPrimNames]
+
+theorem mem_connectiveAndPrimNames_or :
+    orName ∈ connectiveAndPrimNames := by simp [connectiveAndPrimNames]
+
+theorem mem_connectiveAndPrimNames_ex :
+    exName ∈ connectiveAndPrimNames := by simp [connectiveAndPrimNames]
+
+theorem mem_connectiveAndPrimNames_oneOne :
+    oneOneName ∈ connectiveAndPrimNames := by simp [connectiveAndPrimNames]
+
+theorem mem_connectiveAndPrimNames_onto :
+    ontoName ∈ connectiveAndPrimNames := by simp [connectiveAndPrimNames]
+
+theorem Env.HasConnectives.addAxiom [Env.HasConnectives env] (ax : Tm) :
+    Env.HasConnectives (env.addAxiom ax) where
+  eq_const := by rw [Env.addAxiom_constants]; exact HasEq.eq_const
+  select_const := by rw [Env.addAxiom_constants]; exact HasSelect.select_const
+  tru_const := by rw [Env.addAxiom_constants]; exact HasConnectives.tru_const
+  and_const := by rw [Env.addAxiom_constants]; exact HasConnectives.and_const
+  imp_const := by rw [Env.addAxiom_constants]; exact HasConnectives.imp_const
+  all_const := by rw [Env.addAxiom_constants]; exact HasConnectives.all_const
+  falsum_const := by rw [Env.addAxiom_constants]; exact HasConnectives.falsum_const
+  not_const := by rw [Env.addAxiom_constants]; exact HasConnectives.not_const
+  or_const := by rw [Env.addAxiom_constants]; exact HasConnectives.or_const
+  ex_const := by rw [Env.addAxiom_constants]; exact HasConnectives.ex_const
+  oneOne_const := by rw [Env.addAxiom_constants]; exact HasConnectives.oneOne_const
+  onto_const := by rw [Env.addAxiom_constants]; exact HasConnectives.onto_const
+  tru_ax := Env.addAxiom_axioms_of (env := env) ax (Tm.mkEq truTy Tm.tru Tm.truDef)
+    (Env.HasConnectives.tru_ax (env := env))
+  and_ax := Env.addAxiom_axioms_of (env := env) ax (Tm.mkEq andTy (.const andName andTy) Tm.andDef)
+    (Env.HasConnectives.and_ax (env := env))
+  imp_ax := Env.addAxiom_axioms_of (env := env) ax (Tm.mkEq impTy (.const impName impTy) Tm.impDef)
+    (Env.HasConnectives.imp_ax (env := env))
+  all_ax := Env.addAxiom_axioms_of (env := env) ax (Tm.mkEq allTy (.const allName allTy) Tm.allDef)
+    (Env.HasConnectives.all_ax (env := env))
+  falsum_ax := Env.addAxiom_axioms_of (env := env) ax (Tm.mkEq falsumTy Tm.falsum Tm.falsumDef)
+    (Env.HasConnectives.falsum_ax (env := env))
+  not_ax := Env.addAxiom_axioms_of (env := env) ax (Tm.mkEq notTy (.const notName notTy) Tm.notDef)
+    (Env.HasConnectives.not_ax (env := env))
+  or_ax := Env.addAxiom_axioms_of (env := env) ax (Tm.mkEq orTy (.const orName orTy) Tm.orDef)
+    (Env.HasConnectives.or_ax (env := env))
+  ex_ax := Env.addAxiom_axioms_of (env := env) ax (Tm.mkEq exTy (.const exName exTy) Tm.exDef)
+    (Env.HasConnectives.ex_ax (env := env))
+  oneOne_ax := Env.addAxiom_axioms_of (env := env) ax
+    (Tm.mkEq oneOneTy (.const oneOneName oneOneTy) Tm.oneOneDef)
+    (Env.HasConnectives.oneOne_ax (env := env))
+  onto_ax := Env.addAxiom_axioms_of (env := env) ax
+    (Tm.mkEq ontoTy (.const ontoName ontoTy) Tm.ontoDef)
+    (Env.HasConnectives.onto_ax (env := env))
+
+theorem Env.HasConnectives.addDef [Env.HasConnectives env] {n : Name} {ty : Ty} {rhs : Tm}
+    (_hfresh : env.constants n = none) (hnames : nameNotInConnectiveAndPrim n) :
+    Env.HasConnectives (env.addDef n ty rhs) where
+  eq_const := by
+    have hne : eqName ≠ n := (hnames eqName (by simp [connectiveAndPrimNames])).symm
+    rw [Env.addDef_constants_of_ne env ty rhs (n := n) (m := eqName) hne]
+    exact HasEq.eq_const
+  select_const := by
+    have hne : selectName ≠ n := (hnames selectName (by simp [connectiveAndPrimNames])).symm
+    rw [Env.addDef_constants_of_ne env ty rhs (n := n) (m := selectName) hne]
+    exact HasSelect.select_const
+  tru_const := by
+    have hne : truName ≠ n := (hnames truName mem_connectiveAndPrimNames_tru).symm
+    rw [Env.addDef_constants_of_ne env ty rhs (n := n) (m := truName) hne]
+    exact HasConnectives.tru_const
+  and_const := by
+    have hne : andName ≠ n := (hnames andName mem_connectiveAndPrimNames_and).symm
+    rw [Env.addDef_constants_of_ne env ty rhs (n := n) (m := andName) hne]
+    exact HasConnectives.and_const
+  imp_const := by
+    have hne : impName ≠ n := (hnames impName mem_connectiveAndPrimNames_imp).symm
+    rw [Env.addDef_constants_of_ne env ty rhs (n := n) (m := impName) hne]
+    exact HasConnectives.imp_const
+  all_const := by
+    have hne : allName ≠ n := (hnames allName mem_connectiveAndPrimNames_all).symm
+    rw [Env.addDef_constants_of_ne env ty rhs (n := n) (m := allName) hne]
+    exact HasConnectives.all_const
+  falsum_const := by
+    have hne : falsumName ≠ n := (hnames falsumName mem_connectiveAndPrimNames_falsum).symm
+    rw [Env.addDef_constants_of_ne env ty rhs (n := n) (m := falsumName) hne]
+    exact HasConnectives.falsum_const
+  not_const := by
+    have hne : notName ≠ n := (hnames notName mem_connectiveAndPrimNames_not).symm
+    rw [Env.addDef_constants_of_ne env ty rhs (n := n) (m := notName) hne]
+    exact HasConnectives.not_const
+  or_const := by
+    have hne : orName ≠ n := (hnames orName mem_connectiveAndPrimNames_or).symm
+    rw [Env.addDef_constants_of_ne env ty rhs (n := n) (m := orName) hne]
+    exact HasConnectives.or_const
+  ex_const := by
+    have hne : exName ≠ n := (hnames exName mem_connectiveAndPrimNames_ex).symm
+    rw [Env.addDef_constants_of_ne env ty rhs (n := n) (m := exName) hne]
+    exact HasConnectives.ex_const
+  oneOne_const := by
+    have hne : oneOneName ≠ n := (hnames oneOneName mem_connectiveAndPrimNames_oneOne).symm
+    rw [Env.addDef_constants_of_ne env ty rhs (n := n) (m := oneOneName) hne]
+    exact HasConnectives.oneOne_const
+  onto_const := by
+    have hne : ontoName ≠ n := (hnames ontoName mem_connectiveAndPrimNames_onto).symm
+    rw [Env.addDef_constants_of_ne env ty rhs (n := n) (m := ontoName) hne]
+    exact HasConnectives.onto_const
+  tru_ax := Env.addDef_axioms_of HasConnectives.tru_ax
+  and_ax := Env.addDef_axioms_of HasConnectives.and_ax
+  imp_ax := Env.addDef_axioms_of HasConnectives.imp_ax
+  all_ax := Env.addDef_axioms_of HasConnectives.all_ax
+  falsum_ax := Env.addDef_axioms_of HasConnectives.falsum_ax
+  not_ax := Env.addDef_axioms_of HasConnectives.not_ax
+  or_ax := Env.addDef_axioms_of HasConnectives.or_ax
+  ex_ax := Env.addDef_axioms_of HasConnectives.ex_ax
+  oneOne_ax := Env.addDef_axioms_of HasConnectives.oneOne_ax
+  onto_ax := Env.addDef_axioms_of HasConnectives.onto_ax
+
 end HOLean

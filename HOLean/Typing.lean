@@ -539,4 +539,14 @@ theorem Env.WF.addDef [Env.HasEq env] {n : Name} {ty : Ty} {rhs : Tm}
     HasType.mkEq hconst (hty.weakenEnv hle)
   exact (hwf.addConst hfresh).addAxiom heq
 
+theorem Env.WF.addDef_infer [Env.HasEq env] {n : Name} {ty : Ty} {rhs : Tm}
+    (hwf : env.WF) (hfresh : env.constants n = none)
+    (hn : n ≠ eqName) (hinfer : rhs.infer env [] = some ty) :
+    (env.addDef n ty rhs).WF :=
+  Env.WF.addDef hwf hfresh hn (HasType.of_infer hinfer)
+
+theorem Env.WF.addAxiom_infer (hwf : env.WF) (ax : Tm) (hinfer : ax.infer env [] = some .bool) :
+    (env.addAxiom ax).WF :=
+  hwf.addAxiom (HasType.of_infer hinfer)
+
 end HOLean

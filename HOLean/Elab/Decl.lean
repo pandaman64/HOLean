@@ -7,6 +7,7 @@ import Lean
 import Lean.Util.CollectLevelParams
 import HOLean.Elab.Term
 import HOLean.Elab.Kernel
+import HOLean.Elab.Cert
 
 /-!
 # `hdef` / `htheorem`
@@ -37,9 +38,6 @@ def currentHolEnv [Monad m] [MonadEnv m] : m Env := do
 def currentHolCtx [Monad m] [MonadEnv m] : m HolCtx := do
   let decls ← getHolDecls
   return { env := decls.foldl HolDecl.apply holEnv, decls }
-
-def tyvarsOk (ty : Ty) (rhs : Tm) : Bool :=
-  rhs.tyvars.all fun x => x ∈ ty.tyvars
 
 unsafe def evalHolMThm (expected e : Expr) : MetaM (HolM Thm) :=
   Meta.evalExpr (HolM Thm) expected e
@@ -136,6 +134,7 @@ def elabHDef : CommandElab := fun stx => do
       throwError "HOLean: definition RHS is not locally closed"
     unless tyvarsOk ty rhs do
       throwError "HOLean: type variables of the RHS must occur in the declared type"
+    emitHDefCert leanN holN ty rhs
     addLeanDefn leanN leanTy leanRhs
     addHolDecl (.defn leanN holN ty rhs)
     logInfo m!"hdef {holN} : {repr ty}"
@@ -149,24 +148,40 @@ unsafe def elabHTheorem : CommandElab := fun stx => do
     let leanN := (← getCurrNamespace) ++ short
     let holN := holName short
     checkFresh holN leanN
-    let (stmt, propType, thm) ← liftTermElabM do
+    let decls ← getHolDecls
+    let (stmt, propType, thm, provProof?) ← liftTermElabM do
       let e ← elabLean propStx (mkSort 0)
       unless (← Meta.isProp e) do
         throwError "HOLean: expected a proposition{indentExpr e}"
       let propType ← instantiateMVars (← inferType e)
       let stmt ← exprToTm e
-      let env ← currentHolEnv
+      let env := decls.foldl HolDecl.apply holEnv
       unless stmt.infer env [] == some .bool do
         throwError "HOLean: statement is not a closed boolean"
       unless stmt.LC 0 do
         throwError "HOLean: statement is not locally closed"
-      let thm ← try
+      let envExpr := envExprFromDecls decls
+      let provProof? ← try
         let provTy ← liftMetaM do
           let nil ← Meta.mkListLit (mkConst ``Tm) []
-          return mkApp3 (mkConst ``Provable []) (mkConst ``holEnv []) nil (toExpr stmt)
-        let _ ← Term.elabTermAndSynthesize prfStx provTy
-        pure { hyps := [], concl := stmt }
+          return mkApp3 (mkConst ``Provable) envExpr nil (toExpr stmt)
+        let prov ← Term.withoutErrToSorry do
+          Term.elabTermAndSynthesize prfStx provTy
+        let prov ← instantiateMVars prov
+        if prov.hasSorry || prov.hasExprMVar then
+          pure none
+        else
+          let ty ← liftMetaM do inferType prov
+          if ty.isAppOf ``Provable then
+            pure (some prov)
+          else
+            pure none
       catch _ =>
+        pure none
+      let thm ← match provProof? with
+      | some _ =>
+        pure { hyps := [], concl := stmt }
+      | none =>
         let expected ← Term.elabTerm (← `(HolM Thm)) none
         let prf ← Term.elabTermAndSynthesize prfStx expected
         let prf ← instantiateMVars prf
@@ -179,7 +194,12 @@ unsafe def elabHTheorem : CommandElab := fun stx => do
         throwError "HOLean: theorem still has hypotheses {repr thm.hyps}"
       unless thm.concl == stmt do
         throwError "HOLean: proved {repr thm.concl}, expected {repr stmt}"
-      pure (stmt, propType, thm)
+      pure (stmt, propType, thm, provProof?)
+    match provProof? with
+    | some prov =>
+      emitHTheoremCertProvable leanN stmt prov
+    | none =>
+      emitHTheoremCertWf leanN stmt
     addLeanThmStmt leanN propType
     addLeanThmVal leanN thm
     addHolDecl (.thm leanN holN stmt)

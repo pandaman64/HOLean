@@ -184,6 +184,9 @@ def TyVal.std : TyVal.{0} := fun _ => omega
 theorem TyVal.std_nonempty : TyVal.std.Nonempty :=
   fun _ => ⟨∅, omega_zero⟩
 
+noncomputable def EnvModel.holEnv_std : EnvModel HOLean.holEnv TyVal.std :=
+  EnvModel.holEnv TyVal.std TyVal.std_nonempty
+
 theorem Provable.sound_holEnv {Γ p} (h : Γ ⊩[holEnv] p)
     {ρ : TyVal} (hρ : ρ.Nonempty) (ξ : FVarVal ρ)
     (hΓ : HypsTrue (EnvModel.holEnv ρ hρ).interp ξ Γ) :
