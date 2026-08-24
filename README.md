@@ -51,7 +51,8 @@ HOLean/
   Elab/State.lean      `EnvExtension` for user `hdef` / `htheorem`
   Elab/Term.lean       `hol_ty(…)` / `hol_tm(…)` / `hol_prop(…)` / `hol(…)`
   Elab/Kernel.lean     executable LCF layer (`Thm`, `Hol.refl`, …)
-  Elab/Decl.lean       `hdef` / `htheorem` / `#hol_env`
+  Elab/Decl.lean       `hdef` / `htheorem` / `hby` / `#hol_env`
+  Elab/Tactic.lean     Lean-style `hby` tactics
   Elab/Command.lean    `#hol` (infers in the current HOL environment)
   Model/Basic.lean     `zfBool`, graph application, `succ` on `omega`
   Model/Ty.lean        `Ty.denote`, `INST_TYPE` commutation
@@ -65,6 +66,8 @@ HOLean/
 ```
 
 See `docs/MODEL.md` for the full standard-model plan.
+See `docs/INFOVIEW.md` for how Lean InfoView could show HOL sequents
+(mvcgen / iris-lean proof-mode delaborators vs ProofWidgets; not implemented).
 
 Syntax through `Axiom` do not import Mathlib.  `HOLean.Elab` imports the Lean
 compiler library (not Mathlib).  `HOLean.Model` is the first module that
@@ -158,21 +161,33 @@ stay as functions on `Tm` — they would need antiquotation.
 User declarations grow a Lean `EnvExtension` stacked on `holEnv`:
 
 ```lean
-hdef myId : {A : Type} → A → A := fun (x : A) => x
+hdef myId {A : Type} (x : A) := x
 
 htheorem true_eq_true : True = True :=
   Hol.refl (hol_tm(True))
 
 htheorem tru_intro : True := Hol.truth
+
+htheorem eq_refl {A : Type} (x : A) : x = x := hby
+  hrefl
 ```
 
-`hdef` type-checks the RHS and calls `Env.addDef`.  The type and RHS are
-elaborated separately, so write binders on the RHS (`fun {A} (x : A) => x`)
-rather than mentioning them only in the ascription.  Later `hdef`s see
-earlier ones as Lean constants and as HOL constants in `hol_tm` / `hol_prop`.
+`hdef` type-checks the RHS and calls `Env.addDef`.  Binders may be written
+on the left, Lean-style (`hdef f {A : Type} (x : A) := x`), or as a
+lambda on the RHS.  Later `hdef`s see earlier ones as Lean constants and
+as HOL constants in `hol_tm` / `hol_prop`.
 
-`htheorem` runs a `HolM Thm` script and installs the closed boolean as an
-axiom.  The statement is also registered as a Lean `Prop` axiom (same name)
+`htheorem` installs a closed boolean.  The proof may be a `HolM Thm`
+script, a kernel `Provable` term, or an `hby` tactic block (newline or
+`;`-separated, like Lean `by`).  Left binders are type variables,
+value parameters (`GEN`'d at the end), or hypotheses (`DISCH`'d).
+An unfinished `hby` reports the remaining sequents at that block
+(the cursor after the last tactic), not a literal `_`.
+Those sequents currently go to **Messages** (`logInfoAt`), not the
+Goals panel; `docs/INFOVIEW.md` records how mvcgen and iris-lean get
+a custom Goals view without a widget panel.
+
+The statement is also registered as a Lean `Prop` axiom (same name)
 so later `hdef` / `htheorem` statements can mention it.  The checked proof
 value lives at `name_hthm` (a `Thm`).  In proof scripts, `Hol.thm "…"` and
 `Hol.defn "…"` refer to earlier user declarations.
@@ -322,6 +337,9 @@ should satisfy η (functions *are* graphs), `SELECT` (`Classical.epsilon` /
 - **A verified checker / Candle-style kernel.**  `Provable` is still the
   metatheoretic predicate.  `Thm` / `Hol.*` is an executable LCF layer
   used by `htheorem`; it is not yet proved sound w.r.t. `Provable`.
+- **InfoView Goals for `hby`.**  Unsolved sequents are Messages, not
+  tactic `MVarId`s.  Approaches (proof-mode delaborators vs widgets)
+  are in `docs/INFOVIEW.md`; none of them is implemented.
 - **Isabelle locales, HOL4 type operators, higher-rank polymorphism.**
   User type constructors (`Ty.app name args`) are the natural extension
   once the core model works — they become extra `ρ`-data in the signature.

@@ -384,6 +384,12 @@ theorem gen {Γ t x α} (h : Γ ⊩[env] t)
   have hunf := all_eq_expand α x htAbs
   simpa using eqMp (eq_sym hunf) hexp
 
+/-- `GEN` with no hypotheses.  Used to replay `hby` scripts that bind
+value parameters on the left of `htheorem`. -/
+theorem gen_nil {t x α} (h : [] ⊩[env] t) :
+    [] ⊩[env] Tm.all α (t.abstract x α) :=
+  gen h (by intro hx; cases hx) (by intro r hr; cases hr)
+
 theorem conj {Γ Δ p q : _} (x : Name)
     (hp : Γ ⊩[env] p) (hq : Δ ⊩[env] q)
     (hTΓ : Tm.tru ∉ Γ) (hTΔ : Tm.tru ∉ Δ)

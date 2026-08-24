@@ -456,15 +456,14 @@ def emitHTheoremCertWf (leanN : Lean.Name) (stmt : Tm) : CommandElabM Unit := do
     connThm := connName
   }
 
-def emitHTheoremCertProvable (leanN : Lean.Name) (stmt : Tm) (provProof : Expr) : CommandElabM Unit := do
+def emitHTheoremCertProvable (leanN : Lean.Name) (stmt : Tm) (provProof : Expr)
+    (inferProof : Expr) : CommandElabM Unit := do
   let cert ← getHolCert
   let decls ← getHolDecls
   let envBefore := envExprFromDecls decls
   let envAfter := mkApp (mkApp (mkConst ``Env.addAxiom) envBefore) (toExpr stmt)
   let stmtExpr := toExpr stmt
   let hasEq ← liftTermElabM do mkHasEqFromConn (prevConnExpr cert)
-  let inferProof ← liftTermElabM do
-    proveInferFromDecls decls stmt
   let wfProof :=
     mkAppN (mkConst ``HOLean.Elab.cert_wf_addAxiom)
       #[envBefore, hasEq, prevWfExpr cert, stmtExpr, inferProof]

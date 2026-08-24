@@ -7,6 +7,8 @@ import HOLean.Elab.Translate
 import HOLean.Elab.State
 import HOLean.Elab.Term
 import HOLean.Elab.Kernel
+import HOLean.Elab.Tactic
+import HOLean.Elab.Replay
 import HOLean.Elab.Decl
 import HOLean.Elab.Cert
 import HOLean.Elab.Command

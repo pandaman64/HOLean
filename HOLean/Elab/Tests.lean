@@ -146,7 +146,7 @@ section HDef
 open HOLean.Elab
 open Hol
 
-hdef myId := fun {A : Type} (x : A) => x
+hdef myId {A : Type} (x : A) := x
 
 hdef myNot : Prop → Prop := fun (p : Prop) => p → False
 
@@ -168,6 +168,25 @@ example : hol_tm(myNot) = Tm.const "myNot" (.bool ↝ .bool) := rfl
 
 example : hol_prop(myNot True) =
     Tm.app (Tm.const "myNot" (.bool ↝ .bool)) Tm.tru := rfl
+
+htheorem eq_refl_id {A : Type} (x : A) : x = x := hby
+  hrefl
+
+example : eq_refl_id_hthm.concl =
+    Tm.all (Ty.var "A")
+      ((Tm.mkEq (Ty.var "A") (Tm.fvar "x" (Ty.var "A")) (Tm.fvar "x" (Ty.var "A"))).abstract "x" (Ty.var "A")) :=
+  rfl
+
+/--
+info: 1 subgoal(s)
+[1/1] ⊢ HOLean.Tm.const "tru" (HOLean.Ty.bool)
+---
+error: HOLean: unsolved goals
+1 subgoal(s)
+[1/1] ⊢ HOLean.Tm.const "tru" (HOLean.Ty.bool)
+-/
+#guard_msgs in
+htheorem unfinished_hby : True := hby
 
 /--
 info: HOL term:
