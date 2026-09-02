@@ -18,7 +18,7 @@ Both commands extend the current HOL environment stored in
 `holStateExt`.
 
 * `hdef c binders : τ := rhs` — Lean-style left binders, then `Env.addDef`
-* `htheorem n binders : p := script` — a `HolM Thm` script or kernel
+* `htheorem n binders : p := script` — a `HolM CertifiedThm` script or kernel
   `Provable` proof
 * `htheorem n binders : p := hby tacs` — indented HOL tactic script
 -/
@@ -40,8 +40,8 @@ def currentHolCtx [Monad m] [MonadEnv m] : m HolCtx := do
   let decls ← getHolDecls
   return { env := decls.foldl HolDecl.apply holEnv, decls }
 
-unsafe def evalHolMThm (expected e : Expr) : MetaM (HolM Thm) :=
-  Meta.evalExpr (HolM Thm) expected e
+unsafe def evalHolMCertified (expected e : Expr) : MetaM (HolM CertifiedThm) :=
+  Meta.evalExpr (HolM CertifiedThm) expected e
 
 def checkFresh (holN : HOLean.Name) (leanN : Lean.Name) : CommandElabM Unit := do
   if (← getEnv).find? leanN |>.isSome then
@@ -196,16 +196,16 @@ def elabHolTelescope (binders : Array Syntax) (propStx : Syntax)
     elabHolTelescopeFromFVars xs e decls
 
 /-- Close an executable theorem that proved the *open* sequent of `tel`. -/
-def closeThmWithTelescope (tel : HolTelescope) (th : Thm) : HolM Thm := do
-  if th.concl == tel.stmt && th.hyps.isEmpty then
-    return th
-  let mut th := th
-  if th.concl == tel.concl then
+def closeThmWithTelescope (tel : HolTelescope) (ct : CertifiedThm) : HolM CertifiedThm := do
+  if ct.thm.concl == tel.stmt && ct.thm.hyps.isEmpty then
+    return ct
+  let mut ct := ct
+  if ct.thm.concl == tel.concl then
     for p in tel.hyps.reverse do
-      th ← Hol.disch p th
+      ct ← Hol.disch p ct
     for (n, α) in tel.params.reverse do
-      th ← Hol.gen n α th
-  return th
+      ct ← Hol.gen n α ct
+  return ct
 
 def binderSyntaxes (stx : Syntax) : Array Syntax :=
   stx.getArgs.filter fun s => !s.isAtom && !s.isMissing
@@ -294,7 +294,7 @@ unsafe def elabHTheorem : CommandElab := fun stx => do
   let holN := holName short
   checkFresh holN leanN
   let decls ← getHolDecls
-  let (tel, thm, provProof?) ← liftTermElabM do
+  let (tel, ct?, provProof?) ← liftTermElabM do
     Term.elabBinders binders fun xs => do
       let e ← elabLean propStx (mkSort 0)
       let tel ← elabHolTelescopeFromFVars xs e decls
@@ -316,20 +316,26 @@ unsafe def elabHTheorem : CommandElab := fun stx => do
             pure none
       catch _ =>
         pure none
-      let thm ← match provProof? with
+      let ct? ← match provProof? with
       | some _ =>
-        pure { hyps := [], concl := tel.stmt }
+        pure none
       | none =>
-        let expected ← Term.elabTerm (← `(HolM Thm)) none
+        let expected ← Term.elabTerm (← `(HolM CertifiedThm)) none
         let prf ← Term.elabTermAndSynthesize prfStx expected
         let prf ← instantiateMVars prf
-        let tac ← evalHolMThm expected prf
+        let tac ← evalHolMCertified expected prf
         let ctx ← currentHolCtx
         match HolM.run (do closeThmWithTelescope tel (← tac)) ctx with
         | .error msg => throwError "HOLean: {msg}"
-        | .ok thm => pure thm
-      pure (tel, thm, provProof?)
-  finishHTheorem leanN holN tel.stmt tel.propType thm provProof?
+        | .ok ct => pure (some ct)
+      pure (tel, ct?, provProof?)
+  match provProof? with
+  | some prov =>
+    let thm : Thm := { hyps := [], concl := tel.stmt }
+    finishHTheorem leanN holN tel.stmt tel.propType thm (some prov)
+  | none =>
+    let some ct := ct? | throwError "HOLean: internal: missing certified theorem"
+    finishTacticTheorem leanN holN tel.stmt tel.propType ct
 
 @[command_elab htheoremHByCmd]
 def elabHTheoremHBy : CommandElab := fun stx => do

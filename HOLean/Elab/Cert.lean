@@ -136,6 +136,9 @@ theorem cert_prov_weaken {env env' : Env} {p : Tm} (hle : env.LE env') (h : Prov
 theorem hasEq_of_conn {env : Env} (conn : Env.HasConnectives env) : Env.HasEq env :=
   inferInstance
 
+theorem hasSelect_of_conn {env : Env} (conn : Env.HasConnectives env) : Env.HasSelect env :=
+  inferInstance
+
 theorem cert_denote_falsum {env : Env} (conn : Env.HasConnectives env)
     (M : EnvModel env TyVal.std) (ξ : FVarVal TyVal.std) :
     Tm.falsum.denote M.interp ξ [] = zfFalse := by
