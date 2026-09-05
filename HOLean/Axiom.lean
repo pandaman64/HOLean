@@ -76,10 +76,11 @@ inductive HOLAxiom : Tm → Prop where
   | select : HOLAxiom selectAxiom
   | infinity : HOLAxiom infinityAxiom
 
-/-- Initial HOL environment: defined connectives plus the three axioms. -/
-def holEnv : Env where
-  constants := holLogic.constants
-  axioms := fun t => holLogic.axioms t ∨ HOLAxiom t
+/-- Initial HOL environment: defined connectives plus the three closed axioms.
+Axioms are prepended newest-first: `[infinityAxiom, selectAxiom, etaAxiom] ++
+holLogic.axioms`. -/
+def holEnv : Env :=
+  ((holLogic.addAxiom etaAxiom).addAxiom selectAxiom).addAxiom infinityAxiom
 
 instance : Env.HasEq holEnv where
   eq_const := Env.HasEq.eq_const (env := holLogic)
@@ -89,30 +90,16 @@ instance : Env.HasSelect holEnv where
 
 instance : Env.HasPrims holEnv where
 
-instance : Env.HasConnectives holEnv where
-  tru_const := Env.HasConnectives.tru_const (env := holLogic)
-  and_const := Env.HasConnectives.and_const (env := holLogic)
-  imp_const := Env.HasConnectives.imp_const (env := holLogic)
-  all_const := Env.HasConnectives.all_const (env := holLogic)
-  falsum_const := Env.HasConnectives.falsum_const (env := holLogic)
-  not_const := Env.HasConnectives.not_const (env := holLogic)
-  or_const := Env.HasConnectives.or_const (env := holLogic)
-  ex_const := Env.HasConnectives.ex_const (env := holLogic)
-  oneOne_const := Env.HasConnectives.oneOne_const (env := holLogic)
-  onto_const := Env.HasConnectives.onto_const (env := holLogic)
-  tru_ax := Or.inl (Env.HasConnectives.tru_ax (env := holLogic))
-  and_ax := Or.inl (Env.HasConnectives.and_ax (env := holLogic))
-  imp_ax := Or.inl (Env.HasConnectives.imp_ax (env := holLogic))
-  all_ax := Or.inl (Env.HasConnectives.all_ax (env := holLogic))
-  falsum_ax := Or.inl (Env.HasConnectives.falsum_ax (env := holLogic))
-  not_ax := Or.inl (Env.HasConnectives.not_ax (env := holLogic))
-  or_ax := Or.inl (Env.HasConnectives.or_ax (env := holLogic))
-  ex_ax := Or.inl (Env.HasConnectives.ex_ax (env := holLogic))
-  oneOne_ax := Or.inl (Env.HasConnectives.oneOne_ax (env := holLogic))
-  onto_ax := Or.inl (Env.HasConnectives.onto_ax (env := holLogic))
+instance : Env.HasConnectives holEnv :=
+  letI : Env.HasConnectives (holLogic.addAxiom etaAxiom) :=
+    Env.HasConnectives.addAxiom etaAxiom
+  letI : Env.HasConnectives ((holLogic.addAxiom etaAxiom).addAxiom selectAxiom) :=
+    Env.HasConnectives.addAxiom selectAxiom
+  Env.HasConnectives.addAxiom infinityAxiom
 
 theorem holLogic_le_holEnv : holLogic.LE holEnv :=
-  ⟨fun _ _ h => h, fun _ h => Or.inl h⟩
+  (Env.LE.addAxiom holLogic etaAxiom).trans
+    ((Env.LE.addAxiom _ selectAxiom).trans (Env.LE.addAxiom _ infinityAxiom))
 
 theorem holCore_le_holEnv : holCore.LE holEnv :=
   holCore_le_holLogic.trans holLogic_le_holEnv
@@ -159,12 +146,31 @@ theorem HOLAxiom.bool_typed {p} (h : HOLAxiom p) : HasType holLogic [] p .bool :
   | select => exact HasType.of_selectAxiom
   | infinity => exact HasType.of_infinityAxiom
 
-theorem holEnv_WF : holEnv.WF := fun p hp =>
-  match hp with
-  | Or.inl h => (holLogic_WF p h).weakenEnv holLogic_le_holEnv
-  | Or.inr h => (HOLAxiom.bool_typed h).weakenEnv holLogic_le_holEnv
+theorem holEnv_axioms_eta : etaAxiom ∈ holEnv.axioms :=
+  List.Mem.tail _ (List.Mem.tail _ (List.Mem.head _))
+
+theorem holEnv_axioms_select : selectAxiom ∈ holEnv.axioms :=
+  List.Mem.tail _ (List.Mem.head _)
+
+theorem holEnv_axioms_infinity : infinityAxiom ∈ holEnv.axioms :=
+  List.Mem.head _
+
+theorem HOLAxiom.mem_holEnv {p} (h : HOLAxiom p) : p ∈ holEnv.axioms := by
+  cases h with
+  | eta => exact holEnv_axioms_eta
+  | select => exact holEnv_axioms_select
+  | infinity => exact holEnv_axioms_infinity
+
+theorem holEnv_WF : holEnv.WF := by
+  have hη := holLogic_WF.addAxiom (HasType.of_etaAxiom (env := holLogic))
+  have hsel := hη.addAxiom
+    ((HasType.of_selectAxiom (env := holLogic)).weakenEnv (Env.LE.addAxiom holLogic etaAxiom))
+  exact hsel.addAxiom
+    ((HasType.of_infinityAxiom (env := holLogic)).weakenEnv
+      ((Env.LE.addAxiom holLogic etaAxiom).trans
+        (Env.LE.addAxiom (holLogic.addAxiom etaAxiom) selectAxiom)))
 
 theorem Provable.hol_ax {p} (h : HOLAxiom p) : [] ⊩[holEnv] p :=
-  of_axiom holEnv_WF (Or.inr h)
+  of_axiom holEnv_WF (HOLAxiom.mem_holEnv h)
 
 end HOLean

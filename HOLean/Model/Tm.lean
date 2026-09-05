@@ -75,7 +75,7 @@ noncomputable def FVarVal.ofNonempty {ρ : TyVal} (hρ : ρ.Nonempty) : FVarVal 
 structure EnvInterp (env : Env) (ρ : TyVal) where
   interp : Name → Ty → ZFSet
   mem : ∀ {n inst gen},
-    env.constants n = some gen →
+    env.lookup n = some gen →
     gen.instantiates inst →
     interp n inst ∈ inst.denote ρ
 

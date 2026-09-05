@@ -97,7 +97,7 @@ inductive Provable (env : Env) : List Tm → Tm → Prop where
   /-- Admit one environment axiom, given that it is a closed boolean.
   In a well-formed environment this typing is `env.WF`; see `of_axiom`.
   Definitions are axioms `⊢ c = t`; the HOL axioms live in `holEnv`. -/
-  | ax {p} (hp : env.axioms p) (hty : HasType env [] p .bool) :
+  | ax {p} (hp : p ∈ env.axioms) (hty : HasType env [] p .bool) :
       Provable env [] p
 
 scoped notation:50 Γ:51 " ⊩[" env:0 "] " p:50 => Provable env Γ p
@@ -199,7 +199,7 @@ theorem bool_typed [Env.HasEq env] {Γ p} (h : Γ ⊩[env] p) :
     · exact hty
 
 /-- Admit an axiom of a well-formed environment. -/
-theorem of_axiom {p} (hwf : env.WF) (hp : env.axioms p) : [] ⊩[env] p :=
+theorem of_axiom {p} (hwf : env.WF) (hp : p ∈ env.axioms) : [] ⊩[env] p :=
   ax hp (hwf.typed hp)
 
 theorem concl_bool [Env.HasEq env] {Γ p} (h : Γ ⊩[env] p) : HasType env [] p .bool :=

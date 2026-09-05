@@ -83,20 +83,20 @@ instance (n : Name) : Decidable (holNameNotReserved n) := by
   infer_instance
 
 theorem cert_wf_addDef (env : Env) (hasEq : Env.HasEq env) (n : Name) (ty : Ty) (rhs : Tm)
-    (hwf : env.WF) (hfresh : env.constants n = none) (hne : n ≠ eqName)
+    (hwf : env.WF) (hfresh : env.lookup n = none) (hne : n ≠ eqName)
     (hinfer : rhs.infer env [] = some ty) :
     (env.addDef n ty rhs).WF := by
   letI := hasEq
   exact Env.WF.addDef_infer hwf hfresh hne hinfer
 
 theorem cert_conn_addDef (env : Env) (conn : Env.HasConnectives env) (n : Name) (ty : Ty) (rhs : Tm)
-    (hfresh : env.constants n = none) (hnames : nameNotInConnectiveAndPrim n) :
+    (hfresh : env.lookup n = none) (hnames : nameNotInConnectiveAndPrim n) :
     Env.HasConnectives (env.addDef n ty rhs) := by
   letI := conn
   exact Env.HasConnectives.addDef hfresh hnames
 
 noncomputable def cert_model_addDef (env : Env) (conn : Env.HasConnectives env) (n : Name) (ty : Ty) (rhs : Tm)
-    (model : EnvModel env TyVal.std) (hfresh : env.constants n = none) (hne : n ≠ eqName)
+    (model : EnvModel env TyVal.std) (hfresh : env.lookup n = none) (hne : n ≠ eqName)
     (hwf : env.WF) (hinfer : rhs.infer env [] = some ty) (lc : rhs.LC 0 = true)
     (hvars : ∀ x ∈ rhs.tyvars, x ∈ ty.tyvars) (hfree : ∀ x α, rhs.freeIn x α = false) :
     EnvModel (env.addDef n ty rhs) TyVal.std := by
@@ -124,7 +124,7 @@ theorem cert_holEnv_le_thm (env : Env) (stmt : Tm) (h : holEnv.LE env) :
   h.trans (Env.LE.addAxiom env stmt)
 
 theorem cert_holEnv_le_def (env : Env) (n : Name) (ty : Ty) (rhs : Tm)
-    (hfresh : env.constants n = none) (h : holEnv.LE env) :
+    (hfresh : env.lookup n = none) (h : holEnv.LE env) :
     holEnv.LE (env.addDef n ty rhs) :=
   h.trans (Env.LE.addDef_of_fresh hfresh)
 
@@ -198,7 +198,7 @@ def mkOptionNone (α : Expr) : Expr :=
 
 def mkConstantsNoneType (envExpr holN : Expr) : MetaM Expr := do
   mkEqApp
-    (mkApp2 (mkConst ``Env.constants) envExpr holN)
+    (mkApp2 (mkConst ``Env.lookup) envExpr holN)
     (mkOptionNone (mkConst ``Ty))
 
 def mkInferSomeType (envExpr rhs ty : Expr) : MetaM Expr := do

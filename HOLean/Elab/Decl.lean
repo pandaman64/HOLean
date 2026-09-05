@@ -47,7 +47,7 @@ def checkFresh (holN : HOLean.Name) (leanN : Lean.Name) : CommandElabM Unit := d
   if (← getEnv).find? leanN |>.isSome then
     throwError "HOLean: Lean name `{leanN}` is already declared"
   let env ← currentHolEnv
-  if env.constants holN |>.isSome then
+  if env.lookup holN |>.isSome then
     throwError "HOLean: constant `{holN}` is already declared"
   if holNameTaken (← getHolDecls) holN then
     throwError "HOLean: name `{holN}` is already declared"

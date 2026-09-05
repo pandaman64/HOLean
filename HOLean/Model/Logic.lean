@@ -94,7 +94,7 @@ theorem HasType.denote_bool_mem {Γ p} (hp : HasType env Γ p .bool)
 /-- Unfold a monomorphic defining equation `n = rhs`. -/
 theorem EnvModel.unfold_mono [Env.HasEq env] (M : EnvModel env ρ)
     {n : Name} {ty rhs : _}
-    (hax : env.axioms (Tm.mkEq ty (.const n ty) rhs))
+    (hax : (Tm.mkEq ty (.const n ty) rhs) ∈ env.axioms)
     (hc : HasType env [] (.const n ty) ty)
     (hr : HasType env [] rhs ty) (ξ : FVarVal ρ) :
     (Tm.const n ty).denote M.interp ξ [] = rhs.denote M.interp ξ [] :=
@@ -103,7 +103,7 @@ theorem EnvModel.unfold_mono [Env.HasEq env] (M : EnvModel env ρ)
 /-- Unfold a schematic defining equation at a type instance `ty.inst θ`. -/
 theorem EnvModel.unfold_poly [Env.HasEq env] (M : EnvModel env ρ)
     {n : Name} {ty rhs : _} (θ : TySubst)
-    (hax : env.axioms (Tm.mkEq ty (.const n ty) rhs))
+    (hax : (Tm.mkEq ty (.const n ty) rhs) ∈ env.axioms)
     (hc : HasType env [] (.const n ty) ty)
     (hr : HasType env [] rhs ty) (ξ : FVarVal ρ) :
     (Tm.const n (ty.inst θ)).denote M.interp ξ [] =

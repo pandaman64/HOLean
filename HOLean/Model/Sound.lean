@@ -31,7 +31,7 @@ and Hilbert choice is the SELECT *axiom*, checked by `ax_ok` (see
 structure EnvModel (env : Env) (ρ : TyVal) where
   interp : EnvInterp env ρ
   eq_ok : ∀ α, interp.interp eqName (α ↝ α ↝ .bool) = zfEq (α.denote ρ)
-  ax_ok : ∀ (θ : TySubst) (p : Tm), env.axioms p →
+  ax_ok : ∀ (θ : TySubst) (p : Tm), p ∈ env.axioms →
     ∀ ξ : FVarVal (ρ.inst θ), p.denote (interp.inst θ) ξ [] = zfTrue
 
 variable {env : Env}
@@ -97,7 +97,7 @@ noncomputable def EnvModel.inst {ρ : TyVal} (M : EnvModel env ρ) (θ : TySubst
 
 /-- An axiom denotes `zfTrue` already at the uninstantiated valuation. -/
 theorem EnvModel.ax_denote {ρ : TyVal} (M : EnvModel env ρ) {p}
-    (hp : env.axioms p) (ξ : FVarVal ρ) :
+    (hp : p ∈ env.axioms) (ξ : FVarVal ρ) :
     p.denote M.interp ξ [] = zfTrue := by
   have hρ : ∀ α : Ty, Ty.denote ρ α = Ty.denote (ρ.inst []) α := fun α =>
     (Ty.denote_instVal_nil ρ α).symm
@@ -114,8 +114,8 @@ noncomputable def EnvModel.holCore (ρ : TyVal) (hρ : ρ.Nonempty) :
   eq_ok := EnvInterp.holCore_interp_eq ρ hρ
   ax_ok := fun _ _ hp => nomatch hp
 
-theorem holCore_axioms_empty (p : Tm) : holCore.axioms p → False :=
-  id
+theorem holCore_axioms_empty (p : Tm) : p ∈ holCore.axioms → False :=
+  fun h => nomatch h
 
 /-- Soundness of the ten rules plus `ax`. -/
 theorem Provable.sound [Env.HasEq env]

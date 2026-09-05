@@ -43,17 +43,36 @@ def selectTy : Ty :=
 theorem eqName_ne_selectName : eqName ≠ selectName := by
   decide
 
+/-- Look up a name in a constant association list (first match wins). -/
+def ConstTable.lookup (cs : List (Name × Ty)) (n : Name) : Option Ty :=
+  match cs with
+  | [] => none
+  | (m, ty) :: rest => if m = n then some ty else ConstTable.lookup rest n
+
+@[simp] theorem ConstTable.lookup_nil (n : Name) : ConstTable.lookup [] n = none := rfl
+
+@[simp] theorem ConstTable.lookup_cons_self (n : Name) (ty : Ty) (rest : List (Name × Ty)) :
+    ConstTable.lookup ((n, ty) :: rest) n = some ty := by
+  simp [ConstTable.lookup]
+
+theorem ConstTable.lookup_cons_of_ne {n m : Name} (ty : Ty) (rest : List (Name × Ty))
+    (h : m ≠ n) :
+    ConstTable.lookup ((m, ty) :: rest) n = ConstTable.lookup rest n := by
+  simp [ConstTable.lookup, h]
+
 /-- Initial constant table: `eq` and `select`. -/
-def holConstants (n : Name) : Option Ty :=
-  if n = eqName then some eqTy
-  else if n = selectName then some selectTy
-  else none
+def holConstants : List (Name × Ty) :=
+  [(eqName, eqTy), (selectName, selectTy)]
 
-@[simp] theorem holConstants_eq : holConstants eqName = some eqTy := by
-  simp [holConstants]
+@[simp] theorem holConstants_eq : ConstTable.lookup holConstants eqName = some eqTy := by
+  simp [holConstants, ConstTable.lookup]
 
-@[simp] theorem holConstants_select : holConstants selectName = some selectTy := by
-  simp [holConstants, show selectName ≠ eqName from eqName_ne_selectName.symm]
+@[simp] theorem holConstants_select : ConstTable.lookup holConstants selectName = some selectTy := by
+  simp [holConstants, ConstTable.lookup, eqName_ne_selectName]
+
+theorem holConstants_of_ne {n : Name} (heq : n ≠ eqName) (hsel : n ≠ selectName) :
+    ConstTable.lookup holConstants n = none := by
+  simp [holConstants, ConstTable.lookup, heq.symm, hsel.symm]
 
 theorem eqTy_instantiates (α : Ty) :
     eqTy.instantiates (α ↝ α ↝ .bool) :=
@@ -62,9 +81,5 @@ theorem eqTy_instantiates (α : Ty) :
 theorem selectTy_instantiates (α : Ty) :
     selectTy.instantiates ((α ↝ .bool) ↝ α) :=
   ⟨[(primTyVar, α)], by simp [selectTy, primTyVar, Ty.inst, TySubst.lookup]⟩
-
-theorem holConstants_of_ne {n : Name} (heq : n ≠ eqName) (hsel : n ≠ selectName) :
-    holConstants n = none := by
-  simp [holConstants, heq, hsel]
 
 end HOLean

@@ -114,8 +114,8 @@ partial def elabHasType (envE connE : Expr) (t : Tm) (Γ : List Ty) :
         return (pf, (α ↝ .bool) ↝ .bool)
       | _ => throwError "HOLean: cannot type `ex` at {repr τ}"
     else
-      -- User / other constants: require `env.constants n = some τ` (exact).
-      let lhs := mkApp2 (mkConst ``Env.constants) envE (toExpr n)
+      -- User / other constants: require `env.lookup n = some τ` (exact).
+      let lhs := mkApp2 (mkConst ``Env.lookup) envE (toExpr n)
       let rhs :=
         mkApp2 (mkConst ``Option.some [Level.zero]) (mkConst ``Ty) (toExpr τ)
       unless ← isDefEq lhs rhs do
@@ -241,7 +241,7 @@ def mkEnvLe (fromD toD : Array HolDecl) : TermElabM Expr := do
       let rhsExpr := toExpr rhs
       let freshTy ← liftMetaM do
         mkEqApp
-          (mkApp2 (mkConst ``Env.constants) envE holNExpr)
+          (mkApp2 (mkConst ``Env.lookup) envE holNExpr)
           (mkOptionNone (mkConst ``Ty))
       let fresh ← proveByRfl freshTy
       let step ← liftMetaM do
@@ -304,14 +304,14 @@ theorem substOk_nil {env : Env} : Tm.Subst.Ok env ([] : Tm.Subst) := by
   intro y γ v hv
   simp [Tm.Subst.lookup] at hv
 
-theorem holEnv_axioms_infinity : holEnv.axioms infinityAxiom :=
-  Or.inr HOLAxiom.infinity
+theorem holEnv_axioms_infinity : infinityAxiom ∈ holEnv.axioms :=
+  HOLean.holEnv_axioms_infinity
 
-theorem holEnv_axioms_eta : holEnv.axioms etaAxiom :=
-  Or.inr HOLAxiom.eta
+theorem holEnv_axioms_eta : etaAxiom ∈ holEnv.axioms :=
+  HOLean.holEnv_axioms_eta
 
-theorem holEnv_axioms_select : holEnv.axioms selectAxiom :=
-  Or.inr HOLAxiom.select
+theorem holEnv_axioms_select : selectAxiom ∈ holEnv.axioms :=
+  HOLean.holEnv_axioms_select
 
 /-- A name reserved for `SPEC` β-conversion.  Bodies from η / SELECT have no
 fvars, so this is always fresh for those axioms; other uses should ensure
@@ -412,7 +412,7 @@ def mkSubstOk (envE connE : Expr) (σ : Tm.Subst) : TermElabM Expr := do
   | _ =>
     throwError "HOLean: INST with multiple substitutions is not yet replayed"
 
-/-- Weaken an `env.axioms p` proof along subsequent `HolDecl`s. -/
+/-- Weaken an `p ∈ env.axioms` proof along subsequent `HolDecl`s. -/
 def weakenAxiomsProof (fromDecls toDecls : Array HolDecl) (p : Tm) (pf : Expr) :
     TermElabM Expr := do
   unless fromDecls.size ≤ toDecls.size do
@@ -433,7 +433,7 @@ def weakenAxiomsProof (fromDecls toDecls : Array HolDecl) (p : Tm) (pf : Expr) :
       envE := mkApp2 (mkConst ``Env.addAxiom) envE (toExpr stmt)
   return pf
 
-/-- Prove `env.axioms p` for a definitional equation or closed HOL axiom. -/
+/-- Prove `p ∈ env.axioms` for a definitional equation or closed HOL axiom. -/
 def mkAxiomsProof (decls : Array HolDecl) (envE connE : Expr) (p : Tm) :
     TermElabM Expr := do
   let tryConnAx (axName : Lean.Name) (expected : Tm) : TermElabM (Option Expr) := do

@@ -33,7 +33,7 @@ private theorem htBvar1 {α β : Ty} {Γ} :
 def EnvInterp.castConstants {env env' : Env} (I : EnvInterp env ρ)
     (h : env'.constants = env.constants) : EnvInterp env' ρ where
   interp := I.interp
-  mem := fun hconst => I.mem (h ▸ hconst)
+  mem := fun hconst => I.mem (by simpa [Env.lookup, h] using hconst)
 
 theorem EnvInterp.castConstants_interp {env env' : Env} (I : EnvInterp env ρ)
     (h : env'.constants = env.constants) (n : Name) (α : Ty) :
@@ -233,9 +233,10 @@ theorem EnvModel.denote_infinity [Env.HasConnectives env]
   exact happ.symm ▸ hpred
 
 /-- `holEnv` has the same constants as `holLogic`. -/
-theorem holEnv_constants : holEnv.constants = holLogic.constants := rfl
+theorem holEnv_constants : holEnv.constants = holLogic.constants := by
+  simp [holEnv, Env.addAxiom]
 
-/-- The three axioms denote `zfTrue` already in the `holLogic` model. -/
+/-- Denotation of the three closed HOL axioms in the `holLogic` model. -/
 theorem HOLAxiom.denote_holLogic {p} (h : HOLAxiom p)
     {ρ : TyVal} (hρ : ρ.Nonempty) (θ : TySubst) (ξ : FVarVal (ρ.inst θ)) :
     p.denote ((EnvModel.holLogic ρ hρ).interp.inst θ) ξ [] = zfTrue := by
@@ -261,24 +262,46 @@ theorem HOLAxiom.denote_holLogic {p} (h : HOLAxiom p)
   | infinity =>
     exact EnvModel.denote_infinity ((EnvModel.holLogic ρ hρ).inst θ) ξ
 
+private theorem holEnv_ax_ok_core {ρ : TyVal} (hρ : ρ.Nonempty) (θ : TySubst)
+    (p : Tm) (hp : p ∈ holEnv.axioms) (ξ : FVarVal (ρ.inst θ)) :
+    p.denote ((EnvModel.holLogic ρ hρ).interp.inst θ) ξ [] = zfTrue := by
+  -- holEnv.axioms = infinity :: select :: eta :: holLogic.axioms
+  cases hp with
+  | head =>
+    exact EnvModel.denote_infinity ((EnvModel.holLogic ρ hρ).inst θ) ξ
+  | tail _ hp1 =>
+    cases hp1 with
+    | head =>
+      have hA : ((Ty.var primTyVar).denote (ρ.inst θ)).Nonempty :=
+        Ty.denote_nonempty (TyVal.inst_nonempty hρ θ) (.var primTyVar)
+      have hsel :
+          ((EnvModel.holLogic ρ hρ).interp.inst θ).interp selectName
+              ((.var primTyVar ↝ .bool) ↝ .var primTyVar) =
+            zfSelect ((Ty.var primTyVar).denote (ρ.inst θ)) hA := by
+        simp only [EnvInterp.inst_interp]
+        have h :=
+          EnvModel.holLogic_interp_select ρ hρ ((Ty.var primTyVar).inst θ)
+        convert h using 2
+        · simp [Ty.inst]
+        · exact (Ty.denote_inst ρ θ (.var primTyVar)).symm
+      exact EnvModel.denote_select ((EnvModel.holLogic ρ hρ).inst θ) ξ hsel
+    | tail _ hp2 =>
+      cases hp2 with
+      | head =>
+        exact EnvModel.denote_eta ((EnvModel.holLogic ρ hρ).inst θ) ξ
+      | tail _ hold =>
+        exact (EnvModel.holLogic ρ hρ).ax_ok θ p hold ξ
+
 noncomputable def EnvModel.holEnv (ρ : TyVal) (hρ : ρ.Nonempty) :
     EnvModel holEnv ρ where
   interp := (EnvModel.holLogic ρ hρ).interp.castConstants holEnv_constants
   eq_ok := (EnvModel.holLogic ρ hρ).eq_ok
   ax_ok := fun θ p hp ξ =>
-    match hp with
-    | Or.inl hold =>
-      (Tm.denote_interp_eq_env p
-          ((EnvModel.holLogic ρ hρ).interp.inst θ)
-          (((EnvModel.holLogic ρ hρ).interp.castConstants holEnv_constants).inst θ)
-          ξ [] (fun _ _ => rfl)).symm.trans
-        ((EnvModel.holLogic ρ hρ).ax_ok θ p hold ξ)
-    | Or.inr hax =>
-      (Tm.denote_interp_eq_env p
-          ((EnvModel.holLogic ρ hρ).interp.inst θ)
-          (((EnvModel.holLogic ρ hρ).interp.castConstants holEnv_constants).inst θ)
-          ξ [] (fun _ _ => rfl)).symm.trans
-        (HOLAxiom.denote_holLogic hax hρ θ ξ)
+    (Tm.denote_interp_eq_env p
+        ((EnvModel.holLogic ρ hρ).interp.inst θ)
+        (((EnvModel.holLogic ρ hρ).interp.castConstants holEnv_constants).inst θ)
+        ξ [] (fun _ _ => rfl)).symm.trans
+      (holEnv_ax_ok_core hρ θ p hp ξ)
 
 /-- Standard nonempty type valuation: every variable is `omega`. -/
 def TyVal.std : TyVal.{0} := fun _ => omega

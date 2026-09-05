@@ -145,26 +145,26 @@ end Tm
 /-- The environment has the defined logical constants and their defining
 equations. -/
 class Env.HasConnectives (env : Env) extends Env.HasPrims env where
-  tru_const : env.constants truName = some truTy
-  and_const : env.constants andName = some andTy
-  imp_const : env.constants impName = some impTy
-  all_const : env.constants allName = some allTy
-  falsum_const : env.constants falsumName = some falsumTy
-  not_const : env.constants notName = some notTy
-  or_const : env.constants orName = some orTy
-  ex_const : env.constants exName = some exTy
-  oneOne_const : env.constants oneOneName = some oneOneTy
-  onto_const : env.constants ontoName = some ontoTy
-  tru_ax : env.axioms (Tm.mkEq truTy Tm.tru Tm.truDef)
-  and_ax : env.axioms (Tm.mkEq andTy (.const andName andTy) Tm.andDef)
-  imp_ax : env.axioms (Tm.mkEq impTy (.const impName impTy) Tm.impDef)
-  all_ax : env.axioms (Tm.mkEq allTy (.const allName allTy) Tm.allDef)
-  falsum_ax : env.axioms (Tm.mkEq falsumTy Tm.falsum Tm.falsumDef)
-  not_ax : env.axioms (Tm.mkEq notTy (.const notName notTy) Tm.notDef)
-  or_ax : env.axioms (Tm.mkEq orTy (.const orName orTy) Tm.orDef)
-  ex_ax : env.axioms (Tm.mkEq exTy (.const exName exTy) Tm.exDef)
-  oneOne_ax : env.axioms (Tm.mkEq oneOneTy (.const oneOneName oneOneTy) Tm.oneOneDef)
-  onto_ax : env.axioms (Tm.mkEq ontoTy (.const ontoName ontoTy) Tm.ontoDef)
+  tru_const : env.lookup truName = some truTy
+  and_const : env.lookup andName = some andTy
+  imp_const : env.lookup impName = some impTy
+  all_const : env.lookup allName = some allTy
+  falsum_const : env.lookup falsumName = some falsumTy
+  not_const : env.lookup notName = some notTy
+  or_const : env.lookup orName = some orTy
+  ex_const : env.lookup exName = some exTy
+  oneOne_const : env.lookup oneOneName = some oneOneTy
+  onto_const : env.lookup ontoName = some ontoTy
+  tru_ax : (Tm.mkEq truTy Tm.tru Tm.truDef) ∈ env.axioms
+  and_ax : (Tm.mkEq andTy (.const andName andTy) Tm.andDef) ∈ env.axioms
+  imp_ax : (Tm.mkEq impTy (.const impName impTy) Tm.impDef) ∈ env.axioms
+  all_ax : (Tm.mkEq allTy (.const allName allTy) Tm.allDef) ∈ env.axioms
+  falsum_ax : (Tm.mkEq falsumTy Tm.falsum Tm.falsumDef) ∈ env.axioms
+  not_ax : (Tm.mkEq notTy (.const notName notTy) Tm.notDef) ∈ env.axioms
+  or_ax : (Tm.mkEq orTy (.const orName orTy) Tm.orDef) ∈ env.axioms
+  ex_ax : (Tm.mkEq exTy (.const exName exTy) Tm.exDef) ∈ env.axioms
+  oneOne_ax : (Tm.mkEq oneOneTy (.const oneOneName oneOneTy) Tm.oneOneDef) ∈ env.axioms
+  onto_ax : (Tm.mkEq ontoTy (.const ontoName ontoTy) Tm.ontoDef) ∈ env.axioms
 
 variable {env : Env}
 
@@ -307,127 +307,127 @@ def envOneOne : Env := envEx.addDef oneOneName oneOneTy Tm.oneOneDef
 def holLogic : Env := envOneOne.addDef ontoName ontoTy Tm.ontoDef
 
 private theorem fresh_core {n : Name} (heq : n ≠ eqName) (hsel : n ≠ selectName) :
-    holCore.constants n = none :=
+    holCore.lookup n = none :=
   holConstants_of_ne heq hsel
 
-theorem envTru_constants_tru : envTru.constants truName = some truTy := by
+theorem envTru_constants_tru : envTru.lookup truName = some truTy := by
   simp [envTru]
 
 private theorem envTru_fresh {n : Name}
     (h : n ≠ truName) (heq : n ≠ eqName) (hsel : n ≠ selectName) :
-    envTru.constants n = none := by
+    envTru.lookup n = none := by
   simp [envTru, Env.addDef_constants_of_ne (h := h), fresh_core heq hsel]
 
-theorem envAnd_constants_and : envAnd.constants andName = some andTy := by
+theorem envAnd_constants_and : envAnd.lookup andName = some andTy := by
   simp [envAnd]
 
 private theorem envAnd_fresh {n : Name}
     (h1 : n ≠ andName) (h2 : n ≠ truName) (heq : n ≠ eqName) (hsel : n ≠ selectName) :
-    envAnd.constants n = none := by
+    envAnd.lookup n = none := by
   simp [envAnd, Env.addDef_constants_of_ne (h := h1), envTru_fresh h2 heq hsel]
 
-theorem envImp_constants_imp : envImp.constants impName = some impTy := by
+theorem envImp_constants_imp : envImp.lookup impName = some impTy := by
   simp [envImp]
 
 private theorem envImp_fresh {n : Name}
     (h1 : n ≠ impName) (h2 : n ≠ andName) (h3 : n ≠ truName)
     (heq : n ≠ eqName) (hsel : n ≠ selectName) :
-    envImp.constants n = none := by
+    envImp.lookup n = none := by
   simp [envImp, Env.addDef_constants_of_ne (h := h1), envAnd_fresh h2 h3 heq hsel]
 
-theorem envAll_constants_all : envAll.constants allName = some allTy := by
+theorem envAll_constants_all : envAll.lookup allName = some allTy := by
   simp [envAll]
 
 private theorem envAll_fresh {n : Name}
     (h1 : n ≠ allName) (h2 : n ≠ impName) (h3 : n ≠ andName) (h4 : n ≠ truName)
     (heq : n ≠ eqName) (hsel : n ≠ selectName) :
-    envAll.constants n = none := by
+    envAll.lookup n = none := by
   simp [envAll, Env.addDef_constants_of_ne (h := h1), envImp_fresh h2 h3 h4 heq hsel]
 
-theorem envFalsum_constants_falsum : envFalsum.constants falsumName = some falsumTy := by
+theorem envFalsum_constants_falsum : envFalsum.lookup falsumName = some falsumTy := by
   simp [envFalsum]
 
 private theorem envFalsum_fresh {n : Name}
     (h1 : n ≠ falsumName) (h2 : n ≠ allName) (h3 : n ≠ impName) (h4 : n ≠ andName)
     (h5 : n ≠ truName) (heq : n ≠ eqName) (hsel : n ≠ selectName) :
-    envFalsum.constants n = none := by
+    envFalsum.lookup n = none := by
   simp [envFalsum, Env.addDef_constants_of_ne (h := h1), envAll_fresh h2 h3 h4 h5 heq hsel]
 
-theorem envNot_constants_not : envNot.constants notName = some notTy := by
+theorem envNot_constants_not : envNot.lookup notName = some notTy := by
   simp [envNot]
 
 private theorem envNot_fresh {n : Name}
     (h1 : n ≠ notName) (h2 : n ≠ falsumName) (h3 : n ≠ allName) (h4 : n ≠ impName)
     (h5 : n ≠ andName) (h6 : n ≠ truName) (heq : n ≠ eqName) (hsel : n ≠ selectName) :
-    envNot.constants n = none := by
+    envNot.lookup n = none := by
   simp [envNot, Env.addDef_constants_of_ne (h := h1),
     envFalsum_fresh h2 h3 h4 h5 h6 heq hsel]
 
-theorem envOr_constants_or : envOr.constants orName = some orTy := by
+theorem envOr_constants_or : envOr.lookup orName = some orTy := by
   simp [envOr]
 
 private theorem envOr_fresh {n : Name}
     (h1 : n ≠ orName) (h2 : n ≠ notName) (h3 : n ≠ falsumName) (h4 : n ≠ allName)
     (h5 : n ≠ impName) (h6 : n ≠ andName) (h7 : n ≠ truName)
     (heq : n ≠ eqName) (hsel : n ≠ selectName) :
-    envOr.constants n = none := by
+    envOr.lookup n = none := by
   simp [envOr, Env.addDef_constants_of_ne (h := h1),
     envNot_fresh h2 h3 h4 h5 h6 h7 heq hsel]
 
-theorem envEx_constants_ex : envEx.constants exName = some exTy := by
+theorem envEx_constants_ex : envEx.lookup exName = some exTy := by
   simp [envEx]
 
 private theorem envEx_fresh {n : Name}
     (h1 : n ≠ exName) (h2 : n ≠ orName) (h3 : n ≠ notName) (h4 : n ≠ falsumName)
     (h5 : n ≠ allName) (h6 : n ≠ impName) (h7 : n ≠ andName) (h8 : n ≠ truName)
     (heq : n ≠ eqName) (hsel : n ≠ selectName) :
-    envEx.constants n = none := by
+    envEx.lookup n = none := by
   simp [envEx, Env.addDef_constants_of_ne (h := h1),
     envOr_fresh h2 h3 h4 h5 h6 h7 h8 heq hsel]
 
-theorem envOneOne_constants_oneOne : envOneOne.constants oneOneName = some oneOneTy := by
+theorem envOneOne_constants_oneOne : envOneOne.lookup oneOneName = some oneOneTy := by
   simp [envOneOne]
 
 private theorem envOneOne_fresh {n : Name}
     (h1 : n ≠ oneOneName) (h2 : n ≠ exName) (h3 : n ≠ orName) (h4 : n ≠ notName)
     (h5 : n ≠ falsumName) (h6 : n ≠ allName) (h7 : n ≠ impName) (h8 : n ≠ andName)
     (h9 : n ≠ truName) (heq : n ≠ eqName) (hsel : n ≠ selectName) :
-    envOneOne.constants n = none := by
+    envOneOne.lookup n = none := by
   simp [envOneOne, Env.addDef_constants_of_ne (h := h1),
     envEx_fresh h2 h3 h4 h5 h6 h7 h8 h9 heq hsel]
 
 /-! Typing of defining right-hand sides in the environment that introduces them. -/
 
 private theorem hasType_tru_in (e : Env)
-    (h : e.constants truName = some truTy) {Γ} :
+    (h : e.lookup truName = some truTy) {Γ} :
     HasType e Γ Tm.tru .bool :=
   HasType.const h (Ty.instantiates_self truTy)
 
 private theorem hasType_and_in (e : Env)
-    (h : e.constants andName = some andTy) {Γ p q}
+    (h : e.lookup andName = some andTy) {Γ p q}
     (hp : HasType e Γ p .bool) (hq : HasType e Γ q .bool) :
     HasType e Γ (p.and q) .bool :=
   HasType.app (HasType.app (HasType.const h (Ty.instantiates_self andTy)) hp) hq
 
 private theorem hasType_imp_in (e : Env)
-    (h : e.constants impName = some impTy) {Γ p q}
+    (h : e.lookup impName = some impTy) {Γ p q}
     (hp : HasType e Γ p .bool) (hq : HasType e Γ q .bool) :
     HasType e Γ (p.imp q) .bool :=
   HasType.app (HasType.app (HasType.const h (Ty.instantiates_self impTy)) hp) hq
 
 private theorem hasType_all_in (e : Env)
-    (h : e.constants allName = some allTy) {Γ α P}
+    (h : e.lookup allName = some allTy) {Γ α P}
     (hP : HasType e Γ P (α ↝ .bool)) :
     HasType e Γ (Tm.all α P) .bool :=
   HasType.app (HasType.const h (allTy_instantiates α)) hP
 
 private theorem hasType_falsum_in (e : Env)
-    (h : e.constants falsumName = some falsumTy) {Γ} :
+    (h : e.lookup falsumName = some falsumTy) {Γ} :
     HasType e Γ Tm.falsum .bool :=
   HasType.const h (Ty.instantiates_self falsumTy)
 
 private theorem hasType_ex_in (e : Env)
-    (h : e.constants exName = some exTy) {Γ α P}
+    (h : e.lookup exName = some exTy) {Γ α P}
     (hP : HasType e Γ P (α ↝ .bool)) :
     HasType e Γ (Tm.ex α P) .bool :=
   HasType.app (HasType.const h (exTy_instantiates α)) hP
@@ -449,7 +449,7 @@ private theorem htBvar2 {e : Env} {δ γ α : Ty} {Γ} :
   HasType.bvar (by simp)
 
 private theorem hasType_andDef (e : Env) [Env.HasEq e]
-    (htru : e.constants truName = some truTy) :
+    (htru : e.lookup truName = some truTy) :
     HasType e [] Tm.andDef andTy := by
   rw [Tm.andDef_eq]
   unfold Tm.andExpand Tm.boolCombTy andTy
@@ -463,7 +463,7 @@ private theorem hasType_andDef (e : Env) [Env.HasEq e]
       ((hasType_tru_in e htru).shift0 _)
 
 private theorem hasType_impDef (e : Env) [Env.HasEq e]
-    (hand : e.constants andName = some andTy) :
+    (hand : e.lookup andName = some andTy) :
     HasType e [] Tm.impDef impTy := by
   rw [Tm.impDef_eq]
   unfold Tm.impExpand impTy
@@ -471,7 +471,7 @@ private theorem hasType_impDef (e : Env) [Env.HasEq e]
   exact HasType.mkEq (hasType_and_in e hand htBvar1 htBvar0) htBvar1
 
 private theorem hasType_allDef (e : Env) [Env.HasEq e]
-    (htru : e.constants truName = some truTy) :
+    (htru : e.lookup truName = some truTy) :
     HasType e [] Tm.allDef allTy := by
   rw [Tm.allDef_eq]
   unfold Tm.allExpand allTy
@@ -480,13 +480,13 @@ private theorem hasType_allDef (e : Env) [Env.HasEq e]
     (HasType.lam (hasType_tru_in e htru))
 
 private theorem hasType_falsumDef (e : Env)
-    (hall : e.constants allName = some allTy) :
+    (hall : e.lookup allName = some allTy) :
     HasType e [] Tm.falsumDef .bool :=
   hasType_all_in e hall (HasType.lam (HasType.bvar (by simp)))
 
 private theorem hasType_notDef (e : Env)
-    (himp : e.constants impName = some impTy)
-    (hfals : e.constants falsumName = some falsumTy) :
+    (himp : e.lookup impName = some impTy)
+    (hfals : e.lookup falsumName = some falsumTy) :
     HasType e [] Tm.notDef notTy := by
   rw [Tm.notDef_eq]
   unfold notTy
@@ -494,8 +494,8 @@ private theorem hasType_notDef (e : Env)
   exact hasType_imp_in e himp (HasType.bvar (by simp)) (hasType_falsum_in e hfals)
 
 private theorem hasType_orDef (e : Env)
-    (hall : e.constants allName = some allTy)
-    (himp : e.constants impName = some impTy) :
+    (hall : e.lookup allName = some allTy)
+    (himp : e.lookup impName = some impTy) :
     HasType e [] Tm.orDef orTy := by
   rw [Tm.orDef_eq]
   unfold orTy
@@ -508,8 +508,8 @@ private theorem hasType_orDef (e : Env)
   exact HasType.bvar (by simp)
 
 private theorem hasType_exDef (e : Env)
-    (hall : e.constants allName = some allTy)
-    (himp : e.constants impName = some impTy) :
+    (hall : e.lookup allName = some allTy)
+    (himp : e.lookup impName = some impTy) :
     HasType e [] Tm.exDef exTy := by
   rw [Tm.exDef_eq]
   unfold exTy
@@ -521,8 +521,8 @@ private theorem hasType_exDef (e : Env)
   exact HasType.app (α := .var primTyVar) htBvar2 htBvar0
 
 private theorem hasType_oneOneDef (e : Env) [Env.HasEq e]
-    (hall : e.constants allName = some allTy)
-    (himp : e.constants impName = some impTy) :
+    (hall : e.lookup allName = some allTy)
+    (himp : e.lookup impName = some impTy) :
     HasType e [] Tm.oneOneDef oneOneTy := by
   rw [Tm.oneOneDef_eq]
   unfold oneOneTy
@@ -535,8 +535,8 @@ private theorem hasType_oneOneDef (e : Env) [Env.HasEq e]
     (HasType.app (α := .var primTyVar) htBvar2 htBvar0)
 
 private theorem hasType_ontoDef (e : Env) [Env.HasEq e]
-    (hall : e.constants allName = some allTy)
-    (hex : e.constants exName = some exTy) :
+    (hall : e.lookup allName = some allTy)
+    (hex : e.lookup exName = some exTy) :
     HasType e [] Tm.ontoDef ontoTy := by
   rw [Tm.ontoDef_eq]
   unfold ontoTy
@@ -549,106 +549,106 @@ private theorem hasType_ontoDef (e : Env) [Env.HasEq e]
 /-! Carry constants along the chain. -/
 
 private theorem carry {e : Env} {n m : Name} {ty ty' : Ty} {rhs : Tm}
-    (h : e.constants n = some ty) (hne : n ≠ m) :
-    (e.addDef m ty' rhs).constants n = some ty :=
+    (h : e.lookup n = some ty) (hne : n ≠ m) :
+    (e.addDef m ty' rhs).lookup n = some ty :=
   (Env.addDef_constants_of_ne e ty' rhs hne).trans h
 
-private theorem envTru_tru : envTru.constants truName = some truTy :=
+private theorem envTru_tru : envTru.lookup truName = some truTy :=
   envTru_constants_tru
 
-private theorem envAnd_tru : envAnd.constants truName = some truTy :=
+private theorem envAnd_tru : envAnd.lookup truName = some truTy :=
   carry envTru_tru (by decide)
 
-private theorem envImp_tru : envImp.constants truName = some truTy :=
+private theorem envImp_tru : envImp.lookup truName = some truTy :=
   carry envAnd_tru (by decide)
 
-private theorem envImp_and : envImp.constants andName = some andTy :=
+private theorem envImp_and : envImp.lookup andName = some andTy :=
   carry envAnd_constants_and (by decide)
 
-private theorem envAll_tru : envAll.constants truName = some truTy :=
+private theorem envAll_tru : envAll.lookup truName = some truTy :=
   carry envImp_tru (by decide)
 
-private theorem envAll_and : envAll.constants andName = some andTy :=
+private theorem envAll_and : envAll.lookup andName = some andTy :=
   carry envImp_and (by decide)
 
-private theorem envAll_imp : envAll.constants impName = some impTy :=
+private theorem envAll_imp : envAll.lookup impName = some impTy :=
   carry envImp_constants_imp (by decide)
 
-private theorem envFalsum_all : envFalsum.constants allName = some allTy :=
+private theorem envFalsum_all : envFalsum.lookup allName = some allTy :=
   carry envAll_constants_all (by decide)
 
-private theorem envFalsum_imp : envFalsum.constants impName = some impTy :=
+private theorem envFalsum_imp : envFalsum.lookup impName = some impTy :=
   carry envAll_imp (by decide)
 
-private theorem envNot_imp : envNot.constants impName = some impTy :=
+private theorem envNot_imp : envNot.lookup impName = some impTy :=
   carry envFalsum_imp (by decide)
 
-private theorem envNot_all : envNot.constants allName = some allTy :=
+private theorem envNot_all : envNot.lookup allName = some allTy :=
   carry envFalsum_all (by decide)
 
-private theorem envNot_falsum : envNot.constants falsumName = some falsumTy :=
+private theorem envNot_falsum : envNot.lookup falsumName = some falsumTy :=
   carry envFalsum_constants_falsum (by decide)
 
-private theorem envOr_all : envOr.constants allName = some allTy :=
+private theorem envOr_all : envOr.lookup allName = some allTy :=
   carry envNot_all (by decide)
 
-private theorem envOr_imp : envOr.constants impName = some impTy :=
+private theorem envOr_imp : envOr.lookup impName = some impTy :=
   carry envNot_imp (by decide)
 
-private theorem envEx_all : envEx.constants allName = some allTy :=
+private theorem envEx_all : envEx.lookup allName = some allTy :=
   carry envOr_all (by decide)
 
-private theorem envEx_imp : envEx.constants impName = some impTy :=
+private theorem envEx_imp : envEx.lookup impName = some impTy :=
   carry envOr_imp (by decide)
 
-private theorem envOneOne_all : envOneOne.constants allName = some allTy :=
+private theorem envOneOne_all : envOneOne.lookup allName = some allTy :=
   carry envEx_all (by decide)
 
-private theorem envOneOne_ex : envOneOne.constants exName = some exTy :=
+private theorem envOneOne_ex : envOneOne.lookup exName = some exTy :=
   carry envEx_constants_ex (by decide)
 
-private theorem envFalsum_tru : envFalsum.constants truName = some truTy :=
+private theorem envFalsum_tru : envFalsum.lookup truName = some truTy :=
   carry envAll_tru (by decide)
-private theorem envNot_tru : envNot.constants truName = some truTy :=
+private theorem envNot_tru : envNot.lookup truName = some truTy :=
   carry envFalsum_tru (by decide)
-private theorem envOr_tru : envOr.constants truName = some truTy :=
+private theorem envOr_tru : envOr.lookup truName = some truTy :=
   carry envNot_tru (by decide)
-private theorem envEx_tru : envEx.constants truName = some truTy :=
+private theorem envEx_tru : envEx.lookup truName = some truTy :=
   carry envOr_tru (by decide)
-private theorem envOneOne_tru : envOneOne.constants truName = some truTy :=
+private theorem envOneOne_tru : envOneOne.lookup truName = some truTy :=
   carry envEx_tru (by decide)
 
-private theorem envFalsum_and : envFalsum.constants andName = some andTy :=
+private theorem envFalsum_and : envFalsum.lookup andName = some andTy :=
   carry envAll_and (by decide)
-private theorem envNot_and : envNot.constants andName = some andTy :=
+private theorem envNot_and : envNot.lookup andName = some andTy :=
   carry envFalsum_and (by decide)
-private theorem envOr_and : envOr.constants andName = some andTy :=
+private theorem envOr_and : envOr.lookup andName = some andTy :=
   carry envNot_and (by decide)
-private theorem envEx_and : envEx.constants andName = some andTy :=
+private theorem envEx_and : envEx.lookup andName = some andTy :=
   carry envOr_and (by decide)
-private theorem envOneOne_and : envOneOne.constants andName = some andTy :=
+private theorem envOneOne_and : envOneOne.lookup andName = some andTy :=
   carry envEx_and (by decide)
 
-private theorem envOneOne_imp : envOneOne.constants impName = some impTy :=
+private theorem envOneOne_imp : envOneOne.lookup impName = some impTy :=
   carry envEx_imp (by decide)
 
-private theorem envOr_falsum : envOr.constants falsumName = some falsumTy :=
+private theorem envOr_falsum : envOr.lookup falsumName = some falsumTy :=
   carry envNot_falsum (by decide)
-private theorem envEx_falsum : envEx.constants falsumName = some falsumTy :=
+private theorem envEx_falsum : envEx.lookup falsumName = some falsumTy :=
   carry envOr_falsum (by decide)
-private theorem envOneOne_falsum : envOneOne.constants falsumName = some falsumTy :=
+private theorem envOneOne_falsum : envOneOne.lookup falsumName = some falsumTy :=
   carry envEx_falsum (by decide)
 
-private theorem envOr_not : envOr.constants notName = some notTy :=
+private theorem envOr_not : envOr.lookup notName = some notTy :=
   carry envNot_constants_not (by decide)
-private theorem envEx_not : envEx.constants notName = some notTy :=
+private theorem envEx_not : envEx.lookup notName = some notTy :=
   carry envOr_not (by decide)
-private theorem envOneOne_not : envOneOne.constants notName = some notTy :=
+private theorem envOneOne_not : envOneOne.lookup notName = some notTy :=
   carry envEx_not (by decide)
 
-private theorem envEx_or : envEx.constants orName = some orTy :=
+private theorem envEx_or : envEx.lookup orName = some orTy :=
   carry envOr_constants_or (by decide)
-private theorem envOneOne_or : envOneOne.constants orName = some orTy :=
+private theorem envOneOne_or : envOneOne.lookup orName = some orTy :=
   carry envEx_or (by decide)
 
 instance : Env.HasEq envTru := Env.HasEq.addDef (by decide)
@@ -673,7 +673,7 @@ instance : Env.HasSelect envEx := Env.HasSelect.addDef (by decide)
 instance : Env.HasSelect envOneOne := Env.HasSelect.addDef (by decide)
 instance : Env.HasSelect holLogic := Env.HasSelect.addDef (by decide)
 
-theorem holCore_WF : holCore.WF := fun _ h => False.elim h
+theorem holCore_WF : holCore.WF := fun _ h => nomatch h
 
 theorem envTru_WF : envTru.WF :=
   holCore_WF.addDef (fresh_core (by decide) (by decide))
@@ -734,31 +734,35 @@ theorem holLogic_WF : holLogic.WF :=
 /-! `holLogic` has every connective constant and defining axiom. -/
 
 private theorem holLogic_const (n : Name) (ty : Ty)
-    (h : envOneOne.constants n = some ty) (hne : n ≠ ontoName := by decide) :
-    holLogic.constants n = some ty := by
+    (h : envOneOne.lookup n = some ty) (hne : n ≠ ontoName := by decide) :
+    holLogic.lookup n = some ty := by
   simpa [holLogic, Env.addDef_constants_of_ne (h := hne)] using h
 
-private theorem holLogic_ax {ax : Tm} (h : envOneOne.axioms ax) :
-    holLogic.axioms ax :=
+private theorem holLogic_ax {ax : Tm} (h : ax ∈ envOneOne.axioms) :
+    ax ∈ holLogic.axioms :=
   Env.addDef_axioms_of h
 
 instance : Env.HasPrims holLogic where
 
-theorem holCore_le_holLogic : holCore.LE holLogic :=
-  ⟨fun n ty h => by
-      simp [holCore] at h
-      by_cases heq : n = eqName
-      · subst heq
-        simp [holConstants] at h
-        cases h
-        exact Env.HasEq.eq_const (env := holLogic)
-      · by_cases hsel : n = selectName
-        · subst hsel
-          simp [holConstants, show selectName ≠ eqName from eqName_ne_selectName.symm] at h
-          cases h
-          exact Env.HasSelect.select_const (env := holLogic)
-        · simp [holConstants, heq, hsel] at h,
-   fun _ h => False.elim h⟩
+theorem holCore_le_holLogic : holCore.LE holLogic where
+  constants := fun n ty h => by
+    have h' : ConstTable.lookup holConstants n = some ty := by
+      simpa [holCore] using h
+    by_cases heq : n = eqName
+    · subst heq
+      simp [holConstants] at h'
+      cases h'
+      exact Env.HasEq.eq_const (env := holLogic)
+    · by_cases hsel : n = selectName
+      · subst hsel
+        simp [holConstants_select] at h'
+        cases h'
+        exact Env.HasSelect.select_const (env := holLogic)
+      · have heq' : n ≠ eqName := heq
+        have hsel' : n ≠ selectName := hsel
+        rw [holConstants_of_ne heq' hsel'] at h'
+        cases h'
+  axioms := fun _ h => nomatch h
 
 instance : Env.HasConnectives holLogic where
   tru_const := holLogic_const truName truTy envOneOne_tru
@@ -869,39 +873,39 @@ theorem HasType.oneOneDef_envEx : HasType envEx [] Tm.oneOneDef oneOneTy :=
 theorem HasType.ontoDef_envOneOne : HasType envOneOne [] Tm.ontoDef ontoTy :=
   hasType_ontoDef envOneOne envOneOne_all envOneOne_ex
 
-theorem truName_fresh_core : holCore.constants truName = none :=
+theorem truName_fresh_core : holCore.lookup truName = none :=
   fresh_core (by decide) (by decide)
 
-theorem andName_fresh_envTru : envTru.constants andName = none :=
+theorem andName_fresh_envTru : envTru.lookup andName = none :=
   envTru_fresh (by decide) (by decide) (by decide)
 
-theorem impName_fresh_envAnd : envAnd.constants impName = none :=
+theorem impName_fresh_envAnd : envAnd.lookup impName = none :=
   envAnd_fresh (by decide) (by decide) (by decide) (by decide)
 
-theorem allName_fresh_envImp : envImp.constants allName = none :=
+theorem allName_fresh_envImp : envImp.lookup allName = none :=
   envImp_fresh (by decide) (by decide) (by decide) (by decide) (by decide)
 
-theorem falsumName_fresh_envAll : envAll.constants falsumName = none :=
+theorem falsumName_fresh_envAll : envAll.lookup falsumName = none :=
   envAll_fresh (by decide) (by decide) (by decide) (by decide) (by decide)
     (by decide)
 
-theorem notName_fresh_envFalsum : envFalsum.constants notName = none :=
+theorem notName_fresh_envFalsum : envFalsum.lookup notName = none :=
   envFalsum_fresh (by decide) (by decide) (by decide) (by decide) (by decide)
     (by decide) (by decide)
 
-theorem orName_fresh_envNot : envNot.constants orName = none :=
+theorem orName_fresh_envNot : envNot.lookup orName = none :=
   envNot_fresh (by decide) (by decide) (by decide) (by decide) (by decide)
     (by decide) (by decide) (by decide)
 
-theorem exName_fresh_envOr : envOr.constants exName = none :=
+theorem exName_fresh_envOr : envOr.lookup exName = none :=
   envOr_fresh (by decide) (by decide) (by decide) (by decide) (by decide)
     (by decide) (by decide) (by decide) (by decide)
 
-theorem oneOneName_fresh_envEx : envEx.constants oneOneName = none :=
+theorem oneOneName_fresh_envEx : envEx.lookup oneOneName = none :=
   envEx_fresh (by decide) (by decide) (by decide) (by decide) (by decide)
     (by decide) (by decide) (by decide) (by decide) (by decide)
 
-theorem ontoName_fresh_envOneOne : envOneOne.constants ontoName = none :=
+theorem ontoName_fresh_envOneOne : envOneOne.lookup ontoName = none :=
   envOneOne_fresh (by decide) (by decide) (by decide) (by decide) (by decide)
     (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
 
@@ -953,18 +957,18 @@ theorem mem_connectiveAndPrimNames_onto :
 
 theorem Env.HasConnectives.addAxiom [Env.HasConnectives env] (ax : Tm) :
     Env.HasConnectives (env.addAxiom ax) where
-  eq_const := by rw [Env.addAxiom_constants]; exact HasEq.eq_const
-  select_const := by rw [Env.addAxiom_constants]; exact HasSelect.select_const
-  tru_const := by rw [Env.addAxiom_constants]; exact HasConnectives.tru_const
-  and_const := by rw [Env.addAxiom_constants]; exact HasConnectives.and_const
-  imp_const := by rw [Env.addAxiom_constants]; exact HasConnectives.imp_const
-  all_const := by rw [Env.addAxiom_constants]; exact HasConnectives.all_const
-  falsum_const := by rw [Env.addAxiom_constants]; exact HasConnectives.falsum_const
-  not_const := by rw [Env.addAxiom_constants]; exact HasConnectives.not_const
-  or_const := by rw [Env.addAxiom_constants]; exact HasConnectives.or_const
-  ex_const := by rw [Env.addAxiom_constants]; exact HasConnectives.ex_const
-  oneOne_const := by rw [Env.addAxiom_constants]; exact HasConnectives.oneOne_const
-  onto_const := by rw [Env.addAxiom_constants]; exact HasConnectives.onto_const
+  eq_const := HasEq.eq_const (env := env)
+  select_const := HasSelect.select_const (env := env)
+  tru_const := HasConnectives.tru_const (env := env)
+  and_const := HasConnectives.and_const (env := env)
+  imp_const := HasConnectives.imp_const (env := env)
+  all_const := HasConnectives.all_const (env := env)
+  falsum_const := HasConnectives.falsum_const (env := env)
+  not_const := HasConnectives.not_const (env := env)
+  or_const := HasConnectives.or_const (env := env)
+  ex_const := HasConnectives.ex_const (env := env)
+  oneOne_const := HasConnectives.oneOne_const (env := env)
+  onto_const := HasConnectives.onto_const (env := env)
   tru_ax := Env.addAxiom_axioms_of (env := env) ax (Tm.mkEq truTy Tm.tru Tm.truDef)
     (Env.HasConnectives.tru_ax (env := env))
   and_ax := Env.addAxiom_axioms_of (env := env) ax (Tm.mkEq andTy (.const andName andTy) Tm.andDef)
@@ -989,7 +993,7 @@ theorem Env.HasConnectives.addAxiom [Env.HasConnectives env] (ax : Tm) :
     (Env.HasConnectives.onto_ax (env := env))
 
 theorem Env.HasConnectives.addDef [Env.HasConnectives env] {n : Name} {ty : Ty} {rhs : Tm}
-    (_hfresh : env.constants n = none) (hnames : nameNotInConnectiveAndPrim n) :
+    (_hfresh : env.lookup n = none) (hnames : nameNotInConnectiveAndPrim n) :
     Env.HasConnectives (env.addDef n ty rhs) where
   eq_const := by
     have hne : eqName ≠ n := (hnames eqName (by simp [connectiveAndPrimNames])).symm

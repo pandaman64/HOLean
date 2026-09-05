@@ -103,17 +103,18 @@ closed, and `close (open x t) = t` when `x` is fresh.
 Judgments are relative to an environment
 
 ```
-Env  ≔  constants : Name → Option Ty     -- generic types
-      × axioms    : Tm → Prop            -- closed booleans
+Env  ≔  constants : List (Name × Ty)     -- generic types (first match wins)
+      × axioms    : List Tm              -- closed booleans
 ```
 
-This is the HOL analogue of Lean4Lean's `VEnv` (`constants` + `defeqs`).
+This is the HOL analogue of Lean4Lean's `VEnv` (`constants` + `defeqs`),
+with finite association lists for kernel-friendly reduction.
 HOL Light has no δ-reduction, so there is no independent definitional
 equality: a definition is the axiom `⊢ c = t`, and unfolding is `EQ_MP`
 or rewriting.
 
 A term `const n inst` stores the *instantiated* type.  It is well-typed
-when `env.constants n = some gen` and `gen.instantiates inst`.
+when `env.lookup n = some gen` and `gen.instantiates inst`.
 `HasType` reads only `constants`, never `axioms`.  That lets us layer
 environments without a cycle: `holCore` is `{eq, select}` with no axioms;
 `holLogic` is the definitional chain of connectives; `HOLAxiom` is typed

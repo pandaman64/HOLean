@@ -23,7 +23,7 @@ variable {env : Env} {ρ : TyVal}
 private noncomputable def EnvModel.interpAddAxiom [Env.HasEq env] (M : EnvModel env ρ) (ax : Tm) :
     EnvInterp (env.addAxiom ax) ρ where
   interp := M.interp.interp
-  mem := fun hconst => M.interp.mem (Env.addAxiom_constants env ax ▸ hconst)
+  mem := fun hconst => M.interp.mem hconst
 
 private theorem EnvModel.interpAddAxiom_interp [Env.HasEq env] (M : EnvModel env ρ) (ax : Tm)
     (n : Name) (α : Ty) :
@@ -75,7 +75,7 @@ noncomputable def EnvInterp.addDef {n : Name} {ty : Ty} {rhs : Tm}
         exact h.symm
       subst hty
       simpa using interpDef_mem I ξ hrhs hinst
-    · have hconst' : env.constants m = some gen := by
+    · have hconst' : env.lookup m = some gen := by
         rwa [Env.addDef_constants_of_ne env ty rhs hm] at hconst
       simpa [hm] using I.mem hconst' hinst
 
@@ -165,7 +165,7 @@ no fvars and (being typed in `env`) does not mention the new name. -/
 theorem EnvInterp.addDef_denote_rhs (n : Name) {ty : Ty} {rhs : Tm}
     (I : EnvInterp env ρ) (ξ0 : FVarVal ρ)
     (hrhs : HasType env [] rhs ty) (θ : TySubst) (ξ : FVarVal (ρ.inst θ))
-    (hn : env.constants n = none)
+    (hn : env.lookup n = none)
     (hclosed : ∀ x α, rhs.freeIn x α = false) :
     rhs.denote ((I.addDef (n := n) ξ0 hrhs).inst θ) ξ [] =
       (rhs.instTy θ).denote I ξ0 [] := by
@@ -191,7 +191,7 @@ theorem EnvInterp.addDef_inst_eq_ok [Env.HasEq env] (n : Name)
 /-- The new axiom `n = rhs` denotes `zfTrue` at every type instance. -/
 theorem EnvModel.addDef_ax_new [Env.HasEq env] (n : Name) {ty : Ty} {rhs : Tm}
     (M : EnvModel env ρ) (hρ : ρ.Nonempty)
-    (hn : env.constants n = none) (hne_eq : n ≠ eqName)
+    (hn : env.lookup n = none) (hne_eq : n ≠ eqName)
     (hrhs : HasType env [] rhs ty)
     (hclosed : ∀ x α, rhs.freeIn x α = false)
     (hvars : ∀ x ∈ rhs.tyvars, x ∈ ty.tyvars)
@@ -222,9 +222,9 @@ theorem EnvModel.addDef_ax_new [Env.HasEq env] (n : Name) {ty : Ty} {rhs : Tm}
 do not mention the fresh name, and the two interps agree off `n`. -/
 theorem EnvModel.addDef_ax_old [Env.HasEq env] (n : Name) {ty : Ty} {rhs : Tm}
     (M : EnvModel env ρ) (hρ : ρ.Nonempty)
-    (hn : env.constants n = none) (hwf : env.WF)
+    (hn : env.lookup n = none) (hwf : env.WF)
     (hrhs : HasType env [] rhs ty)
-    {θ : TySubst} {p : Tm} (hold : env.axioms p)
+    {θ : TySubst} {p : Tm} (hold : p ∈ env.axioms)
     (ξ : FVarVal (ρ.inst θ)) :
     p.denote
       ((M.interp.addDef (n := n) (FVarVal.ofNonempty hρ) hrhs).inst θ) ξ [] =
@@ -238,7 +238,7 @@ term whose schematic variables are among those of the generic type, and
 the new name must be fresh (so old axioms do not mention it). -/
 noncomputable def EnvModel.addDef [Env.HasEq env] (n : Name) {ty : Ty} {rhs : Tm}
     (M : EnvModel env ρ) (hρ : ρ.Nonempty)
-    (hn : env.constants n = none) (hne_eq : n ≠ eqName)
+    (hn : env.lookup n = none) (hne_eq : n ≠ eqName)
     (hwf : env.WF) (hrhs : HasType env [] rhs ty)
     (hclosed : ∀ x α, rhs.freeIn x α = false)
     (hvars : ∀ x ∈ rhs.tyvars, x ∈ ty.tyvars) :
@@ -246,12 +246,12 @@ noncomputable def EnvModel.addDef [Env.HasEq env] (n : Name) {ty : Ty} {rhs : Tm
   interp := M.interp.addDef (n := n) (FVarVal.ofNonempty hρ) hrhs
   eq_ok :=
     EnvInterp.addDef_eq_ok n M.interp (FVarVal.ofNonempty hρ) hrhs hne_eq M.eq_ok
-  ax_ok := fun θ _p hp ξ =>
-    match hp with
-    | Or.inl heq =>
-      heq ▸ EnvModel.addDef_ax_new n M hρ hn hne_eq hrhs hclosed hvars θ ξ
-    | Or.inr hold =>
-      EnvModel.addDef_ax_old n M hρ hn hwf hrhs hold ξ
+  ax_ok := fun θ p hp ξ => by
+    cases hp with
+    | head =>
+      exact EnvModel.addDef_ax_new n M hρ hn hne_eq hrhs hclosed hvars θ ξ
+    | tail _ hold =>
+      exact EnvModel.addDef_ax_old n M hρ hn hwf hrhs hold ξ
 
 /-- Transport a model along `addAxiom`, given a kernel proof of the new sentence. -/
 noncomputable def EnvModel.addAxiom [Env.HasEq env] (M : EnvModel env ρ) (_hρ : ρ.Nonempty)
@@ -260,14 +260,13 @@ noncomputable def EnvModel.addAxiom [Env.HasEq env] (M : EnvModel env ρ) (_hρ 
   eq_ok := fun α => by
     simp [EnvModel.interpAddAxiom_interp]
     exact M.eq_ok α
-  ax_ok := fun θ p hp ξ =>
-    match hp with
-    | Or.inl heq =>
+  ax_ok := fun θ p hp ξ => by
+    cases hp with
+    | head =>
       have hT := Provable.sound hax (M.inst θ) ξ (fun _ hq => nomatch hq)
-      have hden := EnvModel.interpAddAxiom_denote M ax θ ξ p
-      (hden.trans (heq ▸ hT))
-    | Or.inr hold =>
-      (EnvModel.interpAddAxiom_denote M ax θ ξ p).trans (M.ax_ok θ p hold ξ)
+      exact (EnvModel.interpAddAxiom_denote M ax θ ξ ax).trans hT
+    | tail _ hold =>
+      exact (EnvModel.interpAddAxiom_denote M ax θ ξ p).trans (M.ax_ok θ p hold ξ)
 
 theorem EnvModel.addAxiom_interp [Env.HasEq env] (M : EnvModel env ρ) (_hρ : ρ.Nonempty)
     (ax : Tm) (hax : [] ⊩[env] ax) :
@@ -275,7 +274,7 @@ theorem EnvModel.addAxiom_interp [Env.HasEq env] (M : EnvModel env ρ) (_hρ : �
 
 noncomputable def EnvModel.addDef_checked [Env.HasConnectives env] (n : Name)
     {ty : Ty} {rhs : Tm} (M : EnvModel env ρ) (hρ : ρ.Nonempty)
-    (hfresh : env.constants n = none) (hne_eq : n ≠ eqName) (hwf : env.WF)
+    (hfresh : env.lookup n = none) (hne_eq : n ≠ eqName) (hwf : env.WF)
     (hinfer : rhs.infer env [] = some ty) (_hLC : rhs.LC 0 = true)
     (hvars : ∀ x ∈ rhs.tyvars, x ∈ ty.tyvars)
     (hfree : ∀ x α, rhs.freeIn x α = false) :
@@ -284,7 +283,7 @@ noncomputable def EnvModel.addDef_checked [Env.HasConnectives env] (n : Name)
 
 noncomputable def EnvModel.addDef_cert [Env.HasConnectives env] (n : Name)
     {ty : Ty} {rhs : Tm} (M : EnvModel env ρ) (hρ : ρ.Nonempty)
-    (hfresh : env.constants n = none) (hne_eq : n ≠ eqName) (hwf : env.WF)
+    (hfresh : env.lookup n = none) (hne_eq : n ≠ eqName) (hwf : env.WF)
     (hinfer : rhs.infer env [] = some ty) (_hLC : rhs.LC 0 = true)
     (hvars : ∀ x ∈ rhs.tyvars, x ∈ ty.tyvars)
     (hfree : ∀ x α, rhs.freeIn x α = false) :
@@ -381,7 +380,7 @@ theorem Provable.sound_holLogic {ρ : TyVal} {Γ p} (h : Γ ⊩[holLogic] p)
 /-- `addDef` does not change the interpretation of a different name. -/
 theorem EnvModel.addDef_interp_ne [Env.HasEq env] (n : Name) {ty : Ty} {rhs : Tm}
     (M : EnvModel env ρ) (hρ : ρ.Nonempty)
-    (hn : env.constants n = none) (hne_eq : n ≠ eqName)
+    (hn : env.lookup n = none) (hne_eq : n ≠ eqName)
     (hwf : env.WF) (hrhs : HasType env [] rhs ty)
     (hclosed : ∀ x α, rhs.freeIn x α = false)
     (hvars : ∀ x ∈ rhs.tyvars, x ∈ ty.tyvars)

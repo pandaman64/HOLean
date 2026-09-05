@@ -28,7 +28,7 @@ def Tm.infer (env : Env) (t : Tm) (Γ : List Ty) : Option Ty :=
   | bvar i => Γ[i]?
   | fvar _ α => some α
   | const n τ =>
-    match env.constants n with
+    match env.lookup n with
     | some gen => if (gen.matchTy τ []).isSome then some τ else none
     | none => none
   | app f a =>
@@ -47,7 +47,7 @@ inductive HasType (env : Env) : List Ty → Tm → Ty → Prop where
   | fvar {Γ} (x : Name) (α : Ty) :
       HasType env Γ (.fvar x α) α
   | const {Γ n inst gen}
-      (hconst : env.constants n = some gen)
+      (hconst : env.lookup n = some gen)
       (hinst : gen.instantiates inst) :
       HasType env Γ (.const n inst) inst
   | app {Γ α β} {f a : Tm}
@@ -113,7 +113,7 @@ theorem HasType.of_infer {Γ : List Ty} :
     exact h ▸ HasType.fvar x β
   | const n β =>
     intro α h
-    cases hc : env.constants n with
+    cases hc : env.lookup n with
     | none =>
       simp [Tm.infer, hc] at h
     | some gen =>
@@ -395,7 +395,7 @@ theorem HasType.lc0 {t α} (h : HasType env [] t α) : t.LC 0 = true :=
 
 /-- A well-typed term never mentions a constant that is not in the signature. -/
 theorem HasType.not_hasConst_of_fresh {Γ t α n}
-    (h : HasType env Γ t α) (hn : env.constants n = none) :
+    (h : HasType env Γ t α) (hn : env.lookup n = none) :
     t.hasConst n = false := by
   induction h with
   | bvar hi =>
@@ -405,7 +405,8 @@ theorem HasType.not_hasConst_of_fresh {Γ t α n}
   | const hconst hinst =>
     simp [Tm.hasConst]
     rintro rfl
-    simp [hn] at hconst
+    rw [hn] at hconst
+    cases hconst
   | app _ _ ihf iha =>
     simp [Tm.hasConst, ihf, iha]
   | lam _ ih =>
@@ -478,7 +479,7 @@ theorem HasType.dest_mkEq {Γ s t α β} (h : HasType env Γ (Tm.mkEq α s t) β
 /-- Well-formedness of an environment.
 
 ```
-Env.WF env  ≔  ∀ p, env.axioms p → HasType env [] p .bool
+Env.WF env  ≔  ∀ p, p ∈ env.axioms → HasType env [] p .bool
 ```
 
 Every postulated axiom must be a **closed boolean sentence in this
@@ -501,46 +502,45 @@ the `addDef` chain plus typing of the HOL axioms.
 `Provable.ax` admits one axiom given its typing; `Provable.of_axiom`
 does the same from `env.WF`. -/
 def Env.WF (env : Env) : Prop :=
-  ∀ p, env.axioms p → HasType env [] p .bool
+  ∀ p, p ∈ env.axioms → HasType env [] p .bool
 
-theorem Env.WF.typed {p} (hwf : env.WF) (hp : env.axioms p) :
+theorem Env.WF.typed {p} (hwf : env.WF) (hp : p ∈ env.axioms) :
     HasType env [] p .bool :=
   hwf p hp
 
-theorem Env.WF.lc0 {p} (hwf : env.WF) (hp : env.axioms p) :
+theorem Env.WF.lc0 {p} (hwf : env.WF) (hp : p ∈ env.axioms) :
     p.LC 0 = true :=
   (hwf p hp).lc0
 
 theorem Env.WF.addAxiom {ax : Tm} (hwf : env.WF) (hty : HasType env [] ax .bool) :
     (env.addAxiom ax).WF := by
   intro p hp
-  match hp with
-  | Or.inl heq =>
-    subst heq
-    exact hty.weakenEnv (Env.LE.addAxiom env p)
-  | Or.inr hax =>
+  cases hp with
+  | head =>
+    exact hty.weakenEnv (Env.LE.addAxiom env ax)
+  | tail _ hax =>
     exact (hwf p hax).weakenEnv (Env.LE.addAxiom env ax)
 
 theorem Env.WF.addConst {n : Name} {ty : Ty} (hwf : env.WF)
-    (hfresh : env.constants n = none) :
+    (hfresh : env.lookup n = none) :
     (env.addConst n ty).WF := by
   intro p hp
   exact (hwf p hp).weakenEnv (Env.LE.addConst_of_fresh hfresh)
 
 theorem Env.WF.addDef [Env.HasEq env] {n : Name} {ty : Ty} {rhs : Tm}
-    (hwf : env.WF) (hfresh : env.constants n = none)
+    (hwf : env.WF) (hfresh : env.lookup n = none)
     (hn : n ≠ eqName) (hty : HasType env [] rhs ty) :
     (env.addDef n ty rhs).WF := by
   haveI : Env.HasEq (env.addConst n ty) := Env.HasEq.addConst hn
   have hle : env.LE (env.addConst n ty) := Env.LE.addConst_of_fresh hfresh
   have hconst : HasType (env.addConst n ty) [] (.const n ty) ty :=
-    HasType.const (by simp) (Ty.instantiates_self ty)
+    HasType.const (Env.addConst_self env n ty) (Ty.instantiates_self ty)
   have heq : HasType (env.addConst n ty) [] (Tm.mkEq ty (.const n ty) rhs) .bool :=
     HasType.mkEq hconst (hty.weakenEnv hle)
   exact (hwf.addConst hfresh).addAxiom heq
 
 theorem Env.WF.addDef_infer [Env.HasEq env] {n : Name} {ty : Ty} {rhs : Tm}
-    (hwf : env.WF) (hfresh : env.constants n = none)
+    (hwf : env.WF) (hfresh : env.lookup n = none)
     (hn : n ≠ eqName) (hinfer : rhs.infer env [] = some ty) :
     (env.addDef n ty rhs).WF :=
   Env.WF.addDef hwf hfresh hn (HasType.of_infer hinfer)
