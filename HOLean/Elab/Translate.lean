@@ -30,7 +30,7 @@ variables, not System F type lambdas: they are opened as free type
 variables and do not appear as `Tm.lam`.
 
 Antiquotation `⌜t⌝` (see `HOLean.Elab.Term`) inserts a `Tm` or `Ty`
-value into the Lean stand-in.  The translator replaces `holTmQuote` /
+value into the Lean placeholder.  The translator replaces `holTmQuote` /
 `holTyQuote` with that value, so `hol_prop(⌜p⌝ ∧ True)` elaborates to
 `Tm.and p Tm.tru`.
 -/
@@ -39,18 +39,18 @@ open Lean Meta
 
 namespace HOLean
 
-/-- Lean stand-in for the HOL type of individuals.  `Nat` is also accepted. -/
+/-- Lean placeholder for the HOL type of individuals. -/
 opaque Ind : Type
 
-/-- Lean stand-in for HOL `ONE_ONE`. -/
+/-- Lean placeholder for HOL `ONE_ONE`. -/
 opaque oneOne {α β : Type} (f : α → β) : Prop
 
-/-- Lean stand-in for HOL `ONTO`. -/
+/-- Lean placeholder for HOL `ONTO`. -/
 opaque onto {α β : Type} (f : α → β) : Prop
 
-/-- Lean stand-in for HOL Hilbert choice `@` / `ε`.  An `axiom` (not `opaque`)
-so no `Nonempty` instance is required — matching HOL Light's `@`. -/
-axiom select {α : Type} (P : α → Prop) : α
+/-- Lean placeholder for HOL `@` / `ε`.  Elaboration only.
+`unsafe` so it cannot appear in a safe proof of `False`. -/
+unsafe def select {α : Type} (_P : α → Prop) : α := unsafeCast ()
 
 deriving instance ToExpr for Ty
 deriving instance ToExpr for Tm
@@ -59,19 +59,26 @@ end HOLean
 
 namespace HOLean.Elab
 
-/-- Intermediate stand-in for `⌜t⌝` when `t : Tm`.  The HOL translator
-replaces this with `t`; it should not appear in elaborated output. -/
-axiom holTmQuote (α : Sort u) (t : Tm) : α
+/-- Intermediate placeholder for `⌜t⌝` when `t : Tm`.  Replaced by the translator;
+must not appear in elaborated output.  `unsafe` so it cannot appear in a safe
+proof of `False`. -/
+unsafe def holTmQuote (α : Sort u) (_t : Tm) : α := unsafeCast ()
 
 /-- Wrapper used when `⌜t⌝` has no expected Lean type.  `CoeFun` lets Lean
 infer a function type for `⌜f⌝ x` instead of the elaborator picking one. -/
 structure HolQuoted where
   tm : Tm
 
-noncomputable instance : CoeFun HolQuoted (fun _ => ∀ {α : Sort u} {β : Sort v}, α → β) where
-  coe q := holTmQuote (∀ {α : Sort u} {β : Sort v}, α → β) q.tm
+/-- Irreducible so elaborator keeps `HolQuoted.coe` (not an unfolded λ);
+the translator recognizes this head. -/
+@[irreducible] unsafe def HolQuoted.coe (q : HolQuoted) :
+    ∀ {α : Sort u} {β : Sort v}, α → β :=
+  holTmQuote (∀ {α : Sort u} {β : Sort v}, α → β) q.tm
 
-/-- Intermediate stand-in for `⌜α⌝` when `α : Ty`. -/
+unsafe instance : CoeFun HolQuoted (fun _ => ∀ {α : Sort u} {β : Sort v}, α → β) where
+  coe := HolQuoted.coe
+
+/-- Intermediate placeholder for `⌜α⌝` when `α : Ty`. -/
 opaque holTyQuote (α : Ty) : Type
 
 /-- A HOL type, or a Lean expression of type `Ty` (an antiquotation). -/
@@ -117,6 +124,13 @@ partial def destTmSplice? (e : Expr) : MetaM (Option (Expr × Array Expr)) := do
     return some (e.appArg!, #[])
   if e.isAppOfArity ``HolQuoted.tm 1 then
     return some (e.appArg!, #[])
+  -- `HolQuoted.coe q α β x …` (irreducible coe; α/β are Lean type args).
+  if e.isAppOf ``HolQuoted.coe then
+    let args := e.getAppArgs
+    if args.size ≥ 1 then
+      if let some (t, extras) ← destTmSplice? args[0]! then
+        return some (t, extras ++ args.extract 3 args.size)
+    return none
   if e.isAppOf ``CoeFun.coe then
     let args := e.getAppArgs
     if args.size ≥ 4 then
@@ -312,7 +326,7 @@ partial def exprToTy (e : Expr) : MetaM TyQ := do
       return .val .bool
     else
       throwError "HOLean: `{e}` is a universe, not a HOL type \
-        (use `Prop`/`Bool` for bool, `Nat`/`Ind` for ind, or a type variable)"
+        (use `Prop`/`Bool` for bool, `Ind` for ind, or a type variable)"
   | .fvar id =>
     let decl ← id.getDecl
     let ty ← whnf decl.type
@@ -325,7 +339,7 @@ partial def exprToTy (e : Expr) : MetaM TyQ := do
   | .const n _ =>
     if n == `Prop || n == ``Bool then
       return .val .bool
-    else if n == ``Nat || n == ``HOLean.Ind then
+    else if n == ``HOLean.Ind then
       return .val .ind
     else
       throwError "HOLean: unknown type constant `{n}`"

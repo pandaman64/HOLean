@@ -27,7 +27,7 @@ def zfBool : ZFSet := {zfFalse, zfTrue}
 
 theorem zfFalse_ne_zfTrue : zfFalse ≠ zfTrue := by
   intro h
-  have : (∅ : ZFSet) ∈ zfTrue := by
+  have : ∅ ∈ zfTrue := by
     simp [zfTrue]
   rw [← h] at this
   exact notMem_empty _ this

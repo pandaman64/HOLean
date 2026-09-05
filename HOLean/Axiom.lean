@@ -60,7 +60,7 @@ theorem selectAxiom_eq :
 
 /-- `∃ f : ind ↝ ind. ONE_ONE f ∧ ¬ ONTO f`. -/
 def infinityAxiom : Tm :=
-  hol_prop(∃ f : Nat → Nat, oneOne f ∧ ¬ onto f)
+  hol_prop(∃ f : Ind → Ind, oneOne f ∧ ¬ onto f)
 
 theorem infinityAxiom_eq :
     infinityAxiom =

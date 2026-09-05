@@ -21,7 +21,7 @@ namespace HOLean.Elab
 
 /-- One user extension of the HOL environment. -/
 inductive HolDecl where
-  /-- `addDef holName ty rhs`.  `leanName` is the Lean stand-in constant. -/
+  /-- `addDef holName ty rhs`.  `leanName` is the Lean placeholder constant. -/
   | defn (leanName : Lean.Name) (holName : HOLean.Name) (ty : Ty) (rhs : Tm)
   /-- A proved (or installed) closed boolean, named for later `Hol.thm`. -/
   | thm (leanName : Lean.Name) (holName : HOLean.Name) (stmt : Tm)
@@ -53,7 +53,7 @@ def HolDecl.leanName : HolDecl → Lean.Name
   | .defn n _ _ _ => n
   | .thm n _ _ => n
 
-/-- Look up a user-defined HOL constant by its Lean stand-in name. -/
+/-- Look up a user-defined HOL constant by its Lean placeholder name. -/
 def findUserDef? (env : Environment) (leanName : Lean.Name) : Option (HOLean.Name × Ty) :=
   (holStateExt.getState env).findSome? fun
     | .defn ln hn ty _ => if ln == leanName then some (hn, ty) else none
@@ -65,7 +65,7 @@ def findUserDefByHol? (decls : HolState) (holName : HOLean.Name) : Option (Ty ×
     | .defn _ hn ty rhs => if hn == holName then some (ty, rhs) else none
     | .thm .. => none
 
-/-- Look up a user `htheorem` by its Lean stand-in name. -/
+/-- Look up a user `htheorem` by its Lean placeholder name. -/
 def findUserThmByLean? (env : Environment) (leanName : Lean.Name) : Option Tm :=
   (holStateExt.getState env).findSome? fun
     | .thm ln _ stmt => if ln == leanName then some stmt else none

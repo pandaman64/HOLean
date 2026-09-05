@@ -148,8 +148,8 @@ Dependent types are rejected: a `Π (x : α), β` whose *type* body mentions
 `x` is not a HOL type.  A `∀ (x : α), p` whose body is a proposition is a
 quantifier (or `p ⇒ q` when `α : Prop` and `q` ignores the proof).
 `Type`-binders become schematic type variables, not type lambdas.
-`Prop`/`Bool` stand for `bool`; `Nat`/`Ind` stand for `ind`.  Lean
-connectives (`∧`, `∨`, `¬`, `=`, `∀`, `∃`) and the stand-in `select`
+`Prop`/`Bool` stand for `bool`; `Ind` stands for `ind`.  Lean
+connectives (`∧`, `∨`, `¬`, `=`, `∀`, `∃`) and the placeholder `select`
 map to the `holLogic` / primitive constants.
 
 Closed defining right-hand sides (`Tm.andDef`, `infinityAxiom`, …) are
