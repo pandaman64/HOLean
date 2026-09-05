@@ -72,7 +72,7 @@ def holNameNotReserved (n : Name) : Bool :=
 
 theorem holNameNotReserved_imp (n : Name) (h : holNameNotReserved n = true) :
     nameNotInConnectiveAndPrim n := by
-  simp [holNameNotReserved, nameNotInConnectiveAndPrim, List.all_eq_true] at h
+  simp [holNameNotReserved, List.all_eq_true] at h
   exact h
 
 theorem name_ne_eqName (n : Name) (h : nameNotInConnectiveAndPrim n) : n ≠ eqName :=
@@ -103,11 +103,10 @@ noncomputable def cert_model_addDef (env : Env) (conn : Env.HasConnectives env) 
   letI := conn
   exact EnvModel.addDef_cert n (ty := ty) (rhs := rhs) model TyVal.std_nonempty hfresh hne hwf hinfer lc hvars hfree
 
-theorem cert_wf_addAxiom (env : Env) (hasEq : Env.HasEq env) (hwf : env.WF) (ax : Tm)
+theorem cert_wf_addAxiom (env : Env) (_hasEq : Env.HasEq env) (hwf : env.WF) (ax : Tm)
     (hinfer : ax.infer env [] = some .bool) :
-    (env.addAxiom ax).WF := by
-  letI := hasEq
-  exact Env.WF.addAxiom_infer hwf ax hinfer
+    (env.addAxiom ax).WF :=
+  Env.WF.addAxiom_infer hwf ax hinfer
 
 theorem cert_conn_addAxiom (env : Env) (conn : Env.HasConnectives env) (ax : Tm) :
     Env.HasConnectives (env.addAxiom ax) := by

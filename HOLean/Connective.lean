@@ -918,7 +918,7 @@ def nameNotInConnectiveAndPrim (n : Name) : Prop :=
 theorem nameNotInConnectiveAndPrim_of_decide (n : Name)
     (h : decide (∀ m ∈ connectiveAndPrimNames, n ≠ m) = true) :
     nameNotInConnectiveAndPrim n := by
-  simp [nameNotInConnectiveAndPrim, List.all_eq_true] at h
+  simp only [decide_eq_true_eq] at h
   exact h
 
 theorem mem_connectiveAndPrimNames_tru :

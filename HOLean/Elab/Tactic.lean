@@ -245,7 +245,7 @@ partial def evalTrace : ProvTrace → HolM CertifiedThm
     Hol.sym (← evalTrace h)
   | .gen x α h => do
     Hol.gen x α (← evalTrace h)
-  | .spec t α h => do
+  | .spec t _α h => do
     Hol.spec t (← evalTrace h)
   | .disch p h => do
     Hol.disch p (← evalTrace h)
