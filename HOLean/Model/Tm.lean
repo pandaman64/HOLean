@@ -24,7 +24,7 @@ structure CtxVal (ρ : TyVal) (Γ : List Ty) where
   vals : List ZFSet
   length_eq : vals.length = Γ.length
   typed : ∀ (i : Nat) (hi : i < Γ.length),
-    vals[i]'(length_eq ▸ hi) ∈ (Γ[i]'hi).denote ρ
+    vals[i] ∈ Γ[i].denote ρ
 
 def CtxVal.nil (ρ : TyVal) : CtxVal ρ [] :=
   ⟨[], rfl, fun _i hi => nomatch hi⟩
