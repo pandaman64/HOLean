@@ -182,7 +182,7 @@ theorem EnvModel.denote_select [Env.HasConnectives env]
       have hwit := zfChoose_spec hA ⟨x, hxmem, hPx'⟩
       simp [Tm.denote, CtxVal.cons, vs, vsP]
       rw [hselApp]
-      exact hwit.2
+      exact hwit
     exact happX.symm ▸ hbody
   exact happP.symm ▸ hinner
 

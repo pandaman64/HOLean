@@ -106,15 +106,7 @@ theorem Ty.denote_nonempty {ρ : TyVal} (hρ : ρ.Nonempty) :
   | .ind => ⟨∅, omega_zero⟩
   | .arrow α β => by
     obtain ⟨b, hb⟩ := Ty.denote_nonempty hρ β
-    -- Graph of the constant function: `A × {b}`.
-    refine ⟨prod (α.denote ρ) {b}, mem_funs.2 ⟨?_, ?_⟩⟩
-    · intro z hz
-      obtain ⟨x, hx, y, hy, rfl⟩ := mem_prod.1 hz
-      exact pair_mem_prod.2 ⟨hx, (mem_singleton.1 hy).symm ▸ hb⟩
-    · intro z hz
-      refine ⟨b, pair_mem_prod.2 ⟨hz, mem_singleton.2 rfl⟩, ?_⟩
-      intro w hw
-      exact mem_singleton.1 (pair_mem_prod.1 hw).2
+    exact ⟨zfConst (α.denote ρ) b, zfConst_mem hb⟩
 
 /-- Choice on a predicate graph: a witness of `P` if any, else an
 arbitrary element of the nonempty set `A`. -/
@@ -134,7 +126,7 @@ theorem zfChoose_mem (A : ZFSet) (hA : A.Nonempty) (P : ZFSet) :
 /-- If `P` holds of some element of `A`, choice returns a witness. -/
 theorem zfChoose_spec {A P : ZFSet} (hA : A.Nonempty)
     (hP : ∃ x ∈ A, zfApp P x = zfTrue) :
-    zfChoose A hA P ∈ A ∧ zfApp P (zfChoose A hA P) = zfTrue := by
+    zfApp P (zfChoose A hA P) = zfTrue := by
   obtain ⟨x, hx, hPx⟩ := hP
   have hs : (A.sep (fun y => zfApp P y = zfTrue)).Nonempty :=
     ⟨x, mem_sep.2 ⟨hx, hPx⟩⟩
@@ -142,7 +134,7 @@ theorem zfChoose_spec {A P : ZFSet} (hA : A.Nonempty)
   dsimp
   rw [dif_pos hs]
   have hch := mem_sep.1 (Classical.choose_spec hs)
-  exact ⟨hch.1, hch.2⟩
+  exact hch.2
 
 noncomputable instance (A : ZFSet) (hA : A.Nonempty) :
     Definable₁ (zfChoose A hA) :=
