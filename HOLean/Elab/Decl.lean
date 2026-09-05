@@ -154,7 +154,7 @@ def elabHolTelescopeFromFVars (xs : Array Expr) (e : Expr) (decls : HolState) :
     throwError "HOLean: expected a proposition{indentExpr e}"
   let e ← instantiateMVars e
   let propType ← instantiateMVars (← inferType e)
-  let concl ← exprToTm e
+  let concl ← exprToTmVal e
   let mut hyps : List Tm := []
   let mut params : List (HOLean.Name × Ty) := []
   let mut stmt := concl
@@ -163,20 +163,20 @@ def elabHolTelescopeFromFVars (xs : Array Expr) (e : Expr) (decls : HolState) :
     if ← isTyVarSort xty then
       pure ()
     else if ← isHolHypothesisFVar x then
-      hyps := hyps ++ [← exprToTm xty]
+      hyps := hyps ++ [← exprToTmVal xty]
     else
       let n := holName (← x.fvarId!.getUserName)
-      let α ← exprToTy xty
+      let α ← exprToTyVal xty
       params := params ++ [(n, α)]
   for x in xs.reverse do
     let xty ← inferType x
     if ← isTyVarSort xty then
       pure ()
     else if ← isHolHypothesisFVar x then
-      stmt := Tm.imp (← exprToTm xty) stmt
+      stmt := Tm.imp (← exprToTmVal xty) stmt
     else
       let n := holName (← x.fvarId!.getUserName)
-      let α ← exprToTy xty
+      let α ← exprToTyVal xty
       stmt := Tm.all α (stmt.abstract n α)
   let env := decls.foldl HolDecl.apply holEnv
   unless stmt.infer env [] == some .bool do
@@ -263,8 +263,8 @@ def elabHDef : CommandElab := fun stx => do
       let leanRhs ← instantiateMVars leanRhs
       let fullTy ← mkForallFVars xs leanTy
       let fullRhs ← mkLambdaFVars xs leanRhs
-      let ty ← exprToTy fullTy
-      let rhs ← exprToTm fullRhs
+      let ty ← exprToTyVal fullTy
+      let rhs ← exprToTmVal fullRhs
       let fullTy ← instantiateMVars fullTy
       let fullRhs ← instantiateMVars fullRhs
       pure (ty, rhs, fullTy, fullRhs)

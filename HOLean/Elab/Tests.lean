@@ -85,6 +85,31 @@ example : hol_ty% Prop = Ty.bool := rfl
 example : hol_prop% True = Tm.tru := rfl
 example : hol_tm% true = Tm.tru := rfl
 
+/-! ## Antiquotation `⌜t⌝` -/
+
+example (p : Tm) : hol_prop(⌜p⌝) = p := rfl
+example (p q : Tm) : hol_prop(⌜p⌝ ∧ ⌜q⌝) = Tm.and p q := rfl
+example (p : Tm) : hol_prop(⌜p⌝ ∧ True) = Tm.and p Tm.tru := rfl
+example (p : Tm) : hol_prop(⌜p⌝ → False) = Tm.imp p Tm.falsum := rfl
+example (α : Ty) : hol_ty(⌜α⌝) = α := rfl
+example (α : Ty) : hol_ty(⌜α⌝ → Prop) = α ↝ Ty.bool := rfl
+example (α : Ty) (x : Tm) :
+    hol_tm(fun (_y : ⌜α⌝) => ⌜x⌝ ∧ True) = Tm.lam α (Tm.and x Tm.tru) := rfl
+
+/-- Parameterized formers can be written with `hol_prop` + `⌜·⌝`.
+Splices under a binder are inserted as-is; shift dangling indices yourself. -/
+example (p q : Tm) :
+    hol_prop(
+      (fun (f : Bool → Bool → Bool) => f ⌜p.shift 1 0⌝ ⌜q.shift 1 0⌝) =
+      (fun (f : Bool → Bool → Bool) => f true true)) =
+      Tm.andExpand p q := rfl
+
+/--
+error: HOLean: `⌜·⌝` is only allowed inside `hol_ty` / `hol_tm` / `hol_prop` / `hol`
+-/
+#guard_msgs in
+#check ⌜Tm.tru⌝
+
 /-! ## Local context -/
 
 variable {α : Type} (x : α)

@@ -28,6 +28,11 @@ and mentions `x` is not a HOL type.  A `∀ (x : α), p` whose body has sort
 `Type`-binders (`∀ α : Type, …`, implicit `{α}`) are *schematic* type
 variables, not System F type lambdas: they are opened as free type
 variables and do not appear as `Tm.lam`.
+
+Antiquotation `⌜t⌝` (see `HOLean.Elab.Term`) inserts a `Tm` or `Ty`
+value into the Lean stand-in.  The translator replaces `holTmQuote` /
+`holTyQuote` with that value, so `hol_prop(⌜p⌝ ∧ True)` elaborates to
+`Tm.and p Tm.tru`.
 -/
 
 open Lean Meta
@@ -50,6 +55,183 @@ end HOLean
 
 namespace HOLean.Elab
 
+/-- Intermediate stand-in for `⌜t⌝` when `t : Tm`.  The HOL translator
+replaces this with `t`; it should not appear in elaborated output. -/
+axiom holTmQuote (α : Sort u) (t : Tm) : α
+
+/-- Intermediate stand-in for `⌜α⌝` when `α : Ty`. -/
+opaque holTyQuote (α : Ty) : Type
+
+/-- A HOL type, or a Lean expression of type `Ty` (an antiquotation). -/
+inductive TyQ where
+  | val : Ty → TyQ
+  | expr : Expr → TyQ
+
+/-- Quoted HOL term.  `val` is a fully known tree (no antiquotations).
+`splice` is `⌜t⌝`.  `app'` / `lam'` / `fvar'` / `const'` keep structure so
+that abstracting a Lean binder does not `close` inside a splice. -/
+inductive TmQ where
+  | val : Tm → TmQ
+  | splice : Expr → TmQ
+  | app' : TmQ → TmQ → TmQ
+  | lam' : TyQ → TmQ → TmQ
+  | fvar' : HOLean.Name → TyQ → TmQ
+  | const' : HOLean.Name → TyQ → TmQ
+
+def TyQ.toExpr : TyQ → Expr
+  | .val α => Lean.toExpr α
+  | .expr e => e
+
+def TyQ.beq : TyQ → TyQ → Bool
+  | .val α, .val β => α == β
+  | .expr a, .expr b => a == b
+  | _, _ => false
+
+def isHolTmQuote? (e : Expr) : Option Expr :=
+  if e.isAppOf ``holTmQuote then e.getAppArgs.back? else none
+
+def isHolTyQuote? (e : Expr) : Option Expr :=
+  if e.isAppOfArity ``holTyQuote 1 then some e.appArg! else none
+
+def decodeString (e : Expr) : MetaM String := do
+  let e ← whnf e
+  match e with
+  | .lit (.strVal s) => return s
+  | _ => throwError "HOLean: expected a string literal{indentExpr e}"
+
+def decodeNat (e : Expr) : MetaM Nat := do
+  let e ← whnf e
+  match e.nat? with
+  | some n => return n
+  | none => throwError "HOLean: expected a nat literal{indentExpr e}"
+
+partial def decodeTy (e : Expr) : MetaM Ty := do
+  let e ← whnf e
+  if e.isConstOf ``Ty.bool then
+    return .bool
+  if e.isConstOf ``Ty.ind then
+    return .ind
+  if e.isAppOfArity ``Ty.var 1 then
+    return .var (← decodeString (e.getArg! 0))
+  if e.isAppOfArity ``Ty.arrow 2 then
+    return (← decodeTy (e.getArg! 0)) ↝ (← decodeTy (e.getArg! 1))
+  throwError "HOLean: expected a closed `Ty`{indentExpr e}"
+
+partial def decodeTm (e : Expr) : MetaM Tm := do
+  let e ← whnf e
+  if e.isAppOfArity ``Tm.bvar 1 then
+    return .bvar (← decodeNat (e.getArg! 0))
+  if e.isAppOfArity ``Tm.fvar 2 then
+    return .fvar (← decodeString (e.getArg! 0)) (← decodeTy (e.getArg! 1))
+  if e.isAppOfArity ``Tm.const 2 then
+    return .const (← decodeString (e.getArg! 0)) (← decodeTy (e.getArg! 1))
+  if e.isAppOfArity ``Tm.app 2 then
+    return .app (← decodeTm (e.getArg! 0)) (← decodeTm (e.getArg! 1))
+  if e.isAppOfArity ``Tm.lam 2 then
+    return .lam (← decodeTy (e.getArg! 0)) (← decodeTm (e.getArg! 1))
+  throwError "HOLean: expected a closed `Tm`{indentExpr e}"
+
+def TyQ.force : TyQ → MetaM Ty
+  | .val α => return α
+  | .expr e => decodeTy e
+
+def TyQ.arrow : TyQ → TyQ → TyQ
+  | .val α, .val β => .val (α ↝ β)
+  | α, β => .expr (mkApp2 (mkConst ``Ty.arrow) α.toExpr β.toExpr)
+
+def TmQ.app : TmQ → TmQ → TmQ
+  | .val f, .val a => .val (Tm.app f a)
+  | f, a => .app' f a
+
+def TmQ.lam : TyQ → TmQ → TmQ
+  | .val α, .val t => .val (.lam α t)
+  | α, t => .lam' α t
+
+def TmQ.const (n : HOLean.Name) (ty : TyQ) : TmQ :=
+  match ty with
+  | .val ty => .val (.const n ty)
+  | ty => .const' n ty
+
+def TmQ.fvar (x : HOLean.Name) (α : TyQ) : TmQ :=
+  match α with
+  | .val α => .val (.fvar x α)
+  | α => .fvar' x α
+
+partial def TmQ.toTm? : TmQ → Option Tm
+  | .val t => some t
+  | .splice _ => none
+  | .app' f a => do return Tm.app (← f.toTm?) (← a.toTm?)
+  | .lam' (.val α) t => do return Tm.lam α (← t.toTm?)
+  | .lam' _ _ => none
+  | .fvar' x (.val α) => some (.fvar x α)
+  | .fvar' _ _ => none
+  | .const' n (.val α) => some (.const n α)
+  | .const' _ _ => none
+
+partial def TmQ.toExpr (t : TmQ) : Expr :=
+  match t.toTm? with
+  | some t => Lean.toExpr t
+  | none =>
+    match t with
+    | .val t => Lean.toExpr t
+    | .splice e => e
+    | .app' f a => mkApp2 (mkConst ``Tm.app) f.toExpr a.toExpr
+    | .lam' α t => mkApp2 (mkConst ``Tm.lam) α.toExpr t.toExpr
+    | .fvar' x α => mkApp2 (mkConst ``Tm.fvar) (Lean.toExpr x) α.toExpr
+    | .const' n α => mkApp2 (mkConst ``Tm.const) (Lean.toExpr n) α.toExpr
+
+partial def TmQ.closeAt (t : TmQ) (k : Nat) (x : HOLean.Name) (α : TyQ) : TmQ :=
+  match t with
+  | .val t =>
+    match α with
+    | .val α => .val (t.closeAt k x α)
+    | .expr _ => .val t
+  | .splice e => .splice e
+  | .app' f a => (f.closeAt k x α).app (a.closeAt k x α)
+  | .lam' β t => TmQ.lam β (t.closeAt (k + 1) x α)
+  | .fvar' y β => if y == x && β.beq α then .val (.bvar k) else .fvar' y β
+  | .const' n τ => .const' n τ
+
+def TmQ.abstract (t : TmQ) (x : HOLean.Name) (α : TyQ) : TmQ :=
+  TmQ.lam α (t.closeAt 0 x α)
+
+def TmQ.eqConst (α : TyQ) : TmQ :=
+  match α with
+  | .val α => .val (Tm.eqConst α)
+  | α => TmQ.const eqName (α.arrow (α.arrow (.val .bool)))
+
+def TmQ.mkEq (α : TyQ) (s t : TmQ) : TmQ :=
+  (TmQ.eqConst α).app s |>.app t
+
+def TmQ.not (t : TmQ) : TmQ :=
+  match t with
+  | .val t => .val (Tm.not t)
+  | t => (TmQ.const notName (.val notTy)).app t
+
+def TmQ.imp (p q : TmQ) : TmQ :=
+  match p, q with
+  | .val p, .val q => .val (Tm.imp p q)
+  | p, q => (TmQ.const impName (.val impTy)).app p |>.app q
+
+def TmQ.all (α : TyQ) (P : TmQ) : TmQ :=
+  match α, P with
+  | .val α, .val P => .val (Tm.all α P)
+  | α, P => (TmQ.const allName ((α.arrow (.val .bool)).arrow (.val .bool))).app P
+
+def TmQ.selectConst (α : TyQ) : TmQ :=
+  TmQ.const selectName ((α.arrow (.val .bool)).arrow α)
+
+def TmQ.oneOne (α β : TyQ) (f : TmQ) : TmQ :=
+  (TmQ.const oneOneName (((α.arrow β).arrow (.val .bool)))).app f
+
+def TmQ.onto (α β : TyQ) (f : TmQ) : TmQ :=
+  (TmQ.const ontoName (((α.arrow β).arrow (.val .bool)))).app f
+
+def TmQ.force (t : TmQ) : MetaM Tm :=
+  match t.toTm? with
+  | some t => return t
+  | none => decodeTm t.toExpr
+
 /-- Strip hygiene and render a Lean name as a HOL `Name`. -/
 def holName (n : Lean.Name) : HOLean.Name :=
   let n := n.eraseMacroScopes
@@ -66,26 +248,31 @@ def isTyVarSort (e : Expr) : MetaM Bool := do
 /-- Prepare an elaborated expression for translation. -/
 def ready (e : Expr) : MetaM Expr := do
   let e ← instantiateMVars e
-  let e := e.consumeMData
+  return e.consumeMData
+
+def throwIfMVar (e : Expr) : MetaM Unit := do
   if e.hasExprMVar then
     throwError "HOLean: expression still has metavariables{indentExpr e}"
-  return e
 
 mutual
 
 /-- Apply a HOL head to Lean arguments, each translated as a term. -/
-partial def apps (head : Tm) (args : Array Expr) : MetaM Tm :=
+partial def apps (head : TmQ) (args : Array Expr) : MetaM TmQ :=
   args.foldlM (init := head) fun t a =>
-    return Tm.app t (← exprToTm a)
+    return t.app (← exprToTm a)
 
 /-- Translate a Lean type (`e : Type u` or `e = Prop`) to a HOL type. -/
-partial def exprToTy (e : Expr) : MetaM Ty := do
+partial def exprToTy (e : Expr) : MetaM TyQ := do
   let e ← ready e
+  if let some α := isHolTyQuote? e then
+    throwIfMVar α
+    return .expr α
+  throwIfMVar e
   let e ← whnf e
   match e with
   | .sort l =>
     if l.isZero then
-      return .bool
+      return .val .bool
     else
       throwError "HOLean: `{e}` is a universe, not a HOL type \
         (use `Prop`/`Bool` for bool, `Nat`/`Ind` for ind, or a type variable)"
@@ -97,12 +284,12 @@ partial def exprToTy (e : Expr) : MetaM Ty := do
     if ty.isProp then
       throwError "HOLean: proposition `{decl.userName}` is not a HOL type \
         (it is a term of type bool)"
-    return .var (holName decl.userName)
+    return .val (.var (holName decl.userName))
   | .const n _ =>
     if n == `Prop || n == ``Bool then
-      return .bool
+      return .val .bool
     else if n == ``Nat || n == ``HOLean.Ind then
-      return .ind
+      return .val .ind
     else
       throwError "HOLean: unknown type constant `{n}`"
   | .forallE n α body bi =>
@@ -117,7 +304,7 @@ partial def exprToTy (e : Expr) : MetaM Ty := do
         let body' := body.instantiate1 x
         if body'.containsFVar x.fvarId! then
           throwError "HOLean: dependent type is not a HOL type{indentExpr e}"
-        return (← exprToTy α) ↝ (← exprToTy body')
+        return (← exprToTy α).arrow (← exprToTy body')
   | .letE _ _ v b _ =>
     exprToTy (b.instantiate1 v)
   | .mdata _ e =>
@@ -126,71 +313,73 @@ partial def exprToTy (e : Expr) : MetaM Ty := do
     throwError "HOLean: not a simple type{indentExpr e}"
 
 /-- Known Lean constants that denote HOL primitives or connectives. -/
-partial def translateConst (n : Lean.Name) (args : Array Expr) : MetaM (Option Tm) := do
+partial def translateConst (n : Lean.Name) (args : Array Expr) : MetaM (Option TmQ) := do
   match n with
   | ``True | ``Bool.true =>
-    if args.isEmpty then return some Tm.tru else return none
+    if args.isEmpty then return some (.val Tm.tru) else return none
   | ``False | ``Bool.false =>
-    if args.isEmpty then return some Tm.falsum else return none
+    if args.isEmpty then return some (.val Tm.falsum) else return none
   | ``And | ``Bool.and =>
-    some <$> apps (.const andName andTy) args
+    some <$> apps (.val (.const andName andTy)) args
   | ``Or | ``Bool.or =>
-    some <$> apps (.const orName orTy) args
+    some <$> apps (.val (.const orName orTy)) args
   | ``Not | ``Bool.not =>
-    some <$> apps (.const notName notTy) args
+    some <$> apps (.val (.const notName notTy)) args
   | ``Iff =>
-    some <$> apps (Tm.eqConst .bool) args
+    some <$> apps (TmQ.eqConst (.val .bool)) args
   | ``Eq =>
     if args.isEmpty then
       throwError "HOLean: `Eq` needs a type argument"
     else
       let α ← exprToTy args[0]!
-      some <$> apps (Tm.eqConst α) args[1:]
+      some <$> apps (TmQ.eqConst α) args[1:]
   | ``Ne =>
     match args with
     | #[α, x, y] =>
-      return some (Tm.not (Tm.mkEq (← exprToTy α) (← exprToTm x) (← exprToTm y)))
+      return some ((TmQ.mkEq (← exprToTy α) (← exprToTm x) (← exprToTm y)).not)
     | _ => return none
   | ``Exists =>
     if args.isEmpty then
       throwError "HOLean: `Exists` needs a type argument"
     else
       let α ← exprToTy args[0]!
-      some <$> apps (.const exName ((α ↝ .bool) ↝ .bool)) args[1:]
+      some <$> apps (TmQ.const exName ((α.arrow (.val .bool)).arrow (.val .bool))) args[1:]
   | ``Classical.epsilon =>
     match args with
     | #[α, _inst, p] =>
-      return some (Tm.app (Tm.selectConst (← exprToTy α)) (← exprToTm p))
+      return some ((TmQ.selectConst (← exprToTy α)).app (← exprToTm p))
     | #[α, _inst] =>
-      return some (Tm.selectConst (← exprToTy α))
+      return some (TmQ.selectConst (← exprToTy α))
     | _ => return none
   | ``id =>
     match args with
     | #[α] =>
       let α ← exprToTy α
-      return some (.lam α (.bvar 0))
+      return some (TmQ.lam α (.val (.bvar 0)))
     | #[_α, x] => some <$> exprToTm x
     | _ => return none
   | ``HOLean.oneOne =>
     match args with
     | #[α, β, f] =>
-      return some (Tm.oneOne (← exprToTy α) (← exprToTy β) (← exprToTm f))
+      return some (TmQ.oneOne (← exprToTy α) (← exprToTy β) (← exprToTm f))
     | #[α, β] =>
-      return some (.const oneOneName (((← exprToTy α) ↝ (← exprToTy β)) ↝ .bool))
+      let τ := ((← exprToTy α).arrow (← exprToTy β)).arrow (.val .bool)
+      return some (TmQ.const oneOneName τ)
     | _ => return none
   | ``HOLean.onto =>
     match args with
     | #[α, β, f] =>
-      return some (Tm.onto (← exprToTy α) (← exprToTy β) (← exprToTm f))
+      return some (TmQ.onto (← exprToTy α) (← exprToTy β) (← exprToTm f))
     | #[α, β] =>
-      return some (.const ontoName (((← exprToTy α) ↝ (← exprToTy β)) ↝ .bool))
+      let τ := ((← exprToTy α).arrow (← exprToTy β)).arrow (.val .bool)
+      return some (TmQ.const ontoName τ)
     | _ => return none
   | n =>
     if let some (holName, gen) := findUserDef? (← getEnv) n then
       some <$> applyUserConst holName gen args
     else if args.isEmpty then
       if let some stmt := findUserThmByLean? (← getEnv) n then
-        return some stmt
+        return some (.val stmt)
       else
         return none
     else
@@ -199,7 +388,7 @@ partial def translateConst (n : Lean.Name) (args : Array Expr) : MetaM (Option T
 /-- Apply a user `hdef` constant, instantiating schematic type variables
 from Lean type arguments and from the types of term arguments. -/
 partial def applyUserConst (holName : HOLean.Name) (gen : Ty) (args : Array Expr) :
-    MetaM Tm := do
+    MetaM TmQ := do
   let mut θ : TySubst := []
   let mut targs : Array Expr := #[]
   for a in args do
@@ -208,7 +397,7 @@ partial def applyUserConst (holName : HOLean.Name) (gen : Ty) (args : Array Expr
       let tvs := gen.tyvars.filter fun x => (θ.lookup x).isNone
       if tvs.isEmpty then
         throwError "HOLean: extra type argument{indentExpr a}"
-      let τ ← exprToTy a
+      let τ ← (← exprToTy a).force
       θ := θ ++ [(tvs[0]!, τ)]
     else
       targs := targs.push a
@@ -216,7 +405,7 @@ partial def applyUserConst (holName : HOLean.Name) (gen : Ty) (args : Array Expr
   for a in targs do
     match rest with
     | .arrow α β =>
-      let aTy ← exprToTy (← inferType a)
+      let aTy ← (← exprToTy (← inferType a)).force
       match α.matchTy aTy θ with
       | some θ' =>
         θ := θ'
@@ -225,11 +414,15 @@ partial def applyUserConst (holName : HOLean.Name) (gen : Ty) (args : Array Expr
         throwError "HOLean: cannot instantiate `{holName}` at argument{indentExpr a}"
     | _ =>
       throwError "HOLean: too many arguments to `{holName}`"
-  apps (.const holName (gen.inst θ)) targs
+  apps (TmQ.const holName (.val (gen.inst θ))) targs
 
 /-- Translate a Lean term or proposition to a HOL term. -/
-partial def exprToTm (e : Expr) : MetaM Tm := do
+partial def exprToTm (e : Expr) : MetaM TmQ := do
   let e ← ready e
+  if let some t := isHolTmQuote? e then
+    throwIfMVar t
+    return .splice t
+  throwIfMVar e
   match e with
   | .mdata _ e =>
     exprToTm e
@@ -238,9 +431,9 @@ partial def exprToTm (e : Expr) : MetaM Tm := do
     let ty ← whnf decl.type
     if ty.isSort && !ty.isProp then
       throwError "HOLean: type variable `{decl.userName}` is a HOL type, not a term"
-    return .fvar (holName decl.userName) (← exprToTy decl.type)
+    return TmQ.fvar (holName decl.userName) (← exprToTy decl.type)
   | .bvar i =>
-    return .bvar i
+    return .val (.bvar i)
   | .sort l =>
     throwError "HOLean: universe {Expr.sort l} is a type, not a term (use `hol_ty%`)"
   | .lam n α body bi =>
@@ -271,11 +464,11 @@ partial def exprToTm (e : Expr) : MetaM Tm := do
           -- Implication `p → q`.  A body that mentions the proof is dependent.
           if body'.containsFVar x.fvarId! then
             throwError "HOLean: dependent implication is not a HOL term{indentExpr e}"
-          return Tm.imp (← exprToTm α) (← exprToTm body')
+          return (← exprToTm α).imp (← exprToTm body')
         else
           let αT ← exprToTy α
           let t ← exprToTm body'
-          return Tm.all αT (t.abstract (holName (← x.fvarId!.getUserName)) αT)
+          return TmQ.all αT (t.abstract (holName (← x.fvarId!.getUserName)) αT)
   | .letE _ _ v b _ =>
     exprToTm (b.instantiate1 v)
   | .const .. | .app .. =>
@@ -293,7 +486,7 @@ partial def exprToTm (e : Expr) : MetaM Tm := do
         if aTy.isSort && !aTy.isProp then
           throwError "HOLean: type application is not allowed \
             (polymorphism is schematic){indentExpr a}"
-        t := Tm.app t (← exprToTm a)
+        t := t.app (← exprToTm a)
       return t
   | .mvar .. =>
     throwError "HOLean: unassigned metavariable{indentExpr e}"
@@ -303,5 +496,13 @@ partial def exprToTm (e : Expr) : MetaM Tm := do
     throwError "HOLean: structure projections are not HOL terms{indentExpr e}"
 
 end
+
+/-- Translate a Lean type to a closed `Ty` (no open antiquotations). -/
+def exprToTyVal (e : Expr) : MetaM Ty := do
+  (← exprToTy e).force
+
+/-- Translate a Lean term to a closed `Tm` (no open antiquotations). -/
+def exprToTmVal (e : Expr) : MetaM Tm := do
+  (← exprToTm e).force
 
 end HOLean.Elab

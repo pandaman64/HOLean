@@ -24,14 +24,14 @@ def holCommand (stx : Syntax) : TermElabM MessageData := do
   let e ← elabLean stx
   let type ← whnf (← inferType e)
   if type.isProp then
-    let t ← exprToTm e
+    let t ← exprToTmVal e
     return m!"HOL proposition:{indentD (repr t)}\n\
       infer: {repr (← inferHol t)}"
   else if type.isSort then
-    let ty ← exprToTy e
+    let ty ← exprToTyVal e
     return m!"HOL type:{indentD (repr ty)}"
   else
-    let t ← exprToTm e
+    let t ← exprToTmVal e
     return m!"HOL term:{indentD (repr t)}\n\
       infer: {repr (← inferHol t)}"
 

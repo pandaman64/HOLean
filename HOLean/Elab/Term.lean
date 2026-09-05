@@ -18,6 +18,7 @@ hol_tm(fun (x : α) => x)     -- Tm
 hol_prop(∀ x : α, x = x)     -- Tm of type bool
 hol(True)                    -- dispatch on the sort of the Lean type
 hol_ty% Prop                 -- tight `%` form (`term:max`)
+hol_prop(⌜p⌝ ∧ True)          -- antiquotation of a `Tm` / `Ty`
 ```
 
 `#hol` lives in `HOLean.Elab.Command` so this file does not import
@@ -26,11 +27,17 @@ hol_ty% Prop                 -- tight `%` form (`term:max`)
 
 open Lean Meta Elab
 
+register_option HOLean.inHolElab : Bool := {
+  defValue := false
+  descr := "internal: true while elaborating hol_ty / hol_tm / hol_prop / hol"
+}
+
 namespace HOLean.Elab
 
 /-- Elaborate `stx` with Lean, then translate. -/
 def elabLean (stx : Syntax) (expectedType? : Option Expr := none) : TermElabM Expr :=
-  Term.withoutErrToSorry <| Term.elabTermAndSynthesize stx expectedType?
+  withOptions (·.setBool `HOLean.inHolElab true) do
+    Term.withoutErrToSorry <| Term.elabTermAndSynthesize stx expectedType?
 
 def elabAsTy (stx : Syntax) : TermElabM Expr := do
   let e ← elabLean stx
@@ -40,31 +47,58 @@ def elabAsTy (stx : Syntax) : TermElabM Expr := do
       (use `hol_prop%`)"
   unless type.isSort do
     throwError "HOLean: expected a HOL type{indentExpr e}"
-  toExpr <$> exprToTy e
+  return (← exprToTy e).toExpr
 
 def elabAsTm (stx : Syntax) : TermElabM Expr := do
   let e ← elabLean stx
   let type ← whnf (← inferType e)
   if type.isSort && !type.isProp then
     throwError "HOLean: expected a HOL term, but this is a type (use `hol_ty%`)"
-  toExpr <$> exprToTm e
+  return (← exprToTm e).toExpr
 
 def elabAsProp (stx : Syntax) : TermElabM Expr := do
   let e ← elabLean stx (mkSort 0)
   unless (← Meta.isProp e) do
     throwError "HOLean: expected a proposition{indentExpr e}"
-  toExpr <$> exprToTm e
+  return (← exprToTm e).toExpr
 
 /-- Dispatch: `Prop` → term, `Type u` → type, otherwise term. -/
 def elabBySort (stx : Syntax) : TermElabM Expr := do
   let e ← elabLean stx
   let type ← whnf (← inferType e)
   if type.isProp then
-    toExpr <$> exprToTm e
+    return (← exprToTm e).toExpr
   else if type.isSort then
-    toExpr <$> exprToTy e
+    return (← exprToTy e).toExpr
   else
-    toExpr <$> exprToTm e
+    return (← exprToTm e).toExpr
+
+/-- Splice a `Tm` or `Ty` into a `hol_*` quotation. -/
+def elabHolQuote (stx : Syntax) (expectedType? : Option Expr) : TermElabM Expr := do
+  unless (← getBoolOption `HOLean.inHolElab) do
+    throwError "HOLean: `⌜·⌝` is only allowed inside `hol_ty` / `hol_tm` / `hol_prop` / `hol`"
+  let inner := stx[1]
+  let e ← Term.elabTermAndSynthesize inner none
+  let ty ← whnf (← inferType e)
+  if ← isDefEq ty (mkConst ``Ty) then
+    return mkApp (mkConst ``holTyQuote) e
+  if ← isDefEq ty (mkConst ``Tm) then
+    if expectedType?.isNone then
+      Term.tryPostponeIfNoneOrMVar none
+    let α ← match expectedType? with
+      | some exp =>
+        let exp ← instantiateMVars exp
+        let exp' ← whnf exp
+        if exp'.isSort || exp'.isMVar then
+          pure (mkSort 0)
+        else
+          pure exp
+      | none => pure (mkSort 0)
+    let u ← getLevel α
+    let r := mkApp2 (mkConst ``holTmQuote [u]) α e
+    Term.ensureHasType expectedType? r
+  else
+    throwError "HOLean: `⌜·⌝` expected a `Tm` or `Ty`, got{indentExpr e} : {ty}"
 
 end HOLean.Elab
 
@@ -96,3 +130,19 @@ elab:max "hol_prop%" t:term:max : term =>
 
 elab:max "hol%" t:term:max : term =>
   HOLean.Elab.elabBySort t
+
+/-- Antiquotation: splice a `Tm` or `Ty` into `hol_ty` / `hol_tm` / `hol_prop` / `hol`.
+
+```
+hol_prop(⌜p⌝ ∧ True)          -- `p : Tm`
+hol_ty(⌜α⌝ → Prop)            -- `α : Ty`
+hol_tm(fun (x : ⌜α⌝) => ⌜t⌝)
+```
+
+`$` is not used, so Lean syntax quotations can still write
+`` `(hol_prop(⌜$p⌝ ∧ True)) ``. -/
+syntax:max (name := holQuote) "⌜" term "⌝" : term
+
+@[term_elab holQuote]
+def elabHolQuote : Lean.Elab.Term.TermElab := fun stx expectedType? =>
+  HOLean.Elab.elabHolQuote stx expectedType?

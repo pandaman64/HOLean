@@ -155,8 +155,19 @@ Closed defining right-hand sides (`Tm.andDef`, `infinityAxiom`, …) are
 themselves written with `hol_tm` / `hol_prop`.  That is not circular:
 names and formers live in `Syntax/Logic.lean` (no elaborator), the
 elaborator imports only that file, and `Connective` / `Axiom` import the
-elaborator.  Parameterized formers (`andExpand p q`, `etaAxiom α β f`)
-stay as functions on `Tm` — they would need antiquotation.
+elaborator.  Parameterized formers can splice already-built `Tm` / `Ty`
+values with antiquotation `⌜t⌝`:
+
+```lean
+def andExpand (p q : Tm) : Tm :=
+  hol_prop(
+    (fun (f : Bool → Bool → Bool) => f ⌜p.shift 1 0⌝ ⌜q.shift 1 0⌝) =
+    (fun (f : Bool → Bool → Bool) => f true true))
+```
+
+Splices are inserted as-is: under a Lean binder, dangling `bvar`s must be
+`shift`ed (locally nameless).  `$` is left to Lean syntax quotations, so a
+macro can write `` `(hol_prop(⌜$p⌝ ∧ True)) ``.
 
 User declarations grow a Lean `EnvExtension` stacked on `holEnv`:
 
@@ -327,6 +338,7 @@ should satisfy η (functions *are* graphs), `SELECT` (`Classical.epsilon` /
 - [x] Reuse Lean's elaborator; translate `Lean.Expr` → `Ty` / `Tm`
 - [x] Reject dependent types by the sort of the Π-body
 - [x] `hol_ty(…)` / `hol_tm(…)` / `hol_prop(…)` / `hol(…)` / `#hol`
+- [x] antiquotation `⌜t⌝` of a `Tm` / `Ty` inside those elaborators
 - [x] `hdef` / `htheorem` over an `EnvExtension`; `HolM` kernel scripts
 
 ### Phase 5 — What we are *not* doing yet
