@@ -225,9 +225,13 @@ partial def evalTrace : ProvTrace → HolM CertifiedThm
         | _ => leanN.toString
       Hol.thm n
     | none =>
-      -- Schema axioms (η / SELECT / INFINITY) and raw ax traces.
+      -- HOL axioms (η / SELECT / INFINITY) and raw ax traces.
       if p == infinityAxiom then
         Hol.infinity
+      else if p == etaAxiom then
+        return Hol.mk [] etaAxiom (.ax etaAxiom)
+      else if p == selectAxiom then
+        return Hol.mk [] selectAxiom (.ax selectAxiom)
       else
         HolM.throw s!"evalTrace: cannot reconstruct axiom {repr p}"
   | .truth => Hol.truth
@@ -241,6 +245,8 @@ partial def evalTrace : ProvTrace → HolM CertifiedThm
     Hol.sym (← evalTrace h)
   | .gen x α h => do
     Hol.gen x α (← evalTrace h)
+  | .spec t α h => do
+    Hol.spec t (← evalTrace h)
   | .disch p h => do
     Hol.disch p (← evalTrace h)
   | .hole => HolM.throw "unsolved HOL goal"

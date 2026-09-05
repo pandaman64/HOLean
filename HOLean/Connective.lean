@@ -38,7 +38,7 @@ namespace Tm
 
 /-- Harrison / Andrews expansion of `T`. -/
 def truExpand : Tm :=
-  mkEq (.bool ↝ .bool) (.lam .bool (.bvar 0)) (.lam .bool (.bvar 0))
+  hol_tm((fun (x : Bool) => x) = (fun x => x))
 
 /-- Harrison / Andrews expansion of `p ∧ q`. -/
 def andExpand (p q : Tm) : Tm :=

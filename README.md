@@ -117,7 +117,8 @@ when `env.constants n = some gen` and `gen.instantiates inst`.
 `HasType` reads only `constants`, never `axioms`.  That lets us layer
 environments without a cycle: `holCore` is `{eq, select}` with no axioms;
 `holLogic` is the definitional chain of connectives; `HOLAxiom` is typed
-against `holLogic`; `holEnv` is `holLogic` plus η / SELECT / INFINITY.
+against `holLogic`; `holEnv` is `holLogic` plus the three closed sentences
+η / SELECT / INFINITY (object-level `∀`, as in HOL Light's `class.ml`).
 
 `eq` and `select` are the initial constants.  User constants are
 `Env.addConst` / `Env.addAxiom` / `Env.addDef`.  Connectives are
@@ -148,8 +149,8 @@ Dependent types are rejected: a `Π (x : α), β` whose *type* body mentions
 quantifier (or `p ⇒ q` when `α : Prop` and `q` ignores the proof).
 `Type`-binders become schematic type variables, not type lambdas.
 `Prop`/`Bool` stand for `bool`; `Nat`/`Ind` stand for `ind`.  Lean
-connectives (`∧`, `∨`, `¬`, `=`, `∀`, `∃`, `Classical.epsilon`) map to
-the `holLogic` constants.
+connectives (`∧`, `∨`, `¬`, `=`, `∀`, `∃`) and the stand-in `select`
+map to the `holLogic` / primitive constants.
 
 Closed defining right-hand sides (`Tm.andDef`, `infinityAxiom`, …) are
 themselves written with `hol_tm` / `hol_prop`.  That is not circular:
@@ -268,7 +269,7 @@ variable (HOL free variables are `(name, type)` pairs).
 - [x] Type / term substitution lemmas
 - [x] HOL Light kernel as `Provable`
 - [x] Kernel theorems are closed booleans
-- [x] Equality-only connectives and axiom schemas
+- [x] Equality-only connectives and closed axiom sentences (η, SELECT, INFINITY)
 
 ### Phase 2 — Deeper metatheory (this slice, up through infinity)
 
@@ -330,8 +331,8 @@ Fix a type valuation `ρ : Name → ZFSet`.
 then `⟦p⟧ = zfTrue`.
 
 **Consistency.**  `⟦⊥⟧ = zfFalse`, so `¬ ([] ⊩[holEnv] ⊥)`.  The same model
-should satisfy η (functions *are* graphs), `SELECT` (`Classical.epsilon` /
-`Class.choice`), and infinity (`succ : ω → ω`).
+should satisfy η (functions *are* graphs), `SELECT` (`select` / `zfChoose`),
+and infinity (`succ : ω → ω`).
 
 ### Phase 4 — Lean frontend (this slice)
 

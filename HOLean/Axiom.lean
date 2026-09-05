@@ -8,19 +8,19 @@ import HOLean.Kernel
 import HOLean.Elab.Term
 
 /-!
-# HOL axiom schemas
+# HOL axioms
 
 The ten kernel rules are the *inference* system.  Full HOL Light additionally
-postulates:
+postulates three closed sentences (after the connectives of `bool.ml` /
+`holLogic`):
 
-* **ETA** — `⊢ (λ x. f x) = f` (gives functional extensionality with the kernel)
-* **SELECT** — Hilbert choice, `⊢ P x ⇒ P (ε P)`
+* **ETA** — `⊢ ∀ f. (λ x. f x) = f` (gives functional extensionality with the kernel)
+* **SELECT** — Hilbert choice, `⊢ ∀ P x. P x ⇒ P (ε P)`
 * **INFINITY** — `ind` is Dedekind-infinite:
   `∃ f : ind ↝ ind. ONE_ONE f ∧ ¬ ONTO f`
 
-These are the axioms of the initial environment `holEnv`.  They are typed
-against `holLogic` (primitive constants plus defined connectives) so that
-installing them does not depend on `holEnv` itself.
+They are typed against `holLogic` (primitive constants plus defined
+connectives) so that installing them does not depend on `holEnv` itself.
 
 Infinity is an *existential* sentence.  We deliberately do **not** add an
 `indSuc` constant.  A named witness is `Env.addConst` plus axioms — the same
@@ -31,21 +31,32 @@ See the README section “Environments vs definitional extensions”.
 
 namespace HOLean
 
-/-- `η`: `(λ x. f x) = f`.  `f` is shifted under the binder so the former is
-capture-avoiding on open terms. -/
-def etaAxiom (α β : Ty) (f : Tm) : Tm :=
-  Tm.mkEq (α ↝ β) (.lam α (.app (f.shift 1 0) (.bvar 0))) f
+/-- `η`: `∀ f : A ↝ B. (λ x. f x) = f` with schematic type variables `A` and `B`. -/
+def etaAxiom : Tm :=
+  hol_prop(∀ {A B : Type} (f : A → B), (fun (x : A) => f x) = f)
 
-/-- Hilbert choice: `P x ⇒ P (ε P)`.
+theorem etaAxiom_eq :
+    etaAxiom =
+      Tm.all (.var primTyVar ↝ .var primTyVarB)
+        (.lam (.var primTyVar ↝ .var primTyVarB)
+          (Tm.mkEq (.var primTyVar ↝ .var primTyVarB)
+            (.lam (.var primTyVar) (.app (.bvar 1) (.bvar 0)))
+            (.bvar 0))) :=
+  rfl
 
-Neither `imp` nor `app` binds, so this former is already well-formed when `P`
-or `x` is a `bvar` (a predicate/witness under a local binder).  Axiom
-*instances* (`HOLAxiom`) still require a locally closed sentence: theorems
-cannot mention dangling indices.  To use `ε` on a bound predicate, open it as
-an `fvar`, instantiate the schema, then abstract — the usual locally nameless
-discipline. -/
-def selectAxiom (α : Ty) (P x : Tm) : Tm :=
-  Tm.imp (.app P x) (.app P (.app (Tm.selectConst α) P))
+/-- Hilbert choice: `∀ P x. P x ⇒ P (ε P)` with schematic type variable `A`. -/
+def selectAxiom : Tm :=
+  hol_prop(∀ {A : Type} (P : A → Prop) (x : A), P x → P (select P))
+
+theorem selectAxiom_eq :
+    selectAxiom =
+      Tm.all (.var primTyVar ↝ .bool)
+        (.lam (.var primTyVar ↝ .bool)
+          (Tm.all (.var primTyVar)
+            (.lam (.var primTyVar)
+              (Tm.imp (.app (.bvar 1) (.bvar 0))
+                (.app (.bvar 1) (.app (Tm.selectConst (.var primTyVar)) (.bvar 1))))))) :=
+  rfl
 
 /-- `∃ f : ind ↝ ind. ONE_ONE f ∧ ¬ ONTO f`. -/
 def infinityAxiom : Tm :=
@@ -59,20 +70,13 @@ theorem infinityAxiom_eq :
             (Tm.onto .ind .ind (.bvar 0)).not)) :=
   rfl
 
-/-- A (closed, boolean) formula is a HOL axiom instance, typed in `holLogic`. -/
+/-- The three closed HOL axiom sentences, typed in `holLogic`. -/
 inductive HOLAxiom : Tm → Prop where
-  | eta {α β f} (hf : HasType holLogic [] f (α ↝ β)) :
-      HOLAxiom (etaAxiom α β f)
-  /-- Locally closed instance: `HasType holLogic []` allows fvars, not dangling
-  `bvar`s.  Open a bound predicate to an fvar before forming an axiom
-  instance. -/
-  | select {α P x}
-      (hP : HasType holLogic [] P (α ↝ .bool))
-      (hx : HasType holLogic [] x α) :
-      HOLAxiom (selectAxiom α P x)
+  | eta : HOLAxiom etaAxiom
+  | select : HOLAxiom selectAxiom
   | infinity : HOLAxiom infinityAxiom
 
-/-- Initial HOL environment: defined connectives plus the primitive schemas. -/
+/-- Initial HOL environment: defined connectives plus the three axioms. -/
 def holEnv : Env where
   constants := holLogic.constants
   axioms := fun t => holLogic.axioms t ∨ HOLAxiom t
@@ -115,17 +119,31 @@ theorem holCore_le_holEnv : holCore.LE holEnv :=
 
 variable {env : Env}
 
-theorem HasType.etaAxiom [Env.HasEq env] {Γ α β f} (hf : HasType env Γ f (α ↝ β)) :
-    HasType env Γ (etaAxiom α β f) .bool :=
-  HasType.mkEq
-    (HasType.lam (HasType.app (hf.shift0 _) (HasType.bvar (by simp))))
-    hf
+theorem HasType.of_etaAxiom [Env.HasConnectives env] :
+    HasType env [] etaAxiom .bool := by
+  rw [etaAxiom_eq]
+  let A : Ty := .var primTyVar
+  let B : Ty := .var primTyVarB
+  have hb0A : HasType env [A, A ↝ B] (.bvar 0) A :=
+    HasType.bvar List.getElem?_cons_zero
+  have hb1 : HasType env [A, A ↝ B] (.bvar 1) (A ↝ B) :=
+    HasType.bvar (by simp)
+  have hb0F : HasType env [A ↝ B] (.bvar 0) (A ↝ B) :=
+    HasType.bvar List.getElem?_cons_zero
+  exact HasType.all <| HasType.lam <|
+    HasType.mkEq (HasType.lam (HasType.app hb1 hb0A)) hb0F
 
-theorem HasType.selectAxiom [Env.HasConnectives env] {Γ α P x}
-    (hP : HasType env Γ P (α ↝ .bool)) (hx : HasType env Γ x α) :
-    HasType env Γ (selectAxiom α P x) .bool :=
-  HasType.imp (HasType.app hP hx)
-    (HasType.app hP (HasType.app (HasType.selectConst α) hP))
+theorem HasType.of_selectAxiom [Env.HasConnectives env] :
+    HasType env [] selectAxiom .bool := by
+  rw [selectAxiom_eq]
+  let A : Ty := .var primTyVar
+  have hb0 : HasType env [A, A ↝ .bool] (.bvar 0) A :=
+    HasType.bvar List.getElem?_cons_zero
+  have hb1 : HasType env [A, A ↝ .bool] (.bvar 1) (A ↝ .bool) :=
+    HasType.bvar (by simp)
+  exact HasType.all <| HasType.lam <| HasType.all <| HasType.lam <|
+    HasType.imp (HasType.app hb1 hb0)
+      (HasType.app hb1 (HasType.app (HasType.selectConst A) hb1))
 
 theorem HasType.of_infinityAxiom [Env.HasConnectives env] :
     HasType env [] infinityAxiom .bool :=
@@ -137,8 +155,8 @@ theorem HasType.of_infinityAxiom [Env.HasConnectives env] :
 
 theorem HOLAxiom.bool_typed {p} (h : HOLAxiom p) : HasType holLogic [] p .bool := by
   cases h with
-  | eta hf => exact HasType.etaAxiom hf
-  | select hP hx => exact HasType.selectAxiom hP hx
+  | eta => exact HasType.of_etaAxiom
+  | select => exact HasType.of_selectAxiom
   | infinity => exact HasType.of_infinityAxiom
 
 theorem holEnv_WF : holEnv.WF := fun p hp =>

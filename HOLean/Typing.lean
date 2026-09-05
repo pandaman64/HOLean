@@ -496,7 +496,7 @@ definition is just the axiom `⊢ c = t`.  `Env.WF.addDef` preserves WF
 when the name is fresh and the RHS has the declared type.
 
 `holCore` is WF (no axioms).  `holLogic` and `holEnv` are proved WF by
-the `addDef` chain plus typing of the HOL schemas.
+the `addDef` chain plus typing of the HOL axioms.
 
 `Provable.ax` admits one axiom given its typing; `Provable.of_axiom`
 does the same from `env.WF`. -/

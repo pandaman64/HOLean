@@ -51,6 +51,8 @@ inductive ProvTrace where
   | eqSym (h : ProvTrace)
   /-- `GEN x α`: wrap the conclusion as `∀ x. t`. -/
   | gen (x : HOLean.Name) (α : Ty) (h : ProvTrace)
+  /-- `SPEC t α`: from `⊢ ∀ (λx. body)` conclude `⊢ body[t]`. -/
+  | spec (t : Tm) (α : Ty) (h : ProvTrace)
   /-- `DISCH p`: wrap the conclusion as `p ⇒ q`.  Not yet replayed as
   `Provable`. -/
   | disch (p : Tm) (h : ProvTrace)
@@ -64,7 +66,8 @@ def ProvTrace.usesAssume : ProvTrace → Bool
   | .assume _ => true
   | .trans a b | .mkComb a b | .eqMp a b | .deductAntisym a b =>
     a.usesAssume || b.usesAssume
-  | .abs _ _ h | .instType _ h | .inst _ h | .eqSym h | .gen _ _ h | .disch _ h =>
+  | .abs _ _ h | .instType _ h | .inst _ h | .eqSym h | .gen _ _ h | .spec _ _ h
+  | .disch _ h =>
     h.usesAssume
   | .refl .. | .beta .. | .ax _ | .truth | .named _ | .hole => false
 
@@ -73,7 +76,7 @@ def ProvTrace.usesDisch : ProvTrace → Bool
   | .disch _ _ => true
   | .trans a b | .mkComb a b | .eqMp a b | .deductAntisym a b =>
     a.usesDisch || b.usesDisch
-  | .abs _ _ h | .instType _ h | .inst _ h | .eqSym h | .gen _ _ h =>
+  | .abs _ _ h | .instType _ h | .inst _ h | .eqSym h | .gen _ _ h | .spec _ _ h =>
     h.usesDisch
   | .assume _ | .refl .. | .beta .. | .ax _ | .truth | .named _ | .hole => false
 
@@ -82,7 +85,8 @@ def ProvTrace.hasHole : ProvTrace → Bool
   | .hole => true
   | .trans a b | .mkComb a b | .eqMp a b | .deductAntisym a b =>
     a.hasHole || b.hasHole
-  | .abs _ _ h | .instType _ h | .inst _ h | .eqSym h | .gen _ _ h | .disch _ h =>
+  | .abs _ _ h | .instType _ h | .inst _ h | .eqSym h | .gen _ _ h | .spec _ _ h
+  | .disch _ h =>
     h.hasHole
   | .refl .. | .beta .. | .assume _ | .ax _ | .truth | .named _ => false
 
@@ -91,7 +95,8 @@ def ProvTrace.countHoles : ProvTrace → Nat
   | .hole => 1
   | .trans a b | .mkComb a b | .eqMp a b | .deductAntisym a b =>
     a.countHoles + b.countHoles
-  | .abs _ _ h | .instType _ h | .inst _ h | .eqSym h | .gen _ _ h | .disch _ h =>
+  | .abs _ _ h | .instType _ h | .inst _ h | .eqSym h | .gen _ _ h | .spec _ _ h
+  | .disch _ h =>
     h.countHoles
   | .refl .. | .beta .. | .assume _ | .ax _ | .truth | .named _ => 0
 
@@ -120,6 +125,7 @@ def ProvTrace.fillHole (t new : ProvTrace) : Option ProvTrace :=
   | .inst σ h => (fillHole h new).map (inst σ)
   | .eqSym h => (fillHole h new).map eqSym
   | .gen x α h => (fillHole h new).map (gen x α)
+  | .spec t α h => (fillHole h new).map (spec t α)
   | .disch p h => (fillHole h new).map (disch p)
   | .refl .. | .beta .. | .assume _ | .ax _ | .truth | .named _ => none
 

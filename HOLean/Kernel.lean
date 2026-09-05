@@ -96,7 +96,7 @@ inductive Provable (env : Env) : List Tm → Tm → Prop where
       Provable env (Γ.map (·.applySubst σ)) (p.applySubst σ)
   /-- Admit one environment axiom, given that it is a closed boolean.
   In a well-formed environment this typing is `env.WF`; see `of_axiom`.
-  Definitions are axioms `⊢ c = t`; the HOL schemas live in `holEnv`. -/
+  Definitions are axioms `⊢ c = t`; the HOL axioms live in `holEnv`. -/
   | ax {p} (hp : env.axioms p) (hty : HasType env [] p .bool) :
       Provable env [] p
 

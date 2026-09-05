@@ -206,15 +206,39 @@ def thm (n : HOLean.Name) : HolM CertifiedThm := do
     | none => HolM.throw s!"no Lean name for theorem `{n}`"
   | none => HolM.throw s!"no theorem `{n}`"
 
-/-- One η instance: `⊢ (λ x. f x) = f`. -/
+/-- `SPEC`: from `Γ ⊢ ∀ (λ x. body)` conclude `Γ ⊢ body[t]`. -/
+def spec (t : Tm) (th : CertifiedThm) : HolM CertifiedThm := do
+  match th.thm.concl with
+  | .app (.const n ((.arrow α .bool) ↝ .bool)) (.lam β body) =>
+    unless n == allName do
+      HolM.throw "SPEC: expected a universal quantifier"
+    unless β == α do
+      HolM.throw s!"SPEC: binder type {repr β} ≠ domain {repr α}"
+    let τt ← infer t
+    unless τt == α do
+      HolM.throw s!"SPEC: term has type {repr τt}, expected {repr α}"
+    return mk th.thm.hyps (body.open' t) (.spec t α th.trace)
+  | .app (.const n ((.arrow α .bool) ↝ .bool)) P =>
+    unless n == allName do
+      HolM.throw "SPEC: expected a universal quantifier"
+    let τt ← infer t
+    unless τt == α do
+      HolM.throw s!"SPEC: term has type {repr τt}, expected {repr α}"
+    return mk th.thm.hyps (P.app t) (.spec t α th.trace)
+  | _ => HolM.throw "SPEC: expected `∀ P`"
+
+/-- One η instance: `⊢ (λ x. f x) = f`, from the closed ETA axiom via
+`INST_TYPE` and `SPEC`. -/
 def eta (α β : Ty) (f : Tm) : HolM CertifiedThm := do
   let τ ← infer f
   unless τ == α ↝ β do
     HolM.throw s!"ETA: expected type {repr (α ↝ β)}, got {repr τ}"
-  let p := etaAxiom α β f
-  return mk [] p (.ax p)
+  let th0 := mk [] etaAxiom (.ax etaAxiom)
+  let θ : TySubst := [(primTyVar, α), (primTyVarB, β)]
+  let th1 ← instType θ th0
+  Hol.spec f th1
 
-/-- One SELECT instance: `⊢ P x ⇒ P (ε P)`. -/
+/-- One SELECT instance: `⊢ P x ⇒ P (ε P)`, from the closed SELECT axiom. -/
 def select (α : Ty) (P x : Tm) : HolM CertifiedThm := do
   let τP ← infer P
   let τx ← infer x
@@ -222,8 +246,11 @@ def select (α : Ty) (P x : Tm) : HolM CertifiedThm := do
     HolM.throw s!"SELECT: predicate has type {repr τP}"
   unless τx == α do
     HolM.throw s!"SELECT: witness has type {repr τx}"
-  let p := selectAxiom α P x
-  return mk [] p (.ax p)
+  let th0 := mk [] selectAxiom (.ax selectAxiom)
+  let θ : TySubst := [(primTyVar, α)]
+  let th1 ← instType θ th0
+  let th2 ← Hol.spec P th1
+  Hol.spec x th2
 
 /-- The infinity axiom. -/
 def infinity : HolM CertifiedThm :=

@@ -307,6 +307,17 @@ theorem substOk_nil {env : Env} : Tm.Subst.Ok env ([] : Tm.Subst) := by
 theorem holEnv_axioms_infinity : holEnv.axioms infinityAxiom :=
   Or.inr HOLAxiom.infinity
 
+theorem holEnv_axioms_eta : holEnv.axioms etaAxiom :=
+  Or.inr HOLAxiom.eta
+
+theorem holEnv_axioms_select : holEnv.axioms selectAxiom :=
+  Or.inr HOLAxiom.select
+
+/-- A name reserved for `SPEC` β-conversion.  Bodies from η / SELECT have no
+fvars, so this is always fresh for those axioms; other uses should ensure
+`body.freeIn freshSpecName α = false`. -/
+def freshSpecName : HOLean.Name := "_spec"
+
 /-- Reconstruct the sequent of a closed (or open) trace for side conditions. -/
 partial def ProvTrace.evalSequent (decls : Array HolDecl) :
     ProvTrace → Option (List Tm × Tm)
@@ -361,6 +372,18 @@ partial def ProvTrace.evalSequent (decls : Array HolDecl) :
   | .gen x α h => do
     let (Γ, t) ← h.evalSequent decls
     some (Γ, Tm.all α (t.abstract x α))
+  | .spec t α h => do
+    let (Γ, concl) ← h.evalSequent decls
+    match concl with
+    | .app (.const n ((.arrow α' .bool) ↝ .bool)) (.lam β body) =>
+      if n == allName && α' == α && β == α then
+        some (Γ, body.open' t)
+      else none
+    | .app (.const n ((.arrow α' .bool) ↝ .bool)) P =>
+      if n == allName && α' == α then
+        some (Γ, P.app t)
+      else none
+    | _ => none
   | .disch p h => do
     let (Γ, q) ← h.evalSequent decls
     some (Γ.filter (· != p), Tm.imp p q)
@@ -410,7 +433,7 @@ def weakenAxiomsProof (fromDecls toDecls : Array HolDecl) (p : Tm) (pf : Expr) :
       envE := mkApp2 (mkConst ``Env.addAxiom) envE (toExpr stmt)
   return pf
 
-/-- Prove `env.axioms p` for a definitional equation or HOL schema axiom. -/
+/-- Prove `env.axioms p` for a definitional equation or closed HOL axiom. -/
 def mkAxiomsProof (decls : Array HolDecl) (envE connE : Expr) (p : Tm) :
     TermElabM Expr := do
   let tryConnAx (axName : Lean.Name) (expected : Tm) : TermElabM (Option Expr) := do
@@ -458,9 +481,15 @@ def mkAxiomsProof (decls : Array HolDecl) (envE connE : Expr) (p : Tm) :
         | .thm .. =>
           prefixDecls := prefixDecls.push d
   | _ => pure ()
-  -- Infinity axiom of `holEnv`, weakened through user decls.
+  -- Closed HOL Light axioms of `holEnv`, weakened through user decls.
   if p == infinityAxiom then
     let pf0 := Lean.mkConst ``HOLean.Elab.holEnv_axioms_infinity
+    return ← weakenAxiomsProof #[] decls p pf0
+  if p == etaAxiom then
+    let pf0 := Lean.mkConst ``HOLean.Elab.holEnv_axioms_eta
+    return ← weakenAxiomsProof #[] decls p pf0
+  if p == selectAxiom then
+    let pf0 := Lean.mkConst ``HOLean.Elab.holEnv_axioms_select
     return ← weakenAxiomsProof #[] decls p pf0
   throwError "HOLean: cannot prove environment axiom {repr p}"
 
@@ -537,6 +566,46 @@ partial def buildProvable (decls : Array HolDecl) (envE connE : Expr) :
     liftMetaM do
       mkAppOptM ``Provable.gen_nil
         #[some envE, some connE, none, some (toExpr x), some (toExpr α), some p]
+  | .spec t α h => do
+    let p ← buildProvable decls envE connE h
+    let some (_, concl) := h.evalSequent decls
+      | throwError "HOLean: SPEC: cannot recover premise sequent"
+    match concl with
+    | .app (.const n ((.arrow α' .bool) ↝ .bool)) (.lam β body) => do
+      unless n == allName && α' == α && β == α do
+        throwError "HOLean: SPEC: expected `∀ (λx. body)`"
+      let (hbody, τb) ← liftMetaM do elabHasType envE connE body [α]
+      unless τb == .bool do
+        throwError "HOLean: SPEC: body is not boolean"
+      let (ht, τt) ← liftMetaM do elabHasType envE connE t []
+      unless τt == α do
+        throwError "HOLean: SPEC: witness type mismatch"
+      let x : HOLean.Name := freshSpecName
+      unless body.freeIn x α == false do
+        throwError "HOLean: SPEC: `{x}` is free in the body; pick another name"
+      let hf ← liftMetaM do
+        mkDecideProof <|
+          mkApp3 (mkConst ``Eq [Level.zero]) (mkConst ``Bool)
+            (toExpr (body.freeIn x α)) (toExpr false)
+      liftMetaM do
+        mkAppOptM ``Provable.spec_beta
+          #[some envE, some connE, none, some (toExpr body), some (toExpr t),
+            some (toExpr α), some (toExpr x), some p, some hbody, some ht, some hf]
+    | .app (.const n ((.arrow α' .bool) ↝ .bool)) P => do
+      unless n == allName && α' == α do
+        throwError "HOLean: SPEC: expected `∀ P`"
+      let (hP, τP) ← liftMetaM do elabHasType envE connE P []
+      unless τP == α ↝ .bool do
+        throwError "HOLean: SPEC: predicate type mismatch"
+      let (ht, τt) ← liftMetaM do elabHasType envE connE t []
+      unless τt == α do
+        throwError "HOLean: SPEC: witness type mismatch"
+      let x : HOLean.Name := freshSpecName
+      liftMetaM do
+        mkAppOptM ``Provable.spec
+          #[some envE, some connE, none, some (toExpr P), some (toExpr t),
+            some (toExpr α), some (toExpr x), some p, some hP, some ht]
+    | _ => throwError "HOLean: SPEC: premise is not a universal quantifier"
   | .disch p _ =>
     throwError "HOLean: DISCH is not certified for closed theorems ({repr p})"
   | .assume p =>

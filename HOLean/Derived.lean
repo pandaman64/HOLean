@@ -390,6 +390,43 @@ theorem gen_nil {t x α} (h : [] ⊩[env] t) :
     [] ⊩[env] Tm.all α (t.abstract x α) :=
   gen h (by intro hx; cases hx) (by intro r hr; cases hr)
 
+/-- `EQT_ELIM`: from `Γ ⊢ p = T` conclude `Γ ⊢ p`. -/
+theorem eqt_elim {Γ p} (h : Γ ⊩[env] Tm.mkEq .bool p Tm.tru) :
+    Γ ⊩[env] p := by
+  simpa using eqMp (eq_sym h) tru_intro
+
+/-- `SPEC`: from `Γ ⊢ ∀ P` and `t : α` conclude `Γ ⊢ P t`. -/
+theorem spec {Γ P t α} (x : Name)
+    (h : Γ ⊩[env] Tm.all α P)
+    (hP : HasType env [] P (α ↝ .bool))
+    (ht : HasType env [] t α) :
+    Γ ⊩[env] P.app t := by
+  have hunf := all_eq_expand α x hP
+  have hexp : Γ ⊩[env] Tm.allExpand α P := by
+    simpa using eqMp hunf h
+  have happ : Γ ⊩[env] Tm.mkEq .bool (P.app t) ((Tm.lam α Tm.tru).app t) := by
+    simpa [Tm.allExpand] using mkComb hexp (refl ht)
+  have hβ : [] ⊩[env] Tm.mkEq .bool ((Tm.lam α Tm.tru).app t) Tm.tru := by
+    have hβ0 :=
+      beta_conv (t := Tm.tru) (u := t) (x := x) (α := α) (β := .bool)
+        HasType.tru ht (Tm.tru_not_free x α)
+    simpa [Tm.open', Tm.openAt_of_LC Tm.tru_LC] using hβ0
+  have hPtT : Γ ⊩[env] Tm.mkEq .bool (P.app t) Tm.tru := by
+    simpa using trans happ hβ
+  exact eqt_elim hPtT
+
+/-- `SPEC` when the predicate is a λ: `Γ ⊢ ∀ (λx. body)` and `t : α`
+gives `Γ ⊢ body[t]`. -/
+theorem spec_beta {Γ body t α} (x : Name)
+    (h : Γ ⊩[env] Tm.all α (.lam α body))
+    (hbody : HasType env [α] body .bool)
+    (ht : HasType env [] t α)
+    (hf : body.freeIn x α = false) :
+    Γ ⊩[env] body.open' t := by
+  have happ := spec (P := .lam α body) x h (HasType.lam hbody) ht
+  have hβ := beta_conv (t := body) (u := t) (x := x) hbody ht hf
+  simpa using eqMp hβ happ
+
 theorem conj {Γ Δ p q : _} (x : Name)
     (hp : Γ ⊩[env] p) (hq : Δ ⊩[env] q)
     (hTΓ : Tm.tru ∉ Γ) (hTΔ : Tm.tru ∉ Δ)

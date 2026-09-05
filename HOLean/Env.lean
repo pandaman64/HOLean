@@ -22,7 +22,7 @@ Env  ≔  constants : Name → Option Ty     -- generic types
 between typing axioms and installing them: `holCore` has the primitive
 constants and no axioms; `holLogic` is the definitional chain of
 connectives; `HOLAxiom` is typed against `holLogic`; `holEnv` is `holLogic`
-plus those schemas.
+plus the three closed HOL axioms.
 
 User definitions grow the environment (`addConst` / `addAxiom` / `addDef`).
 Logical connectives are definitional extensions of `holCore` (`holLogic`).
@@ -171,7 +171,7 @@ theorem addAxiom_axioms_of {env : Env} (ax p : Tm) (h : env.axioms p) :
 end Env
 
 /-- Primitive constants, no axioms.  The connective chain (`holLogic`) and
-the HOL axiom schemas (`HOLAxiom`) are layered on top of this. -/
+the three closed HOL axioms (`HOLAxiom`) are layered on top of this. -/
 def holCore : Env where
   constants := holConstants
   axioms := fun _ => False

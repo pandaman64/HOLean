@@ -66,7 +66,7 @@ example : hol_tm(true) = Tm.tru := rfl
 example : hol_tm(fun (p : Bool) => !p) =
     Tm.lam .bool (Tm.not (.bvar 0)) := rfl
 
-example : hol_tm(Classical.epsilon (fun _x : Nat => True)) =
+example : hol_tm(select (fun _x : Nat => True)) =
     Tm.app (Tm.selectConst .ind) (Tm.lam .ind Tm.tru) := rfl
 
 example : hol_prop(∃ f : Nat → Nat, oneOne f ∧ ¬ onto f) =
@@ -74,6 +74,24 @@ example : hol_prop(∃ f : Nat → Nat, oneOne f ∧ ¬ onto f) =
       (.lam (Ty.ind ↝ Ty.ind)
         ((Tm.oneOne .ind .ind (.bvar 0)).and
           (Tm.onto .ind .ind (.bvar 0)).not)) := rfl
+
+example : etaAxiom =
+    Tm.all (.var primTyVar ↝ .var primTyVarB)
+      (.lam (.var primTyVar ↝ .var primTyVarB)
+        (Tm.mkEq (.var primTyVar ↝ .var primTyVarB)
+          (.lam (.var primTyVar) (.app (.bvar 1) (.bvar 0)))
+          (.bvar 0))) :=
+  etaAxiom_eq
+
+example : selectAxiom =
+    Tm.all (.var primTyVar ↝ .bool)
+      (.lam (.var primTyVar ↝ .bool)
+        (Tm.all (.var primTyVar)
+          (.lam (.var primTyVar)
+            (Tm.imp (.app (.bvar 1) (.bvar 0))
+              (.app (.bvar 1)
+                (.app (Tm.selectConst (.var primTyVar)) (.bvar 1))))))) :=
+  selectAxiom_eq
 
 /-! ## Sort dispatch (`hol(·)`) and the tight `%` form -/
 

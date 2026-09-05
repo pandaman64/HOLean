@@ -48,6 +48,10 @@ opaque oneOne {α β : Type} (f : α → β) : Prop
 /-- Lean stand-in for HOL `ONTO`. -/
 opaque onto {α β : Type} (f : α → β) : Prop
 
+/-- Lean stand-in for HOL Hilbert choice `@` / `ε`.  An `axiom` (not `opaque`)
+so no `Nonempty` instance is required — matching HOL Light's `@`. -/
+axiom select {α : Type} (P : α → Prop) : α
+
 deriving instance ToExpr for Ty
 deriving instance ToExpr for Tm
 
@@ -377,11 +381,11 @@ partial def translateConst (n : Lean.Name) (args : Array Expr) : MetaM (Option T
     else
       let α ← exprToTy args[0]!
       some <$> apps (TmQ.const exName ((α.arrow (.val .bool)).arrow (.val .bool))) args[1:]
-  | ``Classical.epsilon =>
+  | ``HOLean.select =>
     match args with
-    | #[α, _inst, p] =>
+    | #[α, p] =>
       return some ((TmQ.selectConst (← exprToTy α)).app (← exprToTm p))
-    | #[α, _inst] =>
+    | #[α] =>
       return some (TmQ.selectConst (← exprToTy α))
     | _ => return none
   | ``id =>

@@ -115,7 +115,8 @@ The ten rules plus `ax` are the cases:
 **Consistency.**  `⟦falsum⟧ = zfFalse`, so `¬ ([] ⊩[holEnv] Tm.falsum)`.
 
 η holds because `funs` contains only graphs.  SELECT uses Lean/`ZFSet`
-choice on `{x ∈ ⟦α⟧ | P x = zfTrue}`.  INFINITY uses `succ` on `omega`.
+choice on the closed `∀ P x. P x ⇒ P (ε P)` sentence
+(`{x ∈ ⟦α⟧ | P x = zfTrue}`).  INFINITY uses `succ` on `omega`.
 
 ## Mathlib pieces we actually use
 
