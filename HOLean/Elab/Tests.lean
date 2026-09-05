@@ -96,6 +96,13 @@ example (α : Ty) : hol_ty(⌜α⌝ → Prop) = α ↝ Ty.bool := rfl
 example (α : Ty) (x : Tm) :
     hol_tm(fun (_y : ⌜α⌝) => ⌜x⌝ ∧ True) = Tm.lam α (Tm.and x Tm.tru) := rfl
 
+example (p : Tm) : hol_tm(⌜p⌝) = p := rfl
+example (f : Tm) (n : Nat) : hol_tm(⌜f⌝ n) = Tm.app f (Tm.fvar "n" .ind) := rfl
+
+example (α β : Ty) (f : Tm) :
+    hol_tm((fun (x : ⌜α⌝) => ⌜f.shift 1 0⌝ x) = (⌜f⌝ : ⌜α⌝ → ⌜β⌝)) =
+      Tm.mkEq (α ↝ β) (.lam α (.app (f.shift 1 0) (.bvar 0))) f := rfl
+
 /-- Parameterized formers can be written with `hol_prop` + `⌜·⌝`.
 Splices under a binder are inserted as-is; shift dangling indices yourself. -/
 example (p q : Tm) :

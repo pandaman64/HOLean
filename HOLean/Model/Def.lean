@@ -45,9 +45,9 @@ noncomputable def interpDef (I : EnvInterp env ρ) (ξ : FVarVal ρ)
 
 theorem interpDef_mem (I : EnvInterp env ρ) (ξ : FVarVal ρ)
     {ty : Ty} {rhs : Tm} {inst : Ty}
-    (hrhs : HasType env [] rhs ty) (hinst : ty.isInstanceOf inst) :
+    (hrhs : HasType env [] rhs ty) (hinst : ty.instantiates inst) :
     interpDef I ξ ty rhs inst ∈ inst.denote ρ := by
-  have hsome := Ty.matchTy_of_isInstanceOf hinst
+  have hsome := Ty.matchTy_of_instantiates hinst
   simp [interpDef]
   cases hθ : ty.matchTy inst [] with
   | none =>
@@ -203,7 +203,7 @@ theorem EnvModel.addDef_ax_new [Env.HasEq env] (n : Name) {ty : Ty} {rhs : Tm}
   set ξ0 := FVarVal.ofNonempty hρ
   set I' := M.interp.addDef (n := n) ξ0 hrhs
   have htyC : HasType (env.addDef n ty rhs) [] (.const n ty) ty :=
-    HasType.const (by simp) (Ty.isInstanceOf_self ty)
+    HasType.const (by simp) (Ty.instantiates_self ty)
   have hrhs' : HasType (env.addDef n ty rhs) [] rhs ty :=
     hrhs.weakenEnv (Env.LE.addDef_of_fresh hn)
   apply (Tm.denote_mkEq_true_iff_nil (I'.inst θ)

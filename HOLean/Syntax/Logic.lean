@@ -42,21 +42,21 @@ def exTy : Ty := (.var primTyVar ↝ .bool) ↝ .bool
 def oneOneTy : Ty := (.var primTyVar ↝ .var primTyVarB) ↝ .bool
 def ontoTy : Ty := (.var primTyVar ↝ .var primTyVarB) ↝ .bool
 
-theorem allTy_isInstanceOf (α : Ty) :
-    allTy.isInstanceOf ((α ↝ .bool) ↝ .bool) :=
+theorem allTy_instantiates (α : Ty) :
+    allTy.instantiates ((α ↝ .bool) ↝ .bool) :=
   ⟨[(primTyVar, α)], by simp [allTy, primTyVar, Ty.inst, TySubst.lookup]⟩
 
-theorem exTy_isInstanceOf (α : Ty) :
-    exTy.isInstanceOf ((α ↝ .bool) ↝ .bool) :=
+theorem exTy_instantiates (α : Ty) :
+    exTy.instantiates ((α ↝ .bool) ↝ .bool) :=
   ⟨[(primTyVar, α)], by simp [exTy, primTyVar, Ty.inst, TySubst.lookup]⟩
 
-theorem oneOneTy_isInstanceOf (α β : Ty) :
-    oneOneTy.isInstanceOf ((α ↝ β) ↝ .bool) :=
+theorem oneOneTy_instantiates (α β : Ty) :
+    oneOneTy.instantiates ((α ↝ β) ↝ .bool) :=
   ⟨[(primTyVar, α), (primTyVarB, β)], by
     simp [oneOneTy, primTyVar, primTyVarB, Ty.inst, TySubst.lookup]⟩
 
-theorem ontoTy_isInstanceOf (α β : Ty) :
-    ontoTy.isInstanceOf ((α ↝ β) ↝ .bool) :=
+theorem ontoTy_instantiates (α β : Ty) :
+    ontoTy.instantiates ((α ↝ β) ↝ .bool) :=
   ⟨[(primTyVar, α), (primTyVarB, β)], by
     simp [ontoTy, primTyVar, primTyVarB, Ty.inst, TySubst.lookup]⟩
 

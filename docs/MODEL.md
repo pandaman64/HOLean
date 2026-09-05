@@ -49,7 +49,7 @@ HasType.denote_mem : HasType env Γ t α → ⟦t⟧ ∈ ⟦α⟧
 * `TyVal` — `Name → ZFSet`, the `ρ` above.
 * `CtxVal Γ` — a list of sets, `vs[i] ∈ ⟦Γ[i]⟧`, for bound indices.
 * `FVarVal` — a map `Name × Ty → ZFSet` with `ξ (x, α) ∈ ⟦α⟧`.
-* `EnvInterp env ρ` — `I n inst ∈ ⟦inst⟧` whenever `inst` instantiates `env.constants n`.
+* `EnvInterp env ρ` — `I n inst ∈ ⟦inst⟧` whenever `env.constants n` instantiates `inst`.
 
 Constructors:
 
@@ -74,7 +74,7 @@ and `funs` of nonempty sets).
 `HasType` reads only `constants`, so a model of an environment is a family
 
 ```
-I : ∀ n inst, env.constants n = some gen → gen.isInstanceOf inst →
+I : ∀ n inst, env.constants n = some gen → gen.instantiates inst →
       { x // x ∈ ⟦inst⟧ }
 ```
 

@@ -178,15 +178,15 @@ theorem inst_comp (ty : Ty) (σ θ : TySubst) :
   | ind => simp
   | arrow α β ihα ihβ => simp [ihα, ihβ]
 
-/-- `gen` is a schematic type of which `inst` is an instance. -/
-def isInstanceOf (gen inst : Ty) : Prop :=
+/-- `gen` instantiates to `inst`: some substitution yields `gen.inst θ = inst`. -/
+def instantiates (gen inst : Ty) : Prop :=
   ∃ θ : TySubst, gen.inst θ = inst
 
-theorem isInstanceOf_self (ty : Ty) : ty.isInstanceOf ty :=
+theorem instantiates_self (ty : Ty) : ty.instantiates ty :=
   ⟨[], inst_nil ty⟩
 
-theorem isInstanceOf.inst {gen inst : Ty} (h : gen.isInstanceOf inst) (θ : TySubst) :
-    gen.isInstanceOf (inst.inst θ) :=
+theorem instantiates.inst {gen inst : Ty} (h : gen.instantiates inst) (θ : TySubst) :
+    gen.instantiates (inst.inst θ) :=
   match h with
   | ⟨σ, hσ⟩ => ⟨σ.comp θ, by rw [← inst_comp, hσ]⟩
 
@@ -359,24 +359,24 @@ theorem matchTy_complete {pat : Ty} {θ acc : TySubst} (h : agrees acc θ) :
     refine ⟨acc2, ?_, ha2⟩
     simp [matchTy, inst, h1, h2]
 
-theorem isInstanceOf_of_matchTy {gen inst : Ty} {acc acc' : TySubst}
+theorem instantiates_of_matchTy {gen inst : Ty} {acc acc' : TySubst}
     (h : gen.matchTy inst acc = some acc') :
-    gen.isInstanceOf inst :=
+    gen.instantiates inst :=
   ⟨acc', matchTy_sound h⟩
 
-theorem matchTy_of_isInstanceOf {gen inst : Ty} (h : gen.isInstanceOf inst) :
+theorem matchTy_of_instantiates {gen inst : Ty} (h : gen.instantiates inst) :
     (gen.matchTy inst []).isSome = true := by
   obtain ⟨θ, hθ⟩ := h
   obtain ⟨acc', hm, _⟩ := matchTy_complete (pat := gen) (θ := θ) (acc := []) (agrees_nil θ)
   rw [hθ] at hm
   simp [hm]
 
-theorem isInstanceOf_of_isSome {gen inst : Ty}
+theorem instantiates_of_isSome {gen inst : Ty}
     (h : (gen.matchTy inst []).isSome = true) :
-    gen.isInstanceOf inst := by
+    gen.instantiates inst := by
   cases hm : gen.matchTy inst [] with
   | none => simp [hm] at h
-  | some acc => exact isInstanceOf_of_matchTy hm
+  | some acc => exact instantiates_of_matchTy hm
 
 end Ty
 

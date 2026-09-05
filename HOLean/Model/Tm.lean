@@ -76,7 +76,7 @@ structure EnvInterp (env : Env) (ρ : TyVal) where
   interp : Name → Ty → ZFSet
   mem : ∀ {n inst gen},
     env.constants n = some gen →
-    gen.isInstanceOf inst →
+    gen.instantiates inst →
     interp n inst ∈ inst.denote ρ
 
 /-- Pointwise body of a λ-graph: apply `g` on the domain, dummy off it. -/
@@ -194,16 +194,16 @@ noncomputable def interpSelect (ρ : TyVal) (hρ : ρ.Nonempty) (inst : Ty) : ZF
   | _ => ∅
 
 theorem interpEq_mem {ρ : TyVal} {inst : Ty}
-    (h : eqTy.isInstanceOf inst) :
+    (h : eqTy.instantiates inst) :
     interpEq ρ inst ∈ inst.denote ρ := by
-  obtain ⟨α, rfl⟩ := eqTy_isInstanceOf_iff.1 h
+  obtain ⟨α, rfl⟩ := eqTy_instantiates_iff.1 h
   simp [interpEq]
   exact zfEq_isFunc (α.denote ρ)
 
 theorem interpSelect_mem {ρ : TyVal} {inst : Ty} (hρ : ρ.Nonempty)
-    (h : selectTy.isInstanceOf inst) :
+    (h : selectTy.instantiates inst) :
     interpSelect ρ hρ inst ∈ inst.denote ρ := by
-  obtain ⟨α, rfl⟩ := selectTy_isInstanceOf_iff.1 h
+  obtain ⟨α, rfl⟩ := selectTy_instantiates_iff.1 h
   simp [interpSelect]
   exact zfSelect_isFunc (α.denote ρ) (Ty.denote_nonempty hρ α)
 

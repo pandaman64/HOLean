@@ -14,7 +14,7 @@ indices are interpreted in the context `Γ` (innermost binder first).  Free
 variables carry their own types, so they need no context entry.
 
 A constant `const n inst` is well-typed when `env` assigns `n` a generic
-type of which `inst` is an instance.  Typing reads only `env.constants`.
+type that instantiates `inst`.  Typing reads only `env.constants`.
 
 A term that is well-typed in the empty bound context is automatically locally
 closed: there is no way to type an unbound `bvar`.
@@ -48,7 +48,7 @@ inductive HasType (env : Env) : List Ty → Tm → Ty → Prop where
       HasType env Γ (.fvar x α) α
   | const {Γ n inst gen}
       (hconst : env.constants n = some gen)
-      (hinst : gen.isInstanceOf inst) :
+      (hinst : gen.instantiates inst) :
       HasType env Γ (.const n inst) inst
   | app {Γ α β} {f a : Tm}
       (hf : HasType env Γ f (α ↝ β)) (ha : HasType env Γ a α) :
@@ -94,7 +94,7 @@ theorem HasType.infer_of {Γ t α} (h : HasType env Γ t α) : t.infer env Γ = 
   | fvar x α =>
     simp [Tm.infer]
   | const hconst hinst =>
-    simp [Tm.infer, hconst, Ty.matchTy_of_isInstanceOf hinst]
+    simp [Tm.infer, hconst, Ty.matchTy_of_instantiates hinst]
   | app _ _ ihf iha =>
     simp [Tm.infer, ihf, iha]
   | lam _ ih =>
@@ -121,7 +121,7 @@ theorem HasType.of_infer {Γ : List Ty} :
       by_cases hm : (gen.matchTy β []).isSome
       · simp [hm] at h
         cases h
-        exact HasType.const hc (Ty.isInstanceOf_of_isSome (by simp [hm]))
+        exact HasType.const hc (Ty.instantiates_of_isSome (by simp [hm]))
       · simp [hm] at h
   | app f a ihf iha =>
     intro α h
@@ -452,12 +452,12 @@ theorem HasType.shift0 {Γ t α} (γ : Ty) (h : HasType env Γ t α) :
 /-- The equality constant at type `α`. -/
 theorem HasType.eqConst [Env.HasEq env] {Γ} (α : Ty) :
     HasType env Γ (Tm.eqConst α) (α ↝ α ↝ .bool) :=
-  HasType.const Env.HasEq.eq_const (eqTy_isInstanceOf α)
+  HasType.const Env.HasEq.eq_const (eqTy_instantiates α)
 
 /-- The Hilbert-choice constant at type `α`. -/
 theorem HasType.selectConst [Env.HasSelect env] {Γ} (α : Ty) :
     HasType env Γ (Tm.selectConst α) ((α ↝ .bool) ↝ α) :=
-  HasType.const Env.HasSelect.select_const (selectTy_isInstanceOf α)
+  HasType.const Env.HasSelect.select_const (selectTy_instantiates α)
 
 /-- Equations are booleans when both sides share a type. -/
 theorem HasType.mkEq [Env.HasEq env] {Γ s t α}
@@ -534,7 +534,7 @@ theorem Env.WF.addDef [Env.HasEq env] {n : Name} {ty : Ty} {rhs : Tm}
   haveI : Env.HasEq (env.addConst n ty) := Env.HasEq.addConst hn
   have hle : env.LE (env.addConst n ty) := Env.LE.addConst_of_fresh hfresh
   have hconst : HasType (env.addConst n ty) [] (.const n ty) ty :=
-    HasType.const (by simp) (Ty.isInstanceOf_self ty)
+    HasType.const (by simp) (Ty.instantiates_self ty)
   have heq : HasType (env.addConst n ty) [] (Tm.mkEq ty (.const n ty) rhs) .bool :=
     HasType.mkEq hconst (hty.weakenEnv hle)
   exact (hwf.addConst hfresh).addAxiom heq

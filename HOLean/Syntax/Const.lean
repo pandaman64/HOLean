@@ -15,7 +15,7 @@ environment (`Env.addDef`).
 Constants are identified by `Name`.  The initial signature assigns each
 primitive a *generic* type (type variables allowed).  A term
 `Tm.const n inst` carries the *instantiated* type `inst`, which must be a
-substitution instance of the generic type (`Ty.isInstanceOf`).
+substitution instance of the generic type (`Ty.instantiates`).
 -/
 
 namespace HOLean
@@ -55,12 +55,12 @@ def holConstants (n : Name) : Option Ty :=
 @[simp] theorem holConstants_select : holConstants selectName = some selectTy := by
   simp [holConstants, show selectName ≠ eqName from eqName_ne_selectName.symm]
 
-theorem eqTy_isInstanceOf (α : Ty) :
-    eqTy.isInstanceOf (α ↝ α ↝ .bool) :=
+theorem eqTy_instantiates (α : Ty) :
+    eqTy.instantiates (α ↝ α ↝ .bool) :=
   ⟨[(primTyVar, α)], by simp [eqTy, primTyVar, Ty.inst, TySubst.lookup]⟩
 
-theorem selectTy_isInstanceOf (α : Ty) :
-    selectTy.isInstanceOf ((α ↝ .bool) ↝ α) :=
+theorem selectTy_instantiates (α : Ty) :
+    selectTy.instantiates ((α ↝ .bool) ↝ α) :=
   ⟨[(primTyVar, α)], by simp [selectTy, primTyVar, Ty.inst, TySubst.lookup]⟩
 
 theorem holConstants_of_ne {n : Name} (heq : n ≠ eqName) (hsel : n ≠ selectName) :

@@ -83,20 +83,17 @@ def elabHolQuote (stx : Syntax) (expectedType? : Option Expr) : TermElabM Expr :
   if ← isDefEq ty (mkConst ``Ty) then
     return mkApp (mkConst ``holTyQuote) e
   if ← isDefEq ty (mkConst ``Tm) then
-    if expectedType?.isNone then
-      Term.tryPostponeIfNoneOrMVar none
-    let α ← match expectedType? with
-      | some exp =>
-        let exp ← instantiateMVars exp
-        let exp' ← whnf exp
-        if exp'.isSort || exp'.isMVar then
-          pure (mkSort 0)
-        else
-          pure exp
-      | none => pure (mkSort 0)
-    let u ← getLevel α
-    let r := mkApp2 (mkConst ``holTmQuote [u]) α e
-    Term.ensureHasType expectedType? r
+    match expectedType? with
+    | none =>
+      -- Do not pick `Prop` or an arrow; Lean infers via `CoeFun` / later expected types.
+      return mkApp (mkConst ``HolQuoted.mk) e
+    | some exp =>
+      let exp ← instantiateMVars exp
+      -- A `Tm` used as a Lean *type* (`⌜p⌝ → q`) is a proposition.
+      let α := if (← whnf exp).isSort then mkSort 0 else exp
+      let u ← getLevel α
+      let r := mkApp2 (mkConst ``holTmQuote [u]) α e
+      Term.ensureHasType expectedType? r
   else
     throwError "HOLean: `⌜·⌝` expected a `Tm` or `Ty`, got{indentExpr e} : {ty}"
 

@@ -167,22 +167,22 @@ theorem zfSelect_app {A P : ZFSet} (hA : A.Nonempty) (hP : P ∈ funs A zfBool) 
     mem_map.2 ⟨P, hP, rfl⟩
   exact zfApp_unique (zfSelect_isFunc A hA) hP hpair
 
-theorem eqTy_isInstanceOf_iff {inst : Ty} :
-    eqTy.isInstanceOf inst ↔ ∃ α, inst = α ↝ α ↝ .bool := by
+theorem eqTy_instantiates_iff {inst : Ty} :
+    eqTy.instantiates inst ↔ ∃ α, inst = α ↝ α ↝ .bool := by
   constructor
   · intro ⟨θ, h⟩
     refine ⟨(θ.lookup primTyVar).getD (.var primTyVar), ?_⟩
     simpa [eqTy, Ty.inst] using h.symm
   · intro ⟨α, h⟩
-    exact h ▸ eqTy_isInstanceOf α
+    exact h ▸ eqTy_instantiates α
 
-theorem selectTy_isInstanceOf_iff {inst : Ty} :
-    selectTy.isInstanceOf inst ↔ ∃ α, inst = (α ↝ .bool) ↝ α := by
+theorem selectTy_instantiates_iff {inst : Ty} :
+    selectTy.instantiates inst ↔ ∃ α, inst = (α ↝ .bool) ↝ α := by
   constructor
   · intro ⟨θ, h⟩
     refine ⟨(θ.lookup primTyVar).getD (.var primTyVar), ?_⟩
     simpa [selectTy, Ty.inst] using h.symm
   · intro ⟨α, h⟩
-    exact h ▸ selectTy_isInstanceOf α
+    exact h ▸ selectTy_instantiates α
 
 end HOLean

@@ -37,7 +37,7 @@ are no type lambdas in terms.
 
 ```
 HOLean/
-  Syntax/Ty.lean       simple types, substitution, `isInstanceOf` / `matchTy`
+  Syntax/Ty.lean       simple types, substitution, `instantiates` / `matchTy`
   Syntax/Const.lean    names and generic types of `eq`, `select`
   Syntax/Tm.lean       locally nameless terms, shift / LC / open–close
   Syntax/Logic.lean    connective names / `Tm.and` formers (no elaborator)
@@ -113,7 +113,7 @@ equality: a definition is the axiom `⊢ c = t`, and unfolding is `EQ_MP`
 or rewriting.
 
 A term `const n inst` stores the *instantiated* type.  It is well-typed
-when `env.constants n = some gen` and `gen.isInstanceOf inst`.
+when `env.constants n = some gen` and `gen.instantiates inst`.
 `HasType` reads only `constants`, never `axioms`.  That lets us layer
 environments without a cycle: `holCore` is `{eq, select}` with no axioms;
 `holLogic` is the definitional chain of connectives; `HOLAxiom` is typed

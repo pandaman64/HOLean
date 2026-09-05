@@ -17,7 +17,7 @@ Locally nameless terms for HOL Light's four constructors:
 
 The type stored on `const n inst` is the type of that occurrence, not a
 type argument.  It must be an instance of the constant's generic type in
-the environment (`Ty.isInstanceOf`).
+the environment (`Ty.instantiates`).
 
 Locally nameless syntax avoids HOL Light's `Clash` during `INST_TYPE`: a type
 instantiation cannot capture a free variable by a binder, because binders are

@@ -170,11 +170,11 @@ variable {env : Env}
 
 theorem HasType.tru [Env.HasConnectives env] {Γ} :
     HasType env Γ Tm.tru .bool :=
-  HasType.const Env.HasConnectives.tru_const (Ty.isInstanceOf_self truTy)
+  HasType.const Env.HasConnectives.tru_const (Ty.instantiates_self truTy)
 
 theorem HasType.andConst [Env.HasConnectives env] {Γ} :
     HasType env Γ (.const andName andTy) andTy :=
-  HasType.const Env.HasConnectives.and_const (Ty.isInstanceOf_self andTy)
+  HasType.const Env.HasConnectives.and_const (Ty.instantiates_self andTy)
 
 theorem HasType.and [Env.HasConnectives env] {Γ p q}
     (hp : HasType env Γ p .bool) (hq : HasType env Γ q .bool) :
@@ -183,7 +183,7 @@ theorem HasType.and [Env.HasConnectives env] {Γ p q}
 
 theorem HasType.impConst [Env.HasConnectives env] {Γ} :
     HasType env Γ (.const impName impTy) impTy :=
-  HasType.const Env.HasConnectives.imp_const (Ty.isInstanceOf_self impTy)
+  HasType.const Env.HasConnectives.imp_const (Ty.instantiates_self impTy)
 
 theorem HasType.imp [Env.HasConnectives env] {Γ p q}
     (hp : HasType env Γ p .bool) (hq : HasType env Γ q .bool) :
@@ -192,7 +192,7 @@ theorem HasType.imp [Env.HasConnectives env] {Γ p q}
 
 theorem HasType.allConst [Env.HasConnectives env] {Γ} (α : Ty) :
     HasType env Γ (.const allName ((α ↝ .bool) ↝ .bool)) ((α ↝ .bool) ↝ .bool) :=
-  HasType.const Env.HasConnectives.all_const (allTy_isInstanceOf α)
+  HasType.const Env.HasConnectives.all_const (allTy_instantiates α)
 
 theorem HasType.all [Env.HasConnectives env] {Γ α P}
     (hP : HasType env Γ P (α ↝ .bool)) :
@@ -201,11 +201,11 @@ theorem HasType.all [Env.HasConnectives env] {Γ α P}
 
 theorem HasType.falsum [Env.HasConnectives env] {Γ} :
     HasType env Γ Tm.falsum .bool :=
-  HasType.const Env.HasConnectives.falsum_const (Ty.isInstanceOf_self falsumTy)
+  HasType.const Env.HasConnectives.falsum_const (Ty.instantiates_self falsumTy)
 
 theorem HasType.notConst [Env.HasConnectives env] {Γ} :
     HasType env Γ (.const notName notTy) notTy :=
-  HasType.const Env.HasConnectives.not_const (Ty.isInstanceOf_self notTy)
+  HasType.const Env.HasConnectives.not_const (Ty.instantiates_self notTy)
 
 theorem HasType.not [Env.HasConnectives env] {Γ p} (hp : HasType env Γ p .bool) :
     HasType env Γ p.not .bool :=
@@ -213,7 +213,7 @@ theorem HasType.not [Env.HasConnectives env] {Γ p} (hp : HasType env Γ p .bool
 
 theorem HasType.orConst [Env.HasConnectives env] {Γ} :
     HasType env Γ (.const orName orTy) orTy :=
-  HasType.const Env.HasConnectives.or_const (Ty.isInstanceOf_self orTy)
+  HasType.const Env.HasConnectives.or_const (Ty.instantiates_self orTy)
 
 theorem HasType.or [Env.HasConnectives env] {Γ p q}
     (hp : HasType env Γ p .bool) (hq : HasType env Γ q .bool) :
@@ -222,7 +222,7 @@ theorem HasType.or [Env.HasConnectives env] {Γ p q}
 
 theorem HasType.exConst [Env.HasConnectives env] {Γ} (α : Ty) :
     HasType env Γ (.const exName ((α ↝ .bool) ↝ .bool)) ((α ↝ .bool) ↝ .bool) :=
-  HasType.const Env.HasConnectives.ex_const (exTy_isInstanceOf α)
+  HasType.const Env.HasConnectives.ex_const (exTy_instantiates α)
 
 theorem HasType.ex [Env.HasConnectives env] {Γ α P}
     (hP : HasType env Γ P (α ↝ .bool)) :
@@ -231,7 +231,7 @@ theorem HasType.ex [Env.HasConnectives env] {Γ α P}
 
 theorem HasType.oneOneConst [Env.HasConnectives env] {Γ} (α β : Ty) :
     HasType env Γ (.const oneOneName ((α ↝ β) ↝ .bool)) ((α ↝ β) ↝ .bool) :=
-  HasType.const Env.HasConnectives.oneOne_const (oneOneTy_isInstanceOf α β)
+  HasType.const Env.HasConnectives.oneOne_const (oneOneTy_instantiates α β)
 
 theorem HasType.oneOne [Env.HasConnectives env] {Γ α β f}
     (hf : HasType env Γ f (α ↝ β)) :
@@ -240,7 +240,7 @@ theorem HasType.oneOne [Env.HasConnectives env] {Γ α β f}
 
 theorem HasType.ontoConst [Env.HasConnectives env] {Γ} (α β : Ty) :
     HasType env Γ (.const ontoName ((α ↝ β) ↝ .bool)) ((α ↝ β) ↝ .bool) :=
-  HasType.const Env.HasConnectives.onto_const (ontoTy_isInstanceOf α β)
+  HasType.const Env.HasConnectives.onto_const (ontoTy_instantiates α β)
 
 theorem HasType.onto [Env.HasConnectives env] {Γ α β f}
     (hf : HasType env Γ f (α ↝ β)) :
@@ -401,36 +401,36 @@ private theorem envOneOne_fresh {n : Name}
 private theorem hasType_tru_in (e : Env)
     (h : e.constants truName = some truTy) {Γ} :
     HasType e Γ Tm.tru .bool :=
-  HasType.const h (Ty.isInstanceOf_self truTy)
+  HasType.const h (Ty.instantiates_self truTy)
 
 private theorem hasType_and_in (e : Env)
     (h : e.constants andName = some andTy) {Γ p q}
     (hp : HasType e Γ p .bool) (hq : HasType e Γ q .bool) :
     HasType e Γ (p.and q) .bool :=
-  HasType.app (HasType.app (HasType.const h (Ty.isInstanceOf_self andTy)) hp) hq
+  HasType.app (HasType.app (HasType.const h (Ty.instantiates_self andTy)) hp) hq
 
 private theorem hasType_imp_in (e : Env)
     (h : e.constants impName = some impTy) {Γ p q}
     (hp : HasType e Γ p .bool) (hq : HasType e Γ q .bool) :
     HasType e Γ (p.imp q) .bool :=
-  HasType.app (HasType.app (HasType.const h (Ty.isInstanceOf_self impTy)) hp) hq
+  HasType.app (HasType.app (HasType.const h (Ty.instantiates_self impTy)) hp) hq
 
 private theorem hasType_all_in (e : Env)
     (h : e.constants allName = some allTy) {Γ α P}
     (hP : HasType e Γ P (α ↝ .bool)) :
     HasType e Γ (Tm.all α P) .bool :=
-  HasType.app (HasType.const h (allTy_isInstanceOf α)) hP
+  HasType.app (HasType.const h (allTy_instantiates α)) hP
 
 private theorem hasType_falsum_in (e : Env)
     (h : e.constants falsumName = some falsumTy) {Γ} :
     HasType e Γ Tm.falsum .bool :=
-  HasType.const h (Ty.isInstanceOf_self falsumTy)
+  HasType.const h (Ty.instantiates_self falsumTy)
 
 private theorem hasType_ex_in (e : Env)
     (h : e.constants exName = some exTy) {Γ α P}
     (hP : HasType e Γ P (α ↝ .bool)) :
     HasType e Γ (Tm.ex α P) .bool :=
-  HasType.app (HasType.const h (exTy_isInstanceOf α)) hP
+  HasType.app (HasType.const h (exTy_instantiates α)) hP
 
 private theorem hasType_truDef (e : Env) [Env.HasEq e] :
     HasType e [] Tm.truDef .bool :=

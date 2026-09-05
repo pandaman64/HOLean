@@ -59,6 +59,14 @@ namespace HOLean.Elab
 replaces this with `t`; it should not appear in elaborated output. -/
 axiom holTmQuote (α : Sort u) (t : Tm) : α
 
+/-- Wrapper used when `⌜t⌝` has no expected Lean type.  `CoeFun` lets Lean
+infer a function type for `⌜f⌝ x` instead of the elaborator picking one. -/
+structure HolQuoted where
+  tm : Tm
+
+noncomputable instance : CoeFun HolQuoted (fun _ => ∀ {α : Sort u} {β : Sort v}, α → β) where
+  coe q := holTmQuote (∀ {α : Sort u} {β : Sort v}, α → β) q.tm
+
 /-- Intermediate stand-in for `⌜α⌝` when `α : Ty`. -/
 opaque holTyQuote (α : Ty) : Type
 
@@ -87,8 +95,33 @@ def TyQ.beq : TyQ → TyQ → Bool
   | .expr a, .expr b => a == b
   | _, _ => false
 
-def isHolTmQuote? (e : Expr) : Option Expr :=
-  if e.isAppOf ``holTmQuote then e.getAppArgs.back? else none
+/-- `t` and any extra Lean arguments (`⌜f⌝ x y` → splice `f` applied to `x`, `y`). -/
+def destHolTmQuote? (e : Expr) : Option (Expr × Array Expr) :=
+  if e.isAppOf ``holTmQuote then
+    let args := e.getAppArgs
+    if args.size ≥ 2 then
+      some (args[1]!, args.extract 2 args.size)
+    else none
+  else none
+
+/-- Peel `holTmQuote` / `HolQuoted` / `CoeFun` so a splice is visible. -/
+partial def destTmSplice? (e : Expr) : MetaM (Option (Expr × Array Expr)) := do
+  let e := (← instantiateMVars e).consumeMData
+  if let some r := destHolTmQuote? e then
+    return some r
+  if e.isAppOfArity ``HolQuoted.mk 1 then
+    return some (e.appArg!, #[])
+  if e.isAppOfArity ``HolQuoted.tm 1 then
+    return some (e.appArg!, #[])
+  if e.isAppOf ``CoeFun.coe then
+    let args := e.getAppArgs
+    if args.size ≥ 4 then
+      if let some (t, extras) ← destTmSplice? args[3]! then
+        return some (t, extras ++ args.extract 4 args.size)
+    return none
+  let e' ← whnf e
+  if e' == e then return none
+  destTmSplice? e'
 
 def isHolTyQuote? (e : Expr) : Option Expr :=
   if e.isAppOfArity ``holTyQuote 1 then some e.appArg! else none
@@ -419,9 +452,15 @@ partial def applyUserConst (holName : HOLean.Name) (gen : Ty) (args : Array Expr
 /-- Translate a Lean term or proposition to a HOL term. -/
 partial def exprToTm (e : Expr) : MetaM TmQ := do
   let e ← ready e
-  if let some t := isHolTmQuote? e then
+  if let some (t, extras) ← destTmSplice? e then
     throwIfMVar t
-    return .splice t
+    let mut q : TmQ := .splice t
+    for a in extras do
+      -- `CoeFun` inserts implicit Lean type arguments; those are not HOL apps.
+      let aTy ← whnf (← inferType a)
+      unless aTy.isSort && !aTy.isProp do
+        q := q.app (← exprToTm a)
+    return q
   throwIfMVar e
   match e with
   | .mdata _ e =>

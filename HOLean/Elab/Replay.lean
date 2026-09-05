@@ -122,7 +122,7 @@ partial def elabHasType (envE connE : Expr) (t : Tm) (Γ : List Ty) :
         throwError "HOLean: no HasType lemma for constant `{n}` at {repr τ}"
       let eqTy ← mkEq lhs rhs
       let hconst ← mkExpectedTypeHint (← mkEqRefl lhs) eqTy
-      let hinst ← mkAppM ``Ty.isInstanceOf_self #[toExpr τ]
+      let hinst ← mkAppM ``Ty.instantiates_self #[toExpr τ]
       let pf ← mkAppOptM ``HasType.const
         #[some envE, some ΓE, some (toExpr n), some (toExpr τ), some (toExpr τ),
           some hconst, some hinst]
