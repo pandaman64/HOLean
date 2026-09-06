@@ -151,44 +151,22 @@ theorem Provable.sound [Env.HasEq env]
       (by simp [Tm.denote, hfg, hxy])
   | abs h hfresh ih =>
     intro ρ M ξ hΓ
-    rename_i Γ s t x α _β
-    obtain ⟨_, hs, ht'⟩ := HasType.dest_mkEq (bool_typed h).2
+    rename_i Γ s t x α β
+    obtain ⟨_, hs, ht⟩ := HasType.dest_mkEq (bool_typed h).2
     apply (Tm.denote_mkEq_true_iff_nil M.interp M.eq_ok ξ
-      hs.abstract ht'.abstract).2
-    apply ext
-    intro z
-    simp [Tm.abstract, Tm.denote, mem_map]
-    constructor
-    · intro ⟨v, hv, heq⟩
-      refine ⟨v, hv, ?_⟩
-      simp [lamFn, hv] at heq ⊢
-      have hΓ' : HypsTrue M.interp (ξ.update x α v hv) Γ := by
-        intro q hq
-        rw [Tm.denote_fresh q M.interp ξ [] hv (hfresh q hq)]
-        exact hΓ q hq
-      have hst := (Tm.denote_mkEq_true_iff_nil M.interp M.eq_ok
-        (ξ.update x α v hv) hs ht').1
-        (ih M (ξ.update x α v hv) hΓ')
-      change v.pair (s.close x α |>.denote M.interp ξ [v]) = z at heq
-      change v.pair (t.close x α |>.denote M.interp ξ [v]) = z
-      rw [Tm.denote_close s M.interp ξ hv hs.lc0] at heq
-      rw [Tm.denote_close t M.interp ξ hv ht'.lc0]
-      exact hst ▸ heq
-    · intro ⟨v, hv, heq⟩
-      refine ⟨v, hv, ?_⟩
-      simp [lamFn, hv] at heq ⊢
-      have hΓ' : HypsTrue M.interp (ξ.update x α v hv) Γ := by
-        intro q hq
-        rw [Tm.denote_fresh q M.interp ξ [] hv (hfresh q hq)]
-        exact hΓ q hq
-      have hst := (Tm.denote_mkEq_true_iff_nil M.interp M.eq_ok
-        (ξ.update x α v hv) hs ht').1
-        (ih M (ξ.update x α v hv) hΓ')
-      change v.pair (s.close x α |>.denote M.interp ξ [v]) = z
-      change v.pair (t.close x α |>.denote M.interp ξ [v]) = z at heq
-      rw [Tm.denote_close s M.interp ξ hv hs.lc0]
-      rw [Tm.denote_close t M.interp ξ hv ht'.lc0] at heq
-      exact hst.symm ▸ heq
+      hs.abstract ht.abstract).2
+    rw [Tm.denote_abstract s M.interp ξ hs.lc0,
+        Tm.denote_abstract t M.interp ξ ht.lc0]
+    apply map_congr
+    intro v hv
+    simp [lamFn, hv]
+    have hΓ' : HypsTrue M.interp (ξ.update x α v hv) Γ := by
+      intro q hq
+      rw [Tm.denote_fresh q M.interp ξ [] hv (hfresh q hq)]
+      exact hΓ q hq
+    exact (Tm.denote_mkEq_true_iff_nil M.interp M.eq_ok
+      (ξ.update x α v hv) hs ht).1
+      (ih M (ξ.update x α v hv) hΓ')
   | beta ht =>
     intro ρ M ξ _hΓ
     rename_i t x α _β

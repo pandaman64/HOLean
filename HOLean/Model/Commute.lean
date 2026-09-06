@@ -14,7 +14,7 @@ rules actually perform.  `Provable.sound` and `EnvModel.addDef` are the
 clients; nothing here is an inference rule.
 
 * `denote_mkEq_true_iff` — REFL, TRANS, MK_COMB, EQ_MP, DEDUCT_ANTISYM, ABS
-* `denote_fresh` / `denote_close` — ABS (`x ∉ FV(Γ)`, then close the fvar)
+* `denote_fresh` / `denote_close` / `denote_abstract` — ABS (`x ∉ FV(Γ)`, then close the fvar)
 * `denote_beta` / `denote_open'` — BETA
 * `denote_instTy` — INST_TYPE
 * `denote_applySubst` — INST
@@ -191,6 +191,18 @@ theorem Tm.denote_close (t : Tm) (I : EnvInterp env ρ) (ξ : FVarVal ρ)
     {x α v} (hv : v ∈ α.denote ρ) (hLC : t.LC 0 = true) :
     (t.close x α).denote I ξ [v] = t.denote I (ξ.update x α v hv) [] :=
   Tm.denote_closeAt t I ξ [] hv hLC
+
+/-- Abstraction is the λ-graph of the body under an updated free valuation. -/
+theorem Tm.denote_abstract (t : Tm) (I : EnvInterp env ρ) (ξ : FVarVal ρ)
+    {x α} (hLC : t.LC 0 = true) :
+    (t.abstract x α).denote I ξ [] =
+      map (lamFn (ρ := ρ) (γ := α) fun v hv =>
+        t.denote I (ξ.update x α v hv) []) (α.denote ρ) := by
+  simp [Tm.abstract, Tm.denote]
+  apply map_congr
+  intro v hv
+  simp [lamFn, hv]
+  exact Tm.denote_close t I ξ hv hLC
 
 /-- Opening index `k = vs.length` as a closed term. -/
 theorem Tm.denote_openAt (t : Tm) (I : EnvInterp env ρ) (ξ : FVarVal ρ)
