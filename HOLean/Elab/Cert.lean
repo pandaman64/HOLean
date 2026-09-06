@@ -152,20 +152,13 @@ theorem cert_not_falsum {env : Env} (hasEq : Env.HasEq env) (conn : Env.HasConne
   exact Provable.not_falsum_of M TyVal.std_nonempty
     (EnvModel.denote_falsum M (FVarVal.ofNonempty TyVal.std_nonempty) [])
 
-theorem cert_sound_with_model {env : Env} (hasEq : Env.HasEq env)
-    (M : EnvModel env TyVal.std) {Γ p}
-    (h : Γ ⊩[env] p) (ξ : FVarVal TyVal.std) (hΓ : HypsTrue M.interp ξ Γ) :
-    p.denote M.interp ξ [] = zfTrue := by
-  letI := hasEq
-  exact Provable.sound_with_model M h ξ hΓ
-
 theorem cert_sound {env : Env} (hasEq : Env.HasEq env) (M : EnvModel env TyVal.std) :
     ∀ (Γ : List Tm) (p : Tm), Γ ⊩[env] p →
     ∀ (ξ : FVarVal TyVal.std), HypsTrue M.interp ξ Γ →
     p.denote M.interp ξ [] = zfTrue := by
   intro Γ p h ξ hΓ
   letI := hasEq
-  exact Provable.sound_with_model M h ξ hΓ
+  exact Provable.sound h M ξ hΓ
 
 def envExprFromDecls (decls : Array HolDecl) : Expr :=
   Id.run do

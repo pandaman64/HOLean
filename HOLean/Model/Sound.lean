@@ -169,7 +169,7 @@ theorem Provable.sound [Env.HasEq env]
       (ih M (ξ.update x α v hv) hΓ')
   | beta ht =>
     intro ρ M ξ _hΓ
-    rename_i t x α _β
+    rename_i t x α β
     have hfvar : HasType env [] (.fvar x α) α := HasType.fvar x α
     exact (Tm.denote_mkEq_true_iff_nil M.interp M.eq_ok ξ
       (HasType.app (HasType.lam ht) hfvar) (ht.open' hfvar)).2
@@ -247,7 +247,7 @@ theorem Provable.sound [Env.HasEq env]
     simp [CtxVal.nil] at heq this
     rwa [heq]
   | ax hp _hty =>
-    intro _ρ M ξ _hΓ
+    intro ρ M ξ hΓ
     exact M.ax_denote hp ξ
 
 theorem Provable.sound_holCore {ρ : TyVal} {Γ p} (h : Γ ⊩[holCore] p)
@@ -263,15 +263,5 @@ theorem Provable.not_falsum_of [Env.HasEq env] (M : EnvModel env ρ) (hρ : ρ.N
   intro h
   have hT := Provable.sound h M (FVarVal.ofNonempty hρ) (fun _ hq => nomatch hq)
   exact zfFalse_ne_zfTrue (hfalsum ▸ hT)
-
-theorem Provable.sound_of_model [Env.HasEq env] (M : EnvModel env ρ) {Γ p} (h : Γ ⊩[env] p)
-    (ξ : FVarVal ρ) (hΓ : HypsTrue M.interp ξ Γ) :
-    p.denote M.interp ξ [] = zfTrue :=
-  Provable.sound h M ξ hΓ
-
-theorem Provable.sound_with_model [Env.HasEq env] (M : EnvModel env ρ) {Γ p}
-    (h : Γ ⊩[env] p) (ξ : FVarVal ρ) (hΓ : HypsTrue M.interp ξ Γ) :
-    p.denote M.interp ξ [] = zfTrue :=
-  Provable.sound_of_model M h ξ hΓ
 
 end HOLean
