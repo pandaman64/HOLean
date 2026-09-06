@@ -106,23 +106,26 @@ def finishHTheorem (leanN : Lean.Name) (holN : HOLean.Name) (stmt : Tm)
     throwError "HOLean: theorem still has hypotheses {repr thm.hyps}"
   unless thm.concl == stmt do
     throwError "HOLean: proved {repr thm.concl}, expected {repr stmt}"
+  let decls ← getHolDecls
+  let cert ← getHolCert
+  let env := envFromDecls decls
+  let envE := envExprFromDecls decls
+  let connE := prevConnExpr cert
+  let hasTypeProof ← liftTermElabM do
+    let ht ← mkHasTypeBoolProof env envE connE stmt
+    liftMetaM do assertKernelProof ht
+    pure ht
   match provProof? with
   | some prov =>
-    let decls ← getHolDecls
-    let cert ← getHolCert
-    let envE := envExprFromDecls decls
-    let connE := prevConnExpr cert
-    let (provVal, provTy, inferProof) ← liftTermElabM do
+    let (provVal, provTy) ← liftTermElabM do
       let p ← mkProvInEnvBefore decls prov
       liftMetaM do assertKernelProof p
       let ty ← inferType p
-      let inf ← mkInferBoolProof envE connE stmt
-      liftMetaM do assertKernelProof inf
-      pure (p, ty, inf)
+      pure (p, ty)
     addCertThm (holProvName leanN) provTy provVal
-    emitHTheoremCertProvable leanN stmt (mkConst (holProvName leanN)) inferProof
+    emitHTheoremCertProvable leanN stmt (mkConst (holProvName leanN)) hasTypeProof
   | none =>
-    emitHTheoremCertWf leanN stmt
+    emitHTheoremCertWf leanN stmt hasTypeProof
   addLeanThmStmt leanN propType
   addLeanThmVal leanN thm
   addHolDecl (.thm leanN holN stmt)
@@ -279,7 +282,17 @@ def elabHDef : CommandElab := fun stx => do
     throwError "HOLean: definition RHS is not locally closed"
   unless tyvarsOk ty rhs do
     throwError "HOLean: type variables of the RHS must occur in the declared type"
-  emitHDefCert leanN holN ty rhs
+  let decls ← getHolDecls
+  let cert ← getHolCert
+  let hasTypeProof ← liftTermElabM do
+    let envE := envExprFromDecls decls
+    let connE := prevConnExpr cert
+    let (ht, α) ← liftMetaM do elabHasType env envE connE rhs []
+    unless α == ty do
+      throwError "HOLean: reconstructed typing has type {repr α}, expected {repr ty}"
+    liftMetaM do assertKernelProof ht
+    pure ht
+  emitHDefCert leanN holN ty rhs hasTypeProof
   addLeanDefn leanN leanTy leanRhs
   addHolDecl (.defn leanN holN ty rhs)
   logInfo m!"hdef {holN} : {repr ty}"

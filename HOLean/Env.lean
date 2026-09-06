@@ -88,7 +88,7 @@ def addDef (env : Env) (n : Name) (ty : Ty) (rhs : Tm) : Env :=
 
 @[simp] theorem addConst_self (env : Env) (n : Name) (ty : Ty) :
     (env.addConst n ty).lookup n = some ty := by
-  simp [addConst, lookup, ConstTable.lookup]
+  simp [addConst, lookup]
 
 theorem addConst_of_ne (env : Env) {n m : Name} (ty : Ty) (h : m ≠ n) :
     (env.addConst n ty).lookup m = env.lookup m := by
@@ -155,7 +155,7 @@ theorem HasSelect.addDef {env : Env} [HasSelect env] {n : Name} {ty : Ty} {rhs :
 
 @[simp] theorem addDef_constants_self (env : Env) (n : Name) (ty : Ty) (rhs : Tm) :
     (env.addDef n ty rhs).lookup n = some ty := by
-  simp [addDef, addAxiom, addConst, lookup, ConstTable.lookup]
+  simp [addDef, addAxiom, addConst, lookup]
 
 theorem addDef_constants_of_ne (env : Env) {n m : Name} (ty : Ty) (rhs : Tm)
     (h : m ≠ n) :

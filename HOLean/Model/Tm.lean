@@ -216,7 +216,7 @@ noncomputable def EnvInterp.holCore (ρ : TyVal) (hρ : ρ.Nonempty) :
     else ∅
   mem := by
     intro n inst gen hconst hinst
-    simp [holCore_constants] at hconst
+    simp at hconst
     by_cases heq : n = eqName
     · subst heq
       simp [holConstants] at hconst

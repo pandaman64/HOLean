@@ -55,8 +55,27 @@ def assertKernelProof (e : Expr) : MetaM Unit := do
     then
       throwError "HOLean: reconstructed proof uses `{bad.getAppFn}` (native reduction)"
 
+/-- Prove `gen.instantiates inst` by `instantiates_self` or a reduced `matchTy`. -/
+def mkInstantiatesProof (gen inst : Ty) : MetaM Expr := do
+  if gen == inst then
+    mkAppM ``Ty.instantiates_self #[toExpr gen]
+  else
+    match gen.matchTy inst [] with
+    | none =>
+      throwError "HOLean: `{repr gen}` does not instantiate to `{repr inst}`"
+    | some acc =>
+      let nilSubst := toExpr ([] : TySubst)
+      let lhs := mkApp3 (mkConst ``Ty.matchTy) (toExpr gen) (toExpr inst) nilSubst
+      let rhs := toExpr (some acc : Option TySubst)
+      unless ← isDefEq lhs rhs do
+        throwError "HOLean: matchTy failed to reduce for `{repr gen}` / `{repr inst}`"
+      let eqTy ← mkEq lhs rhs
+      let hmatch ← mkExpectedTypeHint (← mkEqRefl lhs) eqTy
+      mkAppOptM ``Ty.instantiates_of_matchTy
+        #[some (toExpr gen), some (toExpr inst), some nilSubst, some (toExpr acc), some hmatch]
+
 /-- `HasType env Γ t ?α`, returning the synthesized type. -/
-partial def elabHasType (envE connE : Expr) (t : Tm) (Γ : List Ty) :
+partial def elabHasType (env : Env) (envE connE : Expr) (t : Tm) (Γ : List Ty) :
     MetaM (Expr × Ty) := do
   let ΓE := toExpr Γ
   let tryConn (n : Lean.Name) (extra : Array (Option Expr)) : MetaM Expr :=
@@ -113,25 +132,41 @@ partial def elabHasType (envE connE : Expr) (t : Tm) (Γ : List Ty) :
         let pf ← tryConn ``HasType.exConst #[some (toExpr α)]
         return (pf, (α ↝ .bool) ↝ .bool)
       | _ => throwError "HOLean: cannot type `ex` at {repr τ}"
+    else if n == oneOneName then
+      match τ with
+      | (α ↝ β) ↝ .bool =>
+        let pf ← tryConn ``HasType.oneOneConst #[some (toExpr α), some (toExpr β)]
+        return (pf, (α ↝ β) ↝ .bool)
+      | _ => throwError "HOLean: cannot type `oneOne` at {repr τ}"
+    else if n == ontoName then
+      match τ with
+      | (α ↝ β) ↝ .bool =>
+        let pf ← tryConn ``HasType.ontoConst #[some (toExpr α), some (toExpr β)]
+        return (pf, (α ↝ β) ↝ .bool)
+      | _ => throwError "HOLean: cannot type `onto` at {repr τ}"
     else
-      -- User / other constants: require `env.lookup n = some τ` (exact).
-      let lhs := mkApp2 (mkConst ``Env.lookup) envE (toExpr n)
-      let rhs :=
-        mkApp2 (mkConst ``Option.some [Level.zero]) (mkConst ``Ty) (toExpr τ)
-      unless ← isDefEq lhs rhs do
-        throwError "HOLean: no HasType lemma for constant `{n}` at {repr τ}"
-      let eqTy ← mkEq lhs rhs
-      let hconst ← mkExpectedTypeHint (← mkEqRefl lhs) eqTy
-      let hinst ← mkAppM ``Ty.instantiates_self #[toExpr τ]
-      let pf ← mkAppOptM ``HasType.const
-        #[some envE, some ΓE, some (toExpr n), some (toExpr τ), some (toExpr τ),
-          some hconst, some hinst]
-      return (pf, τ)
+      -- User / other constants: `env.lookup n = some gen` and `gen.instantiates τ`.
+      match env.lookup n with
+      | none =>
+        throwError "HOLean: unknown constant `{n}`"
+      | some gen =>
+        let lhs := mkApp2 (mkConst ``Env.lookup) envE (toExpr n)
+        let rhs :=
+          mkApp2 (mkConst ``Option.some [Level.zero]) (mkConst ``Ty) (toExpr gen)
+        unless ← isDefEq lhs rhs do
+          throwError "HOLean: environment lookup failed for `{n}`"
+        let eqTy ← mkEq lhs rhs
+        let hconst ← mkExpectedTypeHint (← mkEqRefl lhs) eqTy
+        let hinst ← mkInstantiatesProof gen τ
+        let pf ← mkAppOptM ``HasType.const
+          #[some envE, some ΓE, some (toExpr n), some (toExpr τ), some (toExpr gen),
+            some hconst, some hinst]
+        return (pf, τ)
   | .app (.const n τ) P =>
     if n == allName then
       match τ with
       | (α ↝ .bool) ↝ .bool =>
-        let (hP, tP) ← elabHasType envE connE P Γ
+        let (hP, tP) ← elabHasType env envE connE P Γ
         unless tP == α ↝ .bool do
           throwError "HOLean: ∀-predicate type mismatch"
         let pf ← tryConn ``HasType.all #[some (toExpr α), some (toExpr P), some hP]
@@ -140,15 +175,15 @@ partial def elabHasType (envE connE : Expr) (t : Tm) (Γ : List Ty) :
     else if n == exName then
       match τ with
       | (α ↝ .bool) ↝ .bool =>
-        let (hP, tP) ← elabHasType envE connE P Γ
+        let (hP, tP) ← elabHasType env envE connE P Γ
         unless tP == α ↝ .bool do
           throwError "HOLean: ∃-predicate type mismatch"
         let pf ← tryConn ``HasType.ex #[some (toExpr α), some (toExpr P), some hP]
         return (pf, .bool)
       | _ => throwError "HOLean: malformed `ex` constant type {repr τ}"
     else
-      let (hf, tf) ← elabHasType envE connE (.const n τ) Γ
-      let (ha, _) ← elabHasType envE connE P Γ
+      let (hf, tf) ← elabHasType env envE connE (.const n τ) Γ
+      let (ha, _) ← elabHasType env envE connE P Γ
       match tf with
       | .arrow _ β =>
         let pf ← mkAppM ``HasType.app #[hf, ha]
@@ -156,25 +191,25 @@ partial def elabHasType (envE connE : Expr) (t : Tm) (Γ : List Ty) :
       | _ => throwError "HOLean: expected a function type"
   | .app (.app (.const n τ) p) q =>
     if n == andName then
-      let (hp, _) ← elabHasType envE connE p Γ
-      let (hq, _) ← elabHasType envE connE q Γ
+      let (hp, _) ← elabHasType env envE connE p Γ
+      let (hq, _) ← elabHasType env envE connE q Γ
       let pf ← tryConn ``HasType.and #[some (toExpr p), some (toExpr q), some hp, some hq]
       return (pf, .bool)
     else if n == impName then
-      let (hp, _) ← elabHasType envE connE p Γ
-      let (hq, _) ← elabHasType envE connE q Γ
+      let (hp, _) ← elabHasType env envE connE p Γ
+      let (hq, _) ← elabHasType env envE connE q Γ
       let pf ← tryConn ``HasType.imp #[some (toExpr p), some (toExpr q), some hp, some hq]
       return (pf, .bool)
     else if n == orName then
-      let (hp, _) ← elabHasType envE connE p Γ
-      let (hq, _) ← elabHasType envE connE q Γ
+      let (hp, _) ← elabHasType env envE connE p Γ
+      let (hq, _) ← elabHasType env envE connE q Γ
       let pf ← tryConn ``HasType.or #[some (toExpr p), some (toExpr q), some hp, some hq]
       return (pf, .bool)
     else if n == eqName then
       match τ with
       | α ↝ _ ↝ .bool =>
-        let (hs, αs) ← elabHasType envE connE p Γ
-        let (ht, _) ← elabHasType envE connE q Γ
+        let (hs, αs) ← elabHasType env envE connE p Γ
+        let (ht, _) ← elabHasType env envE connE q Γ
         unless αs == α do
           throwError "HOLean: equality type mismatch"
         let hasEq ← mkAppM ``HOLean.Elab.hasEq_of_conn #[connE]
@@ -183,31 +218,31 @@ partial def elabHasType (envE connE : Expr) (t : Tm) (Γ : List Ty) :
             some (toExpr αs), some hs, some ht]
         return (pf, .bool)
       | _ =>
-        let (hf, tf) ← elabHasType envE connE (.app (.const n τ) p) Γ
-        let (ha, _) ← elabHasType envE connE q Γ
+        let (hf, tf) ← elabHasType env envE connE (.app (.const n τ) p) Γ
+        let (ha, _) ← elabHasType env envE connE q Γ
         match tf with
         | .arrow _ β =>
           let pf ← mkAppM ``HasType.app #[hf, ha]
           return (pf, β)
         | _ => throwError "HOLean: expected a function type"
     else
-      let (hf, tf) ← elabHasType envE connE (.app (.const n τ) p) Γ
-      let (ha, _) ← elabHasType envE connE q Γ
+      let (hf, tf) ← elabHasType env envE connE (.app (.const n τ) p) Γ
+      let (ha, _) ← elabHasType env envE connE q Γ
       match tf with
       | .arrow _ β =>
         let pf ← mkAppM ``HasType.app #[hf, ha]
         return (pf, β)
       | _ => throwError "HOLean: expected a function type"
   | .app f a =>
-    let (hf, tf) ← elabHasType envE connE f Γ
-    let (ha, _) ← elabHasType envE connE a Γ
+    let (hf, tf) ← elabHasType env envE connE f Γ
+    let (ha, _) ← elabHasType env envE connE a Γ
     match tf with
     | .arrow _ β =>
       let pf ← mkAppM ``HasType.app #[hf, ha]
       return (pf, β)
     | _ => throwError "HOLean: expected a function type"
   | .lam α b =>
-    let (ht, β) ← elabHasType envE connE b (α :: Γ)
+    let (ht, β) ← elabHasType env envE connE b (α :: Γ)
     let pf ← mkAppM ``HasType.lam #[ht]
     return (pf, α ↝ β)
   | .fvar x α =>
@@ -220,12 +255,12 @@ partial def elabHasType (envE connE : Expr) (t : Tm) (Γ : List Ty) :
       #[some envE, some ΓE, some (toExpr α), some (toExpr i), some hEq]
     return (pf, α)
 
-/-- `t.infer env [] = some .bool` from a connective `HasType` derivation. -/
-def mkInferBoolProof (envE connE : Expr) (stmt : Tm) : TermElabM Expr := do
-  let (ht, α) ← liftMetaM do elabHasType envE connE stmt []
+/-- `HasType env [] stmt .bool` from a connective typing derivation. -/
+def mkHasTypeBoolProof (env : Env) (envE connE : Expr) (stmt : Tm) : TermElabM Expr := do
+  let (ht, α) ← liftMetaM do elabHasType env envE connE stmt []
   unless α == .bool do
     throwError "HOLean: statement is not a boolean"
-  liftMetaM do mkAppM ``HasType.infer_of #[ht]
+  return ht
 
 /-- `Env.LE` from `envExprFromDecls fromD` to `envExprFromDecls toD`. -/
 def mkEnvLe (fromD toD : Array HolDecl) : TermElabM Expr := do
@@ -398,12 +433,12 @@ def mkAbsFreshProof (Γ : List Tm) (x : HOLean.Name) (α : Ty) : TermElabM Expr 
     throwError "HOLean: ABS with non-empty hypotheses is not yet certified for replay"
 
 /-- Prove `σ.Ok env` for a concrete substitution (empty or singleton). -/
-def mkSubstOk (envE connE : Expr) (σ : Tm.Subst) : TermElabM Expr := do
+def mkSubstOk (env : Env) (envE connE : Expr) (σ : Tm.Subst) : TermElabM Expr := do
   match σ with
   | [] =>
     liftMetaM do mkAppOptM ``substOk_nil #[some envE]
   | [(x, α, u)] => do
-    let (hu, α') ← liftMetaM do elabHasType envE connE u []
+    let (hu, α') ← liftMetaM do elabHasType env envE connE u []
     unless α' == α do
       throwError "HOLean: INST replacement type mismatch"
     liftMetaM do
@@ -494,25 +529,25 @@ def mkAxiomsProof (decls : Array HolDecl) (envE connE : Expr) (p : Tm) :
   throwError "HOLean: cannot prove environment axiom {repr p}"
 
 /-- Assemble a `Provable` term from an LCF derivation trace. -/
-partial def buildProvable (decls : Array HolDecl) (envE connE : Expr) :
+partial def buildProvable (decls : Array HolDecl) (env : Env) (envE connE : Expr) :
     ProvTrace → TermElabM Expr
   | .refl t α => do
-    let (ht, α') ← liftMetaM do elabHasType envE connE t []
+    let (ht, α') ← liftMetaM do elabHasType env envE connE t []
     unless α' == α do
       throwError "HOLean: REFL type mismatch: inferred {repr α'}, expected {repr α}"
     liftMetaM do
       mkAppOptM ``Provable.refl
         #[some envE, some (toExpr t), some (toExpr α), some ht]
   | .trans h1 h2 => do
-    let p1 ← buildProvable decls envE connE h1
-    let p2 ← buildProvable decls envE connE h2
+    let p1 ← buildProvable decls env envE connE h1
+    let p2 ← buildProvable decls env envE connE h2
     liftMetaM do mkAppM ``Provable.trans #[p1, p2]
   | .mkComb h1 h2 => do
-    let p1 ← buildProvable decls envE connE h1
-    let p2 ← buildProvable decls envE connE h2
+    let p1 ← buildProvable decls env envE connE h1
+    let p2 ← buildProvable decls env envE connE h2
     liftMetaM do mkAppM ``Provable.mkComb #[p1, p2]
   | .abs x α h => do
-    let p ← buildProvable decls envE connE h
+    let p ← buildProvable decls env envE connE h
     let some (Γ, _) := h.evalSequent decls
       | throwError "HOLean: ABS: cannot reconstruct hypotheses"
     let hfresh ← mkAbsFreshProof Γ x α
@@ -521,24 +556,24 @@ partial def buildProvable (decls : Array HolDecl) (envE connE : Expr) :
         #[some envE, none, none, none, some (toExpr x), some (toExpr α), none,
           some p, some hfresh]
   | .beta t x α => do
-    let (ht, β) ← liftMetaM do elabHasType envE connE t [α]
+    let (ht, β) ← liftMetaM do elabHasType env envE connE t [α]
     liftMetaM do
       mkAppOptM ``Provable.beta
         #[some envE, some (toExpr t), some (toExpr x), some (toExpr α), some (toExpr β),
           some ht]
   | .deductAntisym h1 h2 => do
-    let p1 ← buildProvable decls envE connE h1
-    let p2 ← buildProvable decls envE connE h2
+    let p1 ← buildProvable decls env envE connE h1
+    let p2 ← buildProvable decls env envE connE h2
     liftMetaM do mkAppM ``Provable.deductAntisym #[p1, p2]
   | .inst σ h => do
-    let p ← buildProvable decls envE connE h
-    let hσ ← mkSubstOk envE connE σ
+    let p ← buildProvable decls env envE connE h
+    let hσ ← mkSubstOk env envE connE σ
     liftMetaM do
       mkAppOptM ``Provable.inst
         #[some envE, none, none, some (toExpr σ), some hσ, some p]
   | .ax p => do
     let hax ← mkAxiomsProof decls envE connE p
-    let (hty, α) ← liftMetaM do elabHasType envE connE p []
+    let (hty, α) ← liftMetaM do elabHasType env envE connE p []
     unless α == .bool do
       throwError "HOLean: axiom is not a boolean"
     liftMetaM do
@@ -550,34 +585,34 @@ partial def buildProvable (decls : Array HolDecl) (envE connE : Expr) :
     let thmN ← liftMetaM do resolveNamedProv n
     weakenTraceProof decls (mkConst thmN)
   | .eqMp hEq hP => do
-    let pEq ← buildProvable decls envE connE hEq
-    let pP ← buildProvable decls envE connE hP
+    let pEq ← buildProvable decls env envE connE hEq
+    let pP ← buildProvable decls env envE connE hP
     liftMetaM do mkAppM ``Provable.eqMp #[pEq, pP]
   | .eqSym h => do
-    let p ← buildProvable decls envE connE h
+    let p ← buildProvable decls env envE connE h
     liftMetaM do
       mkAppOptM ``Provable.eq_sym
         #[some envE, some connE, none, none, none, none, some p]
   | .instType θ h => do
-    let p ← buildProvable decls envE connE h
+    let p ← buildProvable decls env envE connE h
     liftMetaM do mkAppM ``Provable.instType #[toExpr θ, p]
   | .gen x α h => do
-    let p ← buildProvable decls envE connE h
+    let p ← buildProvable decls env envE connE h
     liftMetaM do
       mkAppOptM ``Provable.gen_nil
         #[some envE, some connE, none, some (toExpr x), some (toExpr α), some p]
   | .spec t α h => do
-    let p ← buildProvable decls envE connE h
+    let p ← buildProvable decls env envE connE h
     let some (_, concl) := h.evalSequent decls
       | throwError "HOLean: SPEC: cannot recover premise sequent"
     match concl with
     | .app (.const n ((.arrow α' .bool) ↝ .bool)) (.lam β body) => do
       unless n == allName && α' == α && β == α do
         throwError "HOLean: SPEC: expected `∀ (λx. body)`"
-      let (hbody, τb) ← liftMetaM do elabHasType envE connE body [α]
+      let (hbody, τb) ← liftMetaM do elabHasType env envE connE body [α]
       unless τb == .bool do
         throwError "HOLean: SPEC: body is not boolean"
-      let (ht, τt) ← liftMetaM do elabHasType envE connE t []
+      let (ht, τt) ← liftMetaM do elabHasType env envE connE t []
       unless τt == α do
         throwError "HOLean: SPEC: witness type mismatch"
       let x : HOLean.Name := freshSpecName
@@ -594,10 +629,10 @@ partial def buildProvable (decls : Array HolDecl) (envE connE : Expr) :
     | .app (.const n ((.arrow α' .bool) ↝ .bool)) P => do
       unless n == allName && α' == α do
         throwError "HOLean: SPEC: expected `∀ P`"
-      let (hP, τP) ← liftMetaM do elabHasType envE connE P []
+      let (hP, τP) ← liftMetaM do elabHasType env envE connE P []
       unless τP == α ↝ .bool do
         throwError "HOLean: SPEC: predicate type mismatch"
-      let (ht, τt) ← liftMetaM do elabHasType envE connE t []
+      let (ht, τt) ← liftMetaM do elabHasType env envE connE t []
       unless τt == α do
         throwError "HOLean: SPEC: witness type mismatch"
       let x : HOLean.Name := freshSpecName
@@ -624,8 +659,9 @@ def elabProvable (decls : Array HolDecl) (envE connE : Expr) (stmt : Tm)
       emit a `Provable` certificate for discharged hypotheses"
   if tr.hasHole then
     throwError "HOLean: incomplete proof (unsolved HOL goal)"
+  let env := envFromDecls decls
   let goalType := mkApp3 (mkConst ``Provable) envE mkNilTmList (toExpr stmt)
-  let proof ← buildProvable decls envE connE tr
+  let proof ← buildProvable decls env envE connE tr
   liftMetaM do assertKernelProof proof
   unless ← isDefEq (← inferType proof) goalType do
     throwError "HOLean: reconstructed proof has the wrong type\

@@ -281,14 +281,15 @@ noncomputable def EnvModel.addDef_checked [Env.HasConnectives env] (n : Name)
     EnvModel (env.addDef n ty rhs) ρ :=
   M.addDef n hρ hfresh hne_eq hwf (HasType.of_infer hinfer) hfree hvars
 
+/-- Certificate entry point: typing is a reconstructed `HasType` proof (no `infer` decide). -/
 noncomputable def EnvModel.addDef_cert [Env.HasConnectives env] (n : Name)
     {ty : Ty} {rhs : Tm} (M : EnvModel env ρ) (hρ : ρ.Nonempty)
     (hfresh : env.lookup n = none) (hne_eq : n ≠ eqName) (hwf : env.WF)
-    (hinfer : rhs.infer env [] = some ty) (_hLC : rhs.LC 0 = true)
+    (hrhs : HasType env [] rhs ty)
     (hvars : ∀ x ∈ rhs.tyvars, x ∈ ty.tyvars)
     (hfree : ∀ x α, rhs.freeIn x α = false) :
     EnvModel (env.addDef n ty rhs) ρ :=
-  EnvModel.addDef_checked n M hρ hfresh hne_eq hwf hinfer _hLC hvars hfree
+  M.addDef n hρ hfresh hne_eq hwf hrhs hfree hvars
 
 noncomputable def EnvModel.addAxiom_cert [Env.HasEq env] (M : EnvModel env ρ) (hρ : ρ.Nonempty)
     (ax : Tm) (hax : [] ⊩[env] ax) :

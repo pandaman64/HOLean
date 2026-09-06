@@ -65,7 +65,7 @@ def holConstants : List (Name × Ty) :=
   [(eqName, eqTy), (selectName, selectTy)]
 
 @[simp] theorem holConstants_eq : ConstTable.lookup holConstants eqName = some eqTy := by
-  simp [holConstants, ConstTable.lookup]
+  simp [holConstants]
 
 @[simp] theorem holConstants_select : ConstTable.lookup holConstants selectName = some selectTy := by
   simp [holConstants, ConstTable.lookup, eqName_ne_selectName]

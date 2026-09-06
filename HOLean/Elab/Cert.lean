@@ -84,10 +84,10 @@ instance (n : Name) : Decidable (holNameNotReserved n) := by
 
 theorem cert_wf_addDef (env : Env) (hasEq : Env.HasEq env) (n : Name) (ty : Ty) (rhs : Tm)
     (hwf : env.WF) (hfresh : env.lookup n = none) (hne : n ≠ eqName)
-    (hinfer : rhs.infer env [] = some ty) :
+    (hty : HasType env [] rhs ty) :
     (env.addDef n ty rhs).WF := by
   letI := hasEq
-  exact Env.WF.addDef_infer hwf hfresh hne hinfer
+  exact Env.WF.addDef hwf hfresh hne hty
 
 theorem cert_conn_addDef (env : Env) (conn : Env.HasConnectives env) (n : Name) (ty : Ty) (rhs : Tm)
     (hfresh : env.lookup n = none) (hnames : nameNotInConnectiveAndPrim n) :
@@ -97,16 +97,16 @@ theorem cert_conn_addDef (env : Env) (conn : Env.HasConnectives env) (n : Name) 
 
 noncomputable def cert_model_addDef (env : Env) (conn : Env.HasConnectives env) (n : Name) (ty : Ty) (rhs : Tm)
     (model : EnvModel env TyVal.std) (hfresh : env.lookup n = none) (hne : n ≠ eqName)
-    (hwf : env.WF) (hinfer : rhs.infer env [] = some ty) (lc : rhs.LC 0 = true)
+    (hwf : env.WF) (hty : HasType env [] rhs ty)
     (hvars : ∀ x ∈ rhs.tyvars, x ∈ ty.tyvars) (hfree : ∀ x α, rhs.freeIn x α = false) :
     EnvModel (env.addDef n ty rhs) TyVal.std := by
   letI := conn
-  exact EnvModel.addDef_cert n (ty := ty) (rhs := rhs) model TyVal.std_nonempty hfresh hne hwf hinfer lc hvars hfree
+  exact EnvModel.addDef_cert n (ty := ty) (rhs := rhs) model TyVal.std_nonempty hfresh hne hwf hty hvars hfree
 
 theorem cert_wf_addAxiom (env : Env) (_hasEq : Env.HasEq env) (hwf : env.WF) (ax : Tm)
-    (hinfer : ax.infer env [] = some .bool) :
+    (hty : HasType env [] ax .bool) :
     (env.addAxiom ax).WF :=
-  Env.WF.addAxiom_infer hwf ax hinfer
+  hwf.addAxiom hty
 
 theorem cert_conn_addAxiom (env : Env) (conn : Env.HasConnectives env) (ax : Tm) :
     Env.HasConnectives (env.addAxiom ax) := by
@@ -184,9 +184,6 @@ def mkEqApp (a b : Expr) : MetaM Expr :=
 def optTyExpr : Expr :=
   mkApp (mkConst ``Option [Level.zero]) (mkConst ``Ty)
 
-def mkNilTyList : Expr :=
-  mkApp (mkConst ``List.nil [Level.zero]) (mkConst ``Ty)
-
 def mkNilTmList : Expr :=
   mkApp (mkConst ``List.nil [Level.zero]) (mkConst ``Tm)
 
@@ -200,17 +197,6 @@ def mkConstantsNoneType (envExpr holN : Expr) : MetaM Expr := do
   mkEqApp
     (mkApp2 (mkConst ``Env.lookup) envExpr holN)
     (mkOptionNone (mkConst ``Ty))
-
-def mkInferSomeType (envExpr rhs ty : Expr) : MetaM Expr := do
-  mkEqApp
-    (mkApp3 (mkConst ``Tm.infer) envExpr rhs mkNilTyList)
-    (mkApp2 (mkConst ``Option.some [Level.zero]) (mkConst ``Ty) ty)
-
-def mkInferBoolType (envExpr stmt : Expr) : MetaM Expr :=
-  mkInferSomeType envExpr stmt (mkConst ``Ty.bool)
-
-def mkLcTrueType (tm : Expr) : MetaM Expr :=
-  mkEqApp (mkApp2 (mkConst ``Tm.LC) tm (mkNatLit 0)) (mkConst ``Bool.true)
 
 def mkTyvarsOkType (ty rhs : Expr) : MetaM Expr :=
   mkEqApp (mkApp2 (mkConst ``HOLean.Elab.tyvarsOk) ty rhs) (mkConst ``Bool.true)
@@ -231,7 +217,7 @@ def mkNotFalsumType (envExpr : Expr) : Expr :=
   mkApp (mkConst ``Not)
     (mkApp3 (mkConst ``Provable) envExpr mkNilTmList (mkConst ``Tm.falsum))
 
-def runDecideTactic (goalType : Expr) (tac : Syntax) : TermElabM Expr :=
+def runCertTactic (goalType : Expr) (tac : Syntax) : TermElabM Expr :=
   Term.withoutErrToSorry do
     let mvar ← mkFreshExprMVar goalType
     liftMetaM do
@@ -240,10 +226,6 @@ def runDecideTactic (goalType : Expr) (tac : Syntax) : TermElabM Expr :=
         throwError "HOLean: certificate tactic left unsolved goals"
     instantiateMVars mvar
 
-def proveByDecide (type : Expr) : TermElabM Expr := do
-  let tac ← `(tactic| decide +native)
-  runDecideTactic type tac
-
 def proveNotFree (rhs : Expr) : TermElabM Expr := do
   let type ← liftMetaM do
     withLocalDeclD `x (mkConst ``Name) fun x =>
@@ -251,31 +233,19 @@ def proveNotFree (rhs : Expr) : TermElabM Expr := do
       let eq ← mkEqApp (mkApp3 (mkConst ``Tm.freeIn) rhs x α) (mkConst ``Bool.false)
       mkForallFVars #[x, α] eq
   let tac ← `(tactic| intro x α; rfl)
-  runDecideTactic type tac
+  runCertTactic type tac
 
 def proveByRfl (type : Expr) : TermElabM Expr := do
   let tac ← `(tactic| rfl)
-  runDecideTactic type tac
+  runCertTactic type tac
 
-private def applyHolDecl (env : Env) (d : HolDecl) : Env :=
+def applyHolDecl (env : Env) (d : HolDecl) : Env :=
   match d with
   | .defn _ n ty rhs => env.addDef n ty rhs
   | .thm _ _ stmt => env.addAxiom stmt
 
-private def envFromDecls (decls : Array HolDecl) : Env :=
+def envFromDecls (decls : Array HolDecl) : Env :=
   decls.foldl applyHolDecl holEnv
-
-def proveInferEq (type : Expr) : TermElabM Expr := do
-  proveByDecide type
-
-def proveInferFromDecls (decls : Array HolDecl) (stmt : Tm) : TermElabM Expr := do
-  let type ← liftMetaM do mkInferBoolType (envExprFromDecls decls) (toExpr stmt)
-  proveInferEq type
-
-def proveInferSomeFromDecls (decls : Array HolDecl) (rhs : Tm) (ty : Ty) : TermElabM Expr := do
-  let type ← liftMetaM do
-    mkInferSomeType (envExprFromDecls decls) (toExpr rhs) (toExpr ty)
-  proveInferEq type
 
 def mkHolEnvLeProof (decls : Array HolDecl) : TermElabM Expr := do
   let mut envExpr := mkConst ``holEnv
@@ -370,7 +340,8 @@ def mkSoundCert (hasEq modelApp : Expr) : TermElabM (Expr × Expr) := do
   let soundType ← inferType soundVal
   pure (soundType, soundVal)
 
-def emitHDefCert (leanN : Lean.Name) (holN : HOLean.Name) (ty : Ty) (rhs : Tm) : CommandElabM Unit := do
+def emitHDefCert (leanN : Lean.Name) (holN : HOLean.Name) (ty : Ty) (rhs : Tm)
+    (hasTypeProof : Expr) : CommandElabM Unit := do
   let cert ← getHolCert
   let decls ← getHolDecls
   let envBefore := envExprFromDecls decls
@@ -387,11 +358,6 @@ def emitHDefCert (leanN : Lean.Name) (holN : HOLean.Name) (ty : Ty) (rhs : Tm) :
     proveByRfl ty
   let namesImp := Lean.mkAppN (mkConst ``HOLean.Elab.holNameNotReserved_imp) #[holNExpr, namesProof]
   let neEqProof := Lean.mkAppN (mkConst ``HOLean.Elab.name_ne_eqName) #[holNExpr, namesImp]
-  let inferProof ← liftTermElabM do
-    proveInferSomeFromDecls decls rhs ty
-  let lcProof ← liftTermElabM do
-    let ty ← liftMetaM do mkLcTrueType rhsExpr
-    proveByRfl ty
   let notFreeProof ← liftTermElabM do proveNotFree rhsExpr
   let tyvarsProof ← liftTermElabM do
     let ty ← liftMetaM do mkTyvarsOkType tyExpr rhsExpr
@@ -399,7 +365,8 @@ def emitHDefCert (leanN : Lean.Name) (holN : HOLean.Name) (ty : Ty) (rhs : Tm) :
   let hasEq ← liftTermElabM do mkHasEqFromConn (prevConnExpr cert)
   let wfProof :=
     mkAppN (mkConst ``HOLean.Elab.cert_wf_addDef)
-      #[envBefore, hasEq, holNExpr, tyExpr, rhsExpr, prevWfExpr cert, freshProof, neEqProof, inferProof]
+      #[envBefore, hasEq, holNExpr, tyExpr, rhsExpr, prevWfExpr cert, freshProof, neEqProof,
+        hasTypeProof]
   let wfName := certSuffix "_hol_wf" leanN
   addCertThm wfName (mkEnvWfType envAfter) wfProof
   let connProof :=
@@ -413,7 +380,7 @@ def emitHDefCert (leanN : Lean.Name) (holN : HOLean.Name) (ty : Ty) (rhs : Tm) :
   let modelProof :=
     mkAppN (mkConst ``HOLean.Elab.cert_model_addDef)
       #[envBefore, prevConnExpr cert, holNExpr, tyExpr, rhsExpr, prevModelExpr cert,
-        freshProof, neEqProof, prevWfExpr cert, inferProof, lcProof, tyvarsSubset, notFreeProof]
+        freshProof, neEqProof, prevWfExpr cert, hasTypeProof, tyvarsSubset, notFreeProof]
   let modelName := certSuffix "_hol_model" leanN
   addCertDef modelName (mkEnvModelType envAfter) modelProof
   let modelApp := mkConst modelName
@@ -431,18 +398,17 @@ def emitHDefCert (leanN : Lean.Name) (holN : HOLean.Name) (ty : Ty) (rhs : Tm) :
     connThm := connName
   }
 
-def emitHTheoremCertWf (leanN : Lean.Name) (stmt : Tm) : CommandElabM Unit := do
+def emitHTheoremCertWf (leanN : Lean.Name) (stmt : Tm) (hasTypeProof : Expr) :
+    CommandElabM Unit := do
   let cert ← getHolCert
   let decls ← getHolDecls
   let envBefore := envExprFromDecls decls
   let envAfter := mkApp (mkApp (mkConst ``Env.addAxiom) envBefore) (toExpr stmt)
   let stmtExpr := toExpr stmt
   let hasEq ← liftTermElabM do mkHasEqFromConn (prevConnExpr cert)
-  let inferProof ← liftTermElabM do
-    proveInferFromDecls decls stmt
   let wfProof :=
     mkAppN (mkConst ``HOLean.Elab.cert_wf_addAxiom)
-      #[envBefore, hasEq, prevWfExpr cert, stmtExpr, inferProof]
+      #[envBefore, hasEq, prevWfExpr cert, stmtExpr, hasTypeProof]
   let wfName := certSuffix "_hol_wf" leanN
   addCertThm wfName (mkEnvWfType envAfter) wfProof
   let connProof :=
@@ -459,7 +425,7 @@ def emitHTheoremCertWf (leanN : Lean.Name) (stmt : Tm) : CommandElabM Unit := do
   }
 
 def emitHTheoremCertProvable (leanN : Lean.Name) (stmt : Tm) (provProof : Expr)
-    (inferProof : Expr) : CommandElabM Unit := do
+    (hasTypeProof : Expr) : CommandElabM Unit := do
   let cert ← getHolCert
   let decls ← getHolDecls
   let envBefore := envExprFromDecls decls
@@ -468,7 +434,7 @@ def emitHTheoremCertProvable (leanN : Lean.Name) (stmt : Tm) (provProof : Expr)
   let hasEq ← liftTermElabM do mkHasEqFromConn (prevConnExpr cert)
   let wfProof :=
     mkAppN (mkConst ``HOLean.Elab.cert_wf_addAxiom)
-      #[envBefore, hasEq, prevWfExpr cert, stmtExpr, inferProof]
+      #[envBefore, hasEq, prevWfExpr cert, stmtExpr, hasTypeProof]
   let wfName := certSuffix "_hol_wf" leanN
   addCertThm wfName (mkEnvWfType envAfter) wfProof
   let connProof :=
