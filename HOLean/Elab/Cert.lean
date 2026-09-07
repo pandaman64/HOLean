@@ -75,19 +75,16 @@ theorem holNameNotReserved_imp (n : Name) (h : holNameNotReserved n = true) :
   simp [holNameNotReserved, List.all_eq_true] at h
   exact h
 
-theorem name_ne_eqName (n : Name) (h : nameNotInConnectiveAndPrim n) : n ≠ eqName :=
-  h eqName (by simp [connectiveAndPrimNames])
-
 instance (n : Name) : Decidable (holNameNotReserved n) := by
   dsimp [holNameNotReserved]
   infer_instance
 
 theorem cert_wf_addDef (env : Env) (hasEq : Env.HasEq env) (n : Name) (ty : Ty) (rhs : Tm)
-    (hwf : env.WF) (hfresh : env.lookup n = none) (hne : n ≠ eqName)
+    (hwf : env.WF) (hfresh : env.lookup n = none)
     (hty : HasType env [] rhs ty) :
     (env.addDef n ty rhs).WF := by
   letI := hasEq
-  exact Env.WF.addDef hwf hfresh hne hty
+  exact Env.WF.addDef hwf hfresh hty
 
 theorem cert_conn_addDef (env : Env) (conn : Env.HasConnectives env) (n : Name) (ty : Ty) (rhs : Tm)
     (hfresh : env.lookup n = none) (hnames : nameNotInConnectiveAndPrim n) :
@@ -96,12 +93,12 @@ theorem cert_conn_addDef (env : Env) (conn : Env.HasConnectives env) (n : Name) 
   exact Env.HasConnectives.addDef hfresh hnames
 
 noncomputable def cert_model_addDef (env : Env) (conn : Env.HasConnectives env) (n : Name) (ty : Ty) (rhs : Tm)
-    (model : EnvModel env TyVal.std) (hfresh : env.lookup n = none) (hne : n ≠ eqName)
+    (model : EnvModel env TyVal.std) (hfresh : env.lookup n = none)
     (hwf : env.WF) (hty : HasType env [] rhs ty)
     (hvars : ∀ x ∈ rhs.tyvars, x ∈ ty.tyvars) (hfree : ∀ x α, rhs.freeIn x α = false) :
     EnvModel (env.addDef n ty rhs) TyVal.std := by
   letI := conn
-  exact EnvModel.addDef_cert n (ty := ty) (rhs := rhs) model TyVal.std_nonempty hfresh hne hwf hty hvars hfree
+  exact EnvModel.addDef_cert n (ty := ty) (rhs := rhs) model TyVal.std_nonempty hfresh hwf hty hvars hfree
 
 theorem cert_wf_addAxiom (env : Env) (_hasEq : Env.HasEq env) (hwf : env.WF) (ax : Tm)
     (hty : HasType env [] ax .bool) :
@@ -350,7 +347,6 @@ def emitHDefCert (leanN : Lean.Name) (holN : HOLean.Name) (ty : Ty) (rhs : Tm)
     let ty ← liftMetaM do mkHolNameNotReservedType holNExpr
     proveByRfl ty
   let namesImp := Lean.mkAppN (mkConst ``HOLean.Elab.holNameNotReserved_imp) #[holNExpr, namesProof]
-  let neEqProof := Lean.mkAppN (mkConst ``HOLean.Elab.name_ne_eqName) #[holNExpr, namesImp]
   let notFreeProof ← liftTermElabM do proveNotFree rhsExpr
   let tyvarsProof ← liftTermElabM do
     let ty ← liftMetaM do mkTyvarsOkType tyExpr rhsExpr
@@ -358,7 +354,7 @@ def emitHDefCert (leanN : Lean.Name) (holN : HOLean.Name) (ty : Ty) (rhs : Tm)
   let hasEq ← liftTermElabM do mkHasEqFromConn (prevConnExpr cert)
   let wfProof :=
     mkAppN (mkConst ``HOLean.Elab.cert_wf_addDef)
-      #[envBefore, hasEq, holNExpr, tyExpr, rhsExpr, prevWfExpr cert, freshProof, neEqProof,
+      #[envBefore, hasEq, holNExpr, tyExpr, rhsExpr, prevWfExpr cert, freshProof,
         hasTypeProof]
   let wfName := certSuffix "_hol_wf" leanN
   addCertThm wfName (mkEnvWfType envAfter) wfProof
@@ -373,7 +369,7 @@ def emitHDefCert (leanN : Lean.Name) (holN : HOLean.Name) (ty : Ty) (rhs : Tm)
   let modelProof :=
     mkAppN (mkConst ``HOLean.Elab.cert_model_addDef)
       #[envBefore, prevConnExpr cert, holNExpr, tyExpr, rhsExpr, prevModelExpr cert,
-        freshProof, neEqProof, prevWfExpr cert, hasTypeProof, tyvarsSubset, notFreeProof]
+        freshProof, prevWfExpr cert, hasTypeProof, tyvarsSubset, notFreeProof]
   let modelName := certSuffix "_hol_model" leanN
   addCertDef modelName (mkEnvModelType envAfter) modelProof
   let modelApp := mkConst modelName

@@ -529,9 +529,10 @@ theorem Env.WF.addConst {n : Name} {ty : Ty} (hwf : env.WF)
 
 theorem Env.WF.addDef [Env.HasEq env] {n : Name} {ty : Ty} {rhs : Tm}
     (hwf : env.WF) (hfresh : env.lookup n = none)
-    (hn : n ≠ eqName) (hty : HasType env [] rhs ty) :
+    (hty : HasType env [] rhs ty) :
     (env.addDef n ty rhs).WF := by
-  haveI : Env.HasEq (env.addConst n ty) := Env.HasEq.addConst hn
+  haveI : Env.HasEq (env.addConst n ty) :=
+    Env.HasEq.addConst (Env.HasEq.ne_of_fresh hfresh)
   have hle : env.LE (env.addConst n ty) := Env.LE.addConst_of_fresh hfresh
   have hconst : HasType (env.addConst n ty) [] (.const n ty) ty :=
     HasType.const (Env.addConst_self env n ty) (Ty.instantiates_self ty)
@@ -541,9 +542,9 @@ theorem Env.WF.addDef [Env.HasEq env] {n : Name} {ty : Ty} {rhs : Tm}
 
 theorem Env.WF.addDef_infer [Env.HasEq env] {n : Name} {ty : Ty} {rhs : Tm}
     (hwf : env.WF) (hfresh : env.lookup n = none)
-    (hn : n ≠ eqName) (hinfer : rhs.infer env [] = some ty) :
+    (hinfer : rhs.infer env [] = some ty) :
     (env.addDef n ty rhs).WF :=
-  Env.WF.addDef hwf hfresh hn (HasType.of_infer hinfer)
+  Env.WF.addDef hwf hfresh (HasType.of_infer hinfer)
 
 theorem Env.WF.addAxiom_infer (hwf : env.WF) (ax : Tm) (hinfer : ax.infer env [] = some .bool) :
     (env.addAxiom ax).WF :=

@@ -677,58 +677,55 @@ theorem holCore_WF : holCore.WF := fun _ h => nomatch h
 
 theorem envTru_WF : envTru.WF :=
   holCore_WF.addDef (fresh_core (by decide) (by decide))
-    (by decide) (hasType_truDef holCore)
+    (hasType_truDef holCore)
 
 theorem envAnd_WF : envAnd.WF :=
   envTru_WF.addDef (envTru_fresh (by decide) (by decide) (by decide))
-    (by decide) (hasType_andDef envTru envTru_tru)
+    (hasType_andDef envTru envTru_tru)
 
 theorem envImp_WF : envImp.WF :=
   envAnd_WF.addDef (envAnd_fresh (by decide) (by decide) (by decide) (by decide))
-    (by decide) (hasType_impDef envAnd envAnd_constants_and)
+    (hasType_impDef envAnd envAnd_constants_and)
 
 theorem envAll_WF : envAll.WF :=
   envImp_WF.addDef
     (envImp_fresh (by decide) (by decide) (by decide) (by decide) (by decide))
-    (by decide) (hasType_allDef envImp envImp_tru)
+    (hasType_allDef envImp envImp_tru)
 
 theorem envFalsum_WF : envFalsum.WF :=
   envAll_WF.addDef
     (envAll_fresh (by decide) (by decide) (by decide) (by decide) (by decide)
       (by decide))
-    (by decide) (hasType_falsumDef envAll envAll_constants_all)
+    (hasType_falsumDef envAll envAll_constants_all)
 
 theorem envNot_WF : envNot.WF :=
   envFalsum_WF.addDef
     (envFalsum_fresh (by decide) (by decide) (by decide) (by decide) (by decide)
       (by decide) (by decide))
-    (by decide)
     (hasType_notDef envFalsum envFalsum_imp envFalsum_constants_falsum)
 
 theorem envOr_WF : envOr.WF :=
   envNot_WF.addDef
     (envNot_fresh (by decide) (by decide) (by decide) (by decide) (by decide)
       (by decide) (by decide) (by decide))
-    (by decide) (hasType_orDef envNot envNot_all envNot_imp)
+    (hasType_orDef envNot envNot_all envNot_imp)
 
 theorem envEx_WF : envEx.WF :=
   envOr_WF.addDef
     (envOr_fresh (by decide) (by decide) (by decide) (by decide) (by decide)
       (by decide) (by decide) (by decide) (by decide))
-    (by decide) (hasType_exDef envOr envOr_all envOr_imp)
+    (hasType_exDef envOr envOr_all envOr_imp)
 
 theorem envOneOne_WF : envOneOne.WF :=
   envEx_WF.addDef
     (envEx_fresh (by decide) (by decide) (by decide) (by decide) (by decide)
       (by decide) (by decide) (by decide) (by decide) (by decide))
-    (by decide)
     (hasType_oneOneDef envEx envEx_all envEx_imp)
 
 theorem holLogic_WF : holLogic.WF :=
   envOneOne_WF.addDef
     (envOneOne_fresh (by decide) (by decide) (by decide) (by decide) (by decide)
       (by decide) (by decide) (by decide) (by decide) (by decide) (by decide))
-    (by decide)
     (hasType_ontoDef envOneOne envOneOne_all envOneOne_ex)
 
 /-! `holLogic` has every connective constant and defining axiom. -/

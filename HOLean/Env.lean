@@ -65,6 +65,13 @@ theorem LE.trans {e₁ e₂ e₃ : Env} (h₁ : e₁.LE e₂) (h₂ : e₂.LE e�
 class HasEq (env : Env) : Prop where
   eq_const : env.lookup eqName = some eqTy
 
+/-- A fresh name cannot be `eqName`, since `HasEq` puts equality in the table. -/
+theorem HasEq.ne_of_fresh {env : Env} [HasEq env] {n : Name}
+    (h : env.lookup n = none) : n ≠ eqName := by
+  rintro rfl
+  rw [HasEq.eq_const] at h
+  cases h
+
 /-- The environment has Hilbert choice. -/
 class HasSelect (env : Env) : Prop where
   select_const : env.lookup selectName = some selectTy

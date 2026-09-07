@@ -191,7 +191,7 @@ theorem EnvInterp.addDef_inst_eq_ok [Env.HasEq env] (n : Name)
 /-- The new axiom `n = rhs` denotes `zfTrue` at every type instance. -/
 theorem EnvModel.addDef_ax_new [Env.HasEq env] (n : Name) {ty : Ty} {rhs : Tm}
     (M : EnvModel env ρ) (hρ : ρ.Nonempty)
-    (hn : env.lookup n = none) (hne_eq : n ≠ eqName)
+    (hn : env.lookup n = none)
     (hrhs : HasType env [] rhs ty)
     (hclosed : ∀ x α, rhs.freeIn x α = false)
     (hvars : ∀ x ∈ rhs.tyvars, x ∈ ty.tyvars)
@@ -199,6 +199,7 @@ theorem EnvModel.addDef_ax_new [Env.HasEq env] (n : Name) {ty : Ty} {rhs : Tm}
     (Tm.mkEq ty (.const n ty) rhs).denote
       ((M.interp.addDef (n := n) (FVarVal.ofNonempty hρ) hrhs).inst θ) ξ [] =
       zfTrue := by
+  have hne_eq : n ≠ eqName := Env.HasEq.ne_of_fresh hn
   have : Env.HasEq (env.addDef n ty rhs) := Env.HasEq.addDef hne_eq
   set ξ0 := FVarVal.ofNonempty hρ
   set I' := M.interp.addDef (n := n) ξ0 hrhs
@@ -238,18 +239,19 @@ term whose schematic variables are among those of the generic type, and
 the new name must be fresh (so old axioms do not mention it). -/
 noncomputable def EnvModel.addDef [Env.HasEq env] (n : Name) {ty : Ty} {rhs : Tm}
     (M : EnvModel env ρ) (hρ : ρ.Nonempty)
-    (hn : env.lookup n = none) (hne_eq : n ≠ eqName)
+    (hn : env.lookup n = none)
     (hwf : env.WF) (hrhs : HasType env [] rhs ty)
     (hclosed : ∀ x α, rhs.freeIn x α = false)
     (hvars : ∀ x ∈ rhs.tyvars, x ∈ ty.tyvars) :
     EnvModel (env.addDef n ty rhs) ρ where
   interp := M.interp.addDef (n := n) (FVarVal.ofNonempty hρ) hrhs
   eq_ok :=
-    EnvInterp.addDef_eq_ok n M.interp (FVarVal.ofNonempty hρ) hrhs hne_eq M.eq_ok
+    EnvInterp.addDef_eq_ok n M.interp (FVarVal.ofNonempty hρ) hrhs
+      (Env.HasEq.ne_of_fresh hn) M.eq_ok
   ax_ok := fun θ p hp ξ => by
     cases hp with
     | head =>
-      exact EnvModel.addDef_ax_new n M hρ hn hne_eq hrhs hclosed hvars θ ξ
+      exact EnvModel.addDef_ax_new n M hρ hn hrhs hclosed hvars θ ξ
     | tail _ hold =>
       exact EnvModel.addDef_ax_old n M hρ hn hwf hrhs hold ξ
 
@@ -274,22 +276,22 @@ theorem EnvModel.addAxiom_interp [Env.HasEq env] (M : EnvModel env ρ) (_hρ : �
 
 noncomputable def EnvModel.addDef_checked [Env.HasConnectives env] (n : Name)
     {ty : Ty} {rhs : Tm} (M : EnvModel env ρ) (hρ : ρ.Nonempty)
-    (hfresh : env.lookup n = none) (hne_eq : n ≠ eqName) (hwf : env.WF)
+    (hfresh : env.lookup n = none) (hwf : env.WF)
     (hinfer : rhs.infer env [] = some ty) (_hLC : rhs.LC 0 = true)
     (hvars : ∀ x ∈ rhs.tyvars, x ∈ ty.tyvars)
     (hfree : ∀ x α, rhs.freeIn x α = false) :
     EnvModel (env.addDef n ty rhs) ρ :=
-  M.addDef n hρ hfresh hne_eq hwf (HasType.of_infer hinfer) hfree hvars
+  M.addDef n hρ hfresh hwf (HasType.of_infer hinfer) hfree hvars
 
 /-- Certificate entry point: typing is a reconstructed `HasType` proof (no `infer` decide). -/
 noncomputable def EnvModel.addDef_cert [Env.HasConnectives env] (n : Name)
     {ty : Ty} {rhs : Tm} (M : EnvModel env ρ) (hρ : ρ.Nonempty)
-    (hfresh : env.lookup n = none) (hne_eq : n ≠ eqName) (hwf : env.WF)
+    (hfresh : env.lookup n = none) (hwf : env.WF)
     (hrhs : HasType env [] rhs ty)
     (hvars : ∀ x ∈ rhs.tyvars, x ∈ ty.tyvars)
     (hfree : ∀ x α, rhs.freeIn x α = false) :
     EnvModel (env.addDef n ty rhs) ρ :=
-  M.addDef n hρ hfresh hne_eq hwf hrhs hfree hvars
+  M.addDef n hρ hfresh hwf hrhs hfree hvars
 
 noncomputable def EnvModel.addAxiom_cert [Env.HasEq env] (M : EnvModel env ρ) (hρ : ρ.Nonempty)
     (ax : Tm) (hax : [] ⊩[env] ax) :
@@ -308,22 +310,22 @@ theorem Tm.tyvars_subset_of_nil {t : Tm} {ty : Ty}
 
 noncomputable def EnvModel.envTru (ρ : TyVal) (hρ : ρ.Nonempty) :
     EnvModel envTru ρ :=
-  (EnvModel.holCore ρ hρ).addDef truName hρ truName_fresh_core (by decide)
+  (EnvModel.holCore ρ hρ).addDef truName hρ truName_fresh_core
     holCore_WF HasType.truDef_holCore Tm.not_free Tm.tyvars_subset_of_nil
 
 noncomputable def EnvModel.envAnd (ρ : TyVal) (hρ : ρ.Nonempty) :
     EnvModel envAnd ρ :=
-  (EnvModel.envTru ρ hρ).addDef andName hρ andName_fresh_envTru (by decide)
+  (EnvModel.envTru ρ hρ).addDef andName hρ andName_fresh_envTru
     envTru_WF HasType.andDef_envTru Tm.not_free Tm.tyvars_subset_of_nil
 
 noncomputable def EnvModel.envImp (ρ : TyVal) (hρ : ρ.Nonempty) :
     EnvModel envImp ρ :=
-  (EnvModel.envAnd ρ hρ).addDef impName hρ impName_fresh_envAnd (by decide)
+  (EnvModel.envAnd ρ hρ).addDef impName hρ impName_fresh_envAnd
     envAnd_WF HasType.impDef_envAnd Tm.not_free Tm.tyvars_subset_of_nil
 
 noncomputable def EnvModel.envAll (ρ : TyVal) (hρ : ρ.Nonempty) :
     EnvModel envAll ρ :=
-  (EnvModel.envImp ρ hρ).addDef allName hρ allName_fresh_envImp (by decide)
+  (EnvModel.envImp ρ hρ).addDef allName hρ allName_fresh_envImp
     envImp_WF HasType.allDef_envImp Tm.not_free (by
       intro x hx
       simp [Tm.allDef_eq, Tm.allExpand, Tm.mkEq, Tm.eqConst, Tm.tru, Tm.tyvars,
@@ -332,22 +334,22 @@ noncomputable def EnvModel.envAll (ρ : TyVal) (hρ : ρ.Nonempty) :
 
 noncomputable def EnvModel.envFalsum (ρ : TyVal) (hρ : ρ.Nonempty) :
     EnvModel envFalsum ρ :=
-  (EnvModel.envAll ρ hρ).addDef falsumName hρ falsumName_fresh_envAll (by decide)
+  (EnvModel.envAll ρ hρ).addDef falsumName hρ falsumName_fresh_envAll
     envAll_WF HasType.falsumDef_envAll Tm.not_free Tm.tyvars_subset_of_nil
 
 noncomputable def EnvModel.envNot (ρ : TyVal) (hρ : ρ.Nonempty) :
     EnvModel envNot ρ :=
-  (EnvModel.envFalsum ρ hρ).addDef notName hρ notName_fresh_envFalsum (by decide)
+  (EnvModel.envFalsum ρ hρ).addDef notName hρ notName_fresh_envFalsum
     envFalsum_WF HasType.notDef_envFalsum Tm.not_free Tm.tyvars_subset_of_nil
 
 noncomputable def EnvModel.envOr (ρ : TyVal) (hρ : ρ.Nonempty) :
     EnvModel envOr ρ :=
-  (EnvModel.envNot ρ hρ).addDef orName hρ orName_fresh_envNot (by decide)
+  (EnvModel.envNot ρ hρ).addDef orName hρ orName_fresh_envNot
     envNot_WF HasType.orDef_envNot Tm.not_free Tm.tyvars_subset_of_nil
 
 noncomputable def EnvModel.envEx (ρ : TyVal) (hρ : ρ.Nonempty) :
     EnvModel envEx ρ :=
-  (EnvModel.envOr ρ hρ).addDef exName hρ exName_fresh_envOr (by decide)
+  (EnvModel.envOr ρ hρ).addDef exName hρ exName_fresh_envOr
     envOr_WF HasType.exDef_envOr Tm.not_free (by
       intro x hx
       simp [Tm.exDef_eq, Tm.all, Tm.imp, Tm.tyvars, exTy, impTy, Ty.tyvars,
@@ -356,7 +358,7 @@ noncomputable def EnvModel.envEx (ρ : TyVal) (hρ : ρ.Nonempty) :
 
 noncomputable def EnvModel.envOneOne (ρ : TyVal) (hρ : ρ.Nonempty) :
     EnvModel envOneOne ρ :=
-  (EnvModel.envEx ρ hρ).addDef oneOneName hρ oneOneName_fresh_envEx (by decide)
+  (EnvModel.envEx ρ hρ).addDef oneOneName hρ oneOneName_fresh_envEx
     envEx_WF HasType.oneOneDef_envEx Tm.not_free (by
       intro x hx
       simp [Tm.oneOneDef_eq, Tm.all, Tm.imp, Tm.mkEq, Tm.eqConst, Tm.tyvars,
@@ -365,7 +367,7 @@ noncomputable def EnvModel.envOneOne (ρ : TyVal) (hρ : ρ.Nonempty) :
 
 noncomputable def EnvModel.holLogic (ρ : TyVal) (hρ : ρ.Nonempty) :
     EnvModel holLogic ρ :=
-  (EnvModel.envOneOne ρ hρ).addDef ontoName hρ ontoName_fresh_envOneOne (by decide)
+  (EnvModel.envOneOne ρ hρ).addDef ontoName hρ ontoName_fresh_envOneOne
     envOneOne_WF HasType.ontoDef_envOneOne Tm.not_free (by
       intro x hx
       simp [Tm.ontoDef_eq, Tm.all, Tm.ex, Tm.mkEq, Tm.eqConst, Tm.tyvars,
@@ -381,12 +383,12 @@ theorem Provable.sound_holLogic {ρ : TyVal} {Γ p} (h : Γ ⊩[holLogic] p)
 /-- `addDef` does not change the interpretation of a different name. -/
 theorem EnvModel.addDef_interp_ne [Env.HasEq env] (n : Name) {ty : Ty} {rhs : Tm}
     (M : EnvModel env ρ) (hρ : ρ.Nonempty)
-    (hn : env.lookup n = none) (hne_eq : n ≠ eqName)
+    (hn : env.lookup n = none)
     (hwf : env.WF) (hrhs : HasType env [] rhs ty)
     (hclosed : ∀ x α, rhs.freeIn x α = false)
     (hvars : ∀ x ∈ rhs.tyvars, x ∈ ty.tyvars)
     {m : Name} (hm : m ≠ n) (inst : Ty) :
-    (M.addDef n hρ hn hne_eq hwf hrhs hclosed hvars).interp.interp m inst =
+    (M.addDef n hρ hn hwf hrhs hclosed hvars).interp.interp m inst =
       M.interp.interp m inst :=
   EnvInterp.addDef_interp_of_ne n M.interp (FVarVal.ofNonempty hρ) hrhs hm inst
 
