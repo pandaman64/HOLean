@@ -265,32 +265,9 @@ theorem HOLAxiom.denote_holLogic {p} (h : HOLAxiom p)
 private theorem holEnv_ax_ok_core {ρ : TyVal} (hρ : ρ.Nonempty) (θ : TySubst)
     (p : Tm) (hp : p ∈ holEnv.axioms) (ξ : FVarVal (ρ.inst θ)) :
     p.denote ((EnvModel.holLogic ρ hρ).interp.inst θ) ξ [] = zfTrue := by
-  -- holEnv.axioms = infinity :: select :: eta :: holLogic.axioms
-  cases hp with
-  | head =>
-    exact EnvModel.denote_infinity ((EnvModel.holLogic ρ hρ).inst θ) ξ
-  | tail _ hp1 =>
-    cases hp1 with
-    | head =>
-      have hA : ((Ty.var primTyVar).denote (ρ.inst θ)).Nonempty :=
-        Ty.denote_nonempty (TyVal.inst_nonempty hρ θ) (.var primTyVar)
-      have hsel :
-          ((EnvModel.holLogic ρ hρ).interp.inst θ).interp selectName
-              ((.var primTyVar ↝ .bool) ↝ .var primTyVar) =
-            zfSelect ((Ty.var primTyVar).denote (ρ.inst θ)) hA := by
-        simp only [EnvInterp.inst_interp]
-        have h :=
-          EnvModel.holLogic_interp_select ρ hρ ((Ty.var primTyVar).inst θ)
-        convert h using 2
-        · simp [Ty.inst]
-        · exact (Ty.denote_inst ρ θ (.var primTyVar)).symm
-      exact EnvModel.denote_select ((EnvModel.holLogic ρ hρ).inst θ) ξ hsel
-    | tail _ hp2 =>
-      cases hp2 with
-      | head =>
-        exact EnvModel.denote_eta ((EnvModel.holLogic ρ hρ).inst θ) ξ
-      | tail _ hold =>
-        exact (EnvModel.holLogic ρ hρ).ax_ok θ p hold ξ
+  cases holEnv_axioms_iff.mp hp with
+  | inl hold => exact (EnvModel.holLogic ρ hρ).ax_ok θ p hold ξ
+  | inr h => exact HOLAxiom.denote_holLogic h hρ θ ξ
 
 noncomputable def EnvModel.holEnv (ρ : TyVal) (hρ : ρ.Nonempty) :
     EnvModel holEnv ρ where

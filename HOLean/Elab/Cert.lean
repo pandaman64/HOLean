@@ -97,8 +97,8 @@ noncomputable def cert_model_addDef (env : Env) (conn : Env.HasConnectives env) 
     (hwf : env.WF) (hty : HasType env [] rhs ty)
     (hvars : ∀ x ∈ rhs.tyvars, x ∈ ty.tyvars) (hfree : ∀ x α, rhs.freeIn x α = false) :
     EnvModel (env.addDef n ty rhs) TyVal.std := by
-  letI := conn
-  exact EnvModel.addDef_cert n (ty := ty) (rhs := rhs) model TyVal.std_nonempty hfresh hwf hty hvars hfree
+  exact EnvModel.addDef n (ty := ty) (rhs := rhs) model TyVal.std_nonempty
+    hfresh hwf hty hfree hvars
 
 theorem cert_wf_addAxiom (env : Env) (_hasEq : Env.HasEq env) (hwf : env.WF) (ax : Tm)
     (hty : HasType env [] ax .bool) :
@@ -113,8 +113,7 @@ theorem cert_conn_addAxiom (env : Env) (conn : Env.HasConnectives env) (ax : Tm)
 noncomputable def cert_model_addAxiom (env : Env) (hasEq : Env.HasEq env) (model : EnvModel env TyVal.std)
     (ax : Tm) (hax : [] ⊩[env] ax) :
     EnvModel (env.addAxiom ax) TyVal.std := by
-  letI := hasEq
-  exact EnvModel.addAxiom_cert model TyVal.std_nonempty ax hax
+  exact EnvModel.addAxiom model ax hax
 
 theorem cert_holEnv_le_thm (env : Env) (stmt : Tm) (h : holEnv.LE env) :
     holEnv.LE (env.addAxiom stmt) :=

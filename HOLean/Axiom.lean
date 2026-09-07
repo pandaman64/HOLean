@@ -161,6 +161,31 @@ theorem HOLAxiom.mem_holEnv {p} (h : HOLAxiom p) : p ∈ holEnv.axioms := by
   | select => exact holEnv_axioms_select
   | infinity => exact holEnv_axioms_infinity
 
+theorem holEnv_axioms :
+    holEnv.axioms = infinityAxiom :: selectAxiom :: etaAxiom :: holLogic.axioms := by
+  simp [holEnv, Env.addAxiom]
+
+/-- `holCore` is axiom-free; `holLogic` is not.  Each connective is an
+`addDef`, so `holLogic.axioms` holds the defining equations `c = t`.
+`holEnv` prepends the three closed HOL postulates. -/
+theorem holEnv_axioms_iff {p : Tm} :
+    p ∈ holEnv.axioms ↔ p ∈ holLogic.axioms ∨ HOLAxiom p := by
+  constructor
+  · intro hp
+    rw [holEnv_axioms] at hp
+    cases hp with
+    | head => exact .inr .infinity
+    | tail _ hp1 =>
+      cases hp1 with
+      | head => exact .inr .select
+      | tail _ hp2 =>
+        cases hp2 with
+        | head => exact .inr .eta
+        | tail _ hold => exact .inl hold
+  · rintro (hold | hax)
+    · exact holLogic_le_holEnv.axioms _ hold
+    · exact HOLAxiom.mem_holEnv hax
+
 theorem holEnv_WF : holEnv.WF := by
   have hη := holLogic_WF.addAxiom (HasType.of_etaAxiom (env := holLogic))
   have hsel := hη.addAxiom

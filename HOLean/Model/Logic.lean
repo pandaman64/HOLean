@@ -17,8 +17,6 @@ that into the expected two-valued truth tables, used later to satisfy
 
 open ZFSet Classical
 
-set_option maxHeartbeats 800000
-
 namespace HOLean
 
 variable {env : Env} {ρ : TyVal}
