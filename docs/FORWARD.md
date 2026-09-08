@@ -74,7 +74,9 @@ in `de9eff5`).
    `hdef'` / `htheorem'` builds `ProveCtx` for that env and evaluates the
    monad there.  Proved theorems live in `env.axioms` (via `addAxiom`);
    definitions live in the constant table plus a defining axiom
-   (`addDef`).  There is no parallel theorem table in `ProveCtx`.
+   (`addDef`).  A **name roster** in the registered state (`HolDecl`)
+   maps HOL names to those sentences so `Hol.thm` can look them up; it
+   is not a store of `CertifiedThm` proofs.
 6. Closed scripts emit the same *kind* of certificates as today
    (`_hol_wf`, `_hol_prov`, model / consistency when the sequent is closed),
    but the `_hol_prov` term is an application of the verified API, not a
@@ -99,7 +101,7 @@ in `de9eff5`).
                                               │
                          hdef' / htheorem'    ▼
                          env' ≔ env.addDef / addAxiom
-                         persist HolDecl + HolCert
+                         persist HolDecl (env' + name roster) + HolCert
                                               │
                                               ▼
                                     next command’s ProveM
@@ -132,6 +134,9 @@ structure ProveCtx (env : Env) where
   wf    : env.WF
   hasEq : Env.HasEq env
   conn  : Env.HasConnectives env
+  /-- Name roster from registered `HolDecl`s: HOL name → axiom sentence.
+  Evidence is still `p ∈ env.axioms`, not a stored proof. -/
+  thms  : List (Name × Tm)
 ```
 
 `HasConnectives` is required so derived rules (`truth`, `spec`, `gen`,
@@ -142,21 +147,24 @@ Previous declarations are **already in `env`**, which is how `Env` is
 defined today (`constants` × `axioms`):
 
 * `hdef' c : τ := rhs` registers `env.addDef c τ rhs` — `c` becomes
-  `lookup`-able and `⊢ c = rhs` is an axiom.
+  `lookup`-able and `⊢ c = rhs` is an axiom.  `HolDecl.defn` records
+  `(c, τ, rhs)` so `Hol.defn` can recover the defining equation.
 * `htheorem' n : p := …` registers `env.addAxiom p` — `p` is in
-  `env.axioms`.
+  `env.axioms`.  `HolDecl.thm` records `(n, p)` so `Hol.thm n` can find
+  `p` by name.
 
 The next command folds `holStateExt` onto `holEnv` (same `HolDecl.apply`
-as today) and evaluates `ProveM` against **that** env.  `Hol.thm` /
-`Hol.defn` / `Hol.ax` do not consult a side list of `CertifiedThm`s.
-They recover `[] ⊩[env] p` from `env.WF` and `p ∈ env.axioms`
-(`Provable.of_axiom`), which is exactly the kernel rule for installed
-sentences.
+as today), copies the name roster into `ProveCtx.thms`, and evaluates
+`ProveM` against **that** env.
 
-A name such as `"true_eq_true_fwd"` is elaborator sugar: `holStateExt`
-maps the HOL name to the sentence `p` that was `addAxiom`’d, and the
-monad sees `Hol.ax p`.  The evidence is membership in `env.axioms`, not
-a stored proof tree of the previous script.
+`Hol.thm n` is a monad operation, not elaborator sugar:
+
+1. look up `n` in the roster → sentence `p`;
+2. `checkMemAxioms p` (`p ∈ env.axioms`);
+3. `CertifiedThm` via `Provable.of_axiom ctx.wf`.
+
+A stale or forged roster entry that does not match `env.axioms` fails
+at step 2.  The roster never carries a previous script’s proof tree.
 
 ## Growing the environment
 
@@ -179,13 +187,13 @@ hdef' / htheorem' ₂
 ```
 
 So `htheorem' true_eq_true_again : True = True := Hol.thm "true_eq_true_fwd"`
-is, after name resolution, `Hol.ax (mkEq bool tru tru)` in an environment
-that already contains that equation because the previous command
-registered it.
+looks up `"true_eq_true_fwd"` in the roster, checks that sentence is in
+`env₁.axioms`, and applies `ax`.
 
-`CertifiedThm env` is therefore **intra-script** evidence (composing
+`CertifiedThm env` is **intra-script** evidence (composing
 `REFL`/`TRANS`/… in one `do` block).  Crossing a command boundary goes
-through `Env`, not by wrapping old `CertifiedThm`s into `ProveCtx`.
+through `Env` (and the name roster).  We do not wrap old `CertifiedThm`s
+into `ProveCtx`.
 
 ### `ProveM`
 
@@ -356,21 +364,26 @@ flow*, but the return type carries `Provable`:
 | `inst σ th` | `checkSubst σ` | `Provable.inst` |
 | `ax p` | `checkMemAxioms p` | `Provable.of_axiom ctx.wf` |
 
-`ax` is the only way a **previous** declaration re-enters a script.
+`ax` is how a sentence **already in `env.axioms`** becomes a
+`CertifiedThm`.  Named recall is `thm`, which uses the roster then `ax`:
 
 ```lean
 def ax (p : Tm) : ProveM env (CertifiedThm env) := do
   let ctx ← read
   let ⟨hp⟩ ← checkMemAxioms p
   return { hyps := [], concl := p, proof := Provable.of_axiom ctx.wf hp }
+
+def thm (n : Name) : ProveM env (CertifiedThm env) := do
+  match (← read).thms.find? (fun e => e.1 == n) with
+  | none => ProveM.throw s!"no theorem `{n}`"
+  | some (_, p) => ax p
 ```
 
-`defn n` finds the defining equation `c = rhs` in `env.axioms` (it was
-put there by `addDef`) and calls `ax`.  `Hol.thm "n"` is elaborated to
-`ax p` for the sentence stored under that name.  Built-in `holEnv`
-sentences (η, SELECT, INFINITY, connective definitions) are already in
-`holEnv.axioms`, so they use the same rule — no special `ProveCtx`
-fields.
+`defn n` recovers `c = rhs` from the registered definition (or a
+built-in table) and likewise calls `ax`, so the defining equation must
+be in `env.axioms`.  Built-in `holEnv` sentences (η, SELECT, INFINITY,
+connective definitions) are already in `holEnv.axioms`; they do not
+need roster entries unless we want `Hol.thm` to name them.
 
 ### Derived rules
 
@@ -380,8 +393,9 @@ the elaborator:
 
 * `sym`, `truth`, `disch`, `gen`, `spec`
 * `eta`, `select`, `infinity` (instantiate closed axioms already in `holEnv`)
-* `defn n` — defining equation `c = rhs` from `env.axioms` (`Hol.ax`)
-* `ax p` / `thm` — any installed sentence, including previous `htheorem'` results
+* `defn n` — name → defining equation, then `ax` (must be in `env.axioms`)
+* `ax p` — any `p ∈ env.axioms`
+* `thm n` — roster lookup, then `ax`
 
 `DISCH` / `ASSUME` are first-class.  Closed `htheorem'` scripts that
 discharge telescope hypotheses can still emit `_hol_prov`, which the
@@ -518,13 +532,17 @@ command** (previous decls already applied):
 * `env` — `envExprFromDecls` (already in `Cert.lean`)
 * `wf` / `hasEq` / `conn` — previous `HolCert` constants (`_hol_wf`,
   `_hol_conn`, … of the last `hdef'` / `htheorem'`, or `holEnv`’s)
+* `thms` — name roster from `holStateExt` (`HolDecl.thm` → `(n, stmt)`).
+  Same persistent array the command already writes; copied into
+  `ProveCtx` so `Hol.thm` is ordinary `ProveM` code.
 
-No extra theorem list.  After a successful command, `setHolCert` points
-at the new env’s WF / connectives / model, so the next `ProveCtx` is
-again three projections of `HolCert` plus that new `env` expression.
+After a successful command, `addHolDecl` extends the roster and
+`setHolCert` points at the new env’s WF / connectives / model.  The
+next `ProveCtx` is those certificate projections plus the new `env`
+and the extended roster.
 
 No `rfl` is needed to *construct* `ctx`; it is `mkAppN` of existing
-certificate names.
+certificate names plus `toExpr` of the roster.
 
 ## User-facing shape
 
@@ -538,7 +556,7 @@ htheorem' true_eq_true_fwd : True = True :=
 
 htheorem' true_eq_true_again : True = True :=
   Hol.thm "true_eq_true_fwd"
--- ProveM env₁; Hol.thm ⇝ Hol.ax (True = True) via env₁.axioms
+-- roster → p; check p ∈ env₁.axioms; CertifiedThm via ax
 
 htheorem' true_via_eqmp : True := do
   let heq ← Hol.sym (← Hol.defn "tru")
@@ -626,7 +644,7 @@ Work proceeds in this order so each step is independently checkable:
 5. `hdef'` + WF / model certificates from `DefWitness`; persist
    `addDef` so later `ProveM` sees the constant.
 6. Port `Examples/Forward.lean` to `Examples/ProveForward.lean`,
-   including `Hol.thm` of a previously registered axiom.
+   including `Hol.thm` via roster lookup + `ax`.
 7. Telescope `DISCH`/`GEN` in `closeTheorem`.
 
 Do not delete `HolM` until this path covers the Forward examples and
@@ -642,9 +660,10 @@ the certificate surface (`#hol_cert`) looks the same.
 * **`ReaderT` over a frozen `env`, not `StateT Env`.**  Inference does
   not allocate constants; `hdef'` / `htheorem'` do, at command
   granularity, and pass the extension into the next `ProveM`.
-* **No parallel theorem table.**  Installed results are `env.axioms`
-  (and definitions, `env.constants` + a defining axiom).  `Hol.ax` is
-  `Provable.of_axiom`.
+* **Roster is names, not proofs.**  Registered `HolDecl` / `ProveCtx.thms`
+  map `Name` to an axiom sentence.  `Hol.thm` looks that up, checks
+  `p ∈ env.axioms`, then `Provable.of_axiom`.  We do not store
+  `CertifiedThm` in the side table.
 * **Keep `Provable` inductive.**  We are not switching to a verified
   *checker* of traces.  Traces were the translation-validation artefact.
 * **One extract `rfl` per command is in budget.**  Per-node `rfl` in
