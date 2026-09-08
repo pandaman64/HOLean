@@ -378,6 +378,12 @@ theorem instantiates_of_isSome {gen inst : Ty}
   | none => simp [hm] at h
   | some acc => exact instantiates_of_matchTy hm
 
+/-- Substitutions produced by matching `ty` against `ty.inst θ` agree with
+`θ` on every type variable of `ty`. -/
+theorem matchTy_inst_agrees (ty : Ty) (θ : TySubst) :
+    ∃ σ, ty.matchTy (ty.inst θ) [] = some σ ∧ agrees σ θ :=
+  matchTy_complete (agrees_nil θ)
+
 end Ty
 
 /-!

@@ -241,6 +241,24 @@ theorem instTy_eq_of (t : Tm) {θ σ : TySubst}
     simp [instTy, Ty.inst_eq_of (α := α) (fun x hx => h x (mem_tyvars_lam.2 (Or.inl hx))),
       ih (fun x hx => h x (mem_tyvars_lam.2 (Or.inr hx)))]
 
+/-- Matching `ty` against `ty.inst θ` recovers `rhs[θ]`, provided every
+schematic variable of `rhs` already occurs in `ty`. -/
+theorem instTy_eq_of_match {rhs : Tm} {ty : Ty} {θ σ : TySubst}
+    (hvars : ∀ x ∈ rhs.tyvars, x ∈ ty.tyvars)
+    (hm : ty.matchTy (ty.inst θ) [] = some σ)
+    (hag : Ty.agrees σ θ) :
+    rhs.instTy σ = rhs.instTy θ := by
+  apply Tm.instTy_eq_of
+  intro x hx
+  have hx' : x ∈ ty.tyvars := hvars x hx
+  have hsome : (σ.lookup x).isSome = true := (Ty.matchTy_spec hm).2.1 x hx'
+  cases hlook : σ.lookup x with
+  | none =>
+    simp [hlook] at hsome
+  | some α =>
+    have := hag x α hlook
+    simp [this]
+
 /-- Increment every bound index `≥ c` by `d`.  Used when a term is placed
 under additional λ-binders (so connectives do not capture). -/
 def shift (t : Tm) (d c : Nat) : Tm :=
@@ -394,6 +412,279 @@ theorem closeAt_openAt {t : Tm} {x : Name} {α : Ty} {k : Nat}
     (hLC : t.LC 1 = true) (hf : t.freeIn x α = false) :
     (t.open' (.fvar x α)).close x α = t :=
   closeAt_openAt hLC hf
+
+theorem instTy_comp (t : Tm) (σ θ : TySubst) :
+    (t.instTy σ).instTy θ = t.instTy (σ.comp θ) := by
+  induction t with
+  | bvar i => rfl
+  | fvar x α => simp [instTy, Ty.inst_comp]
+  | const n α => simp [instTy, Ty.inst_comp]
+  | app f a ihf iha => simp [instTy, ihf, iha]
+  | lam α t ih => simp [instTy, Ty.inst_comp, ih]
+
+/-- Replace occurrences of defined constant `n` by the matching instance of `rhs`.
+If `inst` is not an instance of the generic type `ty`, the constant is left alone. -/
+def unfoldDef (t : Tm) (n : Name) (ty : Ty) (rhs : Tm) : Tm :=
+  match t with
+  | const c inst =>
+      if c = n then
+        match ty.matchTy inst [] with
+        | some σ => rhs.instTy σ
+        | none => const c inst
+      else const c inst
+  | app f a => app (f.unfoldDef n ty rhs) (a.unfoldDef n ty rhs)
+  | lam α t => lam α (t.unfoldDef n ty rhs)
+  | t => t
+
+theorem unfoldDef_bvar (n : Name) (ty : Ty) (rhs : Tm) (i : Nat) :
+    (bvar i).unfoldDef n ty rhs = bvar i := rfl
+
+theorem unfoldDef_fvar (n : Name) (ty : Ty) (rhs : Tm) (x : Name) (α : Ty) :
+    (fvar x α).unfoldDef n ty rhs = fvar x α := rfl
+
+theorem unfoldDef_app (n : Name) (ty : Ty) (rhs : Tm) (f a : Tm) :
+    (app f a).unfoldDef n ty rhs =
+      app (f.unfoldDef n ty rhs) (a.unfoldDef n ty rhs) := rfl
+
+theorem unfoldDef_lam (n : Name) (ty : Ty) (rhs : Tm) (α : Ty) (t : Tm) :
+    (lam α t).unfoldDef n ty rhs = lam α (t.unfoldDef n ty rhs) := rfl
+
+theorem unfoldDef_const_of_ne (n : Name) (ty : Ty) (rhs : Tm) {c : Name} (α : Ty)
+    (hne : c ≠ n) :
+    (const c α).unfoldDef n ty rhs = const c α := by
+  simp [unfoldDef, hne]
+
+theorem unfoldDef_const_self (n : Name) (ty : Ty) (rhs : Tm) (inst : Ty) :
+    (const n inst).unfoldDef n ty rhs =
+      match ty.matchTy inst [] with
+      | some σ => rhs.instTy σ
+      | none => const n inst := by
+  simp [unfoldDef]
+
+theorem unfoldDef_of_not_hasConst (n : Name) (ty : Ty) (rhs : Tm) (t : Tm)
+    (h : t.hasConst n = false) :
+    t.unfoldDef n ty rhs = t := by
+  induction t with
+  | bvar i => rfl
+  | fvar x α => rfl
+  | const c α =>
+    simp [hasConst] at h
+    exact unfoldDef_const_of_ne n ty rhs α h
+  | app f a ihf iha =>
+    simp [hasConst, Bool.or_eq_false_iff] at h
+    simp [unfoldDef, ihf h.1, iha h.2]
+  | lam α t ih =>
+    simp [hasConst] at h
+    simp [unfoldDef, ih h]
+
+theorem unfoldDef_mkEq (n : Name) (ty : Ty) (rhs : Tm) (α : Ty) (s t : Tm)
+    (hne_eq : n ≠ eqName) :
+    (mkEq α s t).unfoldDef n ty rhs =
+      mkEq α (s.unfoldDef n ty rhs) (t.unfoldDef n ty rhs) := by
+  have hne : eqName ≠ n := Ne.symm hne_eq
+  simp [mkEq, eqConst, unfoldDef, hne]
+
+theorem freeIn_instTy_false (t : Tm) (σ : TySubst)
+    (h : ∀ x α, t.freeIn x α = false) (x : Name) (α : Ty) :
+    (t.instTy σ).freeIn x α = false := by
+  induction t generalizing σ with
+  | bvar i => rfl
+  | fvar y β =>
+    have := h y β
+    simp [freeIn] at this
+  | const c β => rfl
+  | app f a ihf iha =>
+    have hf : ∀ x α, f.freeIn x α = false := fun x α => by
+      have := h x α; simp [freeIn] at this; exact this.1
+    have ha : ∀ x α, a.freeIn x α = false := fun x α => by
+      have := h x α; simp [freeIn] at this; exact this.2
+    simp [instTy, freeIn, ihf σ hf, iha σ ha]
+  | lam β t ih =>
+    have ht : ∀ x α, t.freeIn x α = false := fun x α => by
+      simpa [freeIn] using h x α
+    simp [instTy, freeIn, ih σ ht]
+
+theorem applySubst_of_not_freeIn (t : Tm) (σ : Subst)
+    (h : ∀ x α, t.freeIn x α = false) :
+    t.applySubst σ = t := by
+  induction t with
+  | bvar i => rfl
+  | fvar y β =>
+    have := h y β
+    simp [freeIn] at this
+  | const c β => rfl
+  | app f a ihf iha =>
+    have hf : ∀ x α, f.freeIn x α = false := fun x α => by
+      have := h x α; simp [freeIn] at this; exact this.1
+    have ha : ∀ x α, a.freeIn x α = false := fun x α => by
+      have := h x α; simp [freeIn] at this; exact this.2
+    simp [applySubst, ihf hf, iha ha]
+  | lam β t ih =>
+    have ht : ∀ x α, t.freeIn x α = false := fun x α => by
+      simpa [freeIn] using h x α
+    simp [applySubst, ih ht]
+
+theorem unfoldDef_freeIn (n : Name) (ty : Ty) (rhs : Tm) (t : Tm)
+    (hclosed : ∀ x α, rhs.freeIn x α = false) (x : Name) (α : Ty) :
+    (t.unfoldDef n ty rhs).freeIn x α = t.freeIn x α := by
+  induction t with
+  | bvar i => rfl
+  | fvar y β => rfl
+  | const c β =>
+    by_cases hc : c = n
+    · subst hc
+      simp only [unfoldDef, ↓reduceIte]
+      cases hθ : ty.matchTy β [] with
+      | none => rfl
+      | some σ =>
+        exact (freeIn_instTy_false rhs σ hclosed x α).trans rfl
+    · simp [unfoldDef, hc]
+  | app f a ihf iha =>
+    simp [unfoldDef, freeIn, ihf, iha]
+  | lam β t ih =>
+    simp [unfoldDef, freeIn, ih]
+
+theorem Subst.lookup_map_unfoldDef (n : Name) (ty : Ty) (rhs : Tm) (σ : Subst)
+    (x : Name) (α : Ty) :
+    Subst.lookup (σ.map fun p => (p.1, p.2.1, p.2.2.unfoldDef n ty rhs)) x α =
+      Option.map (·.unfoldDef n ty rhs) (Subst.lookup σ x α) := by
+  induction σ with
+  | nil => rfl
+  | cons p rest ih =>
+    obtain ⟨y, β, u⟩ := p
+    by_cases hy : y = x ∧ β = α
+    · simp [Subst.lookup, List.map, hy]
+    · simp [Subst.lookup, List.map, hy, ih]
+
+theorem unfoldDef_applySubst (n : Name) (ty : Ty) (rhs : Tm) (t : Tm) (σ : Subst)
+    (hclosed : ∀ x α, rhs.freeIn x α = false) :
+    (t.applySubst σ).unfoldDef n ty rhs =
+      (t.unfoldDef n ty rhs).applySubst
+        (σ.map fun p => (p.1, p.2.1, p.2.2.unfoldDef n ty rhs)) := by
+  induction t with
+  | bvar i => rfl
+  | fvar x α =>
+    simp only [applySubst, unfoldDef_fvar, Subst.lookup_map_unfoldDef]
+    cases σ.lookup x α <;> simp [unfoldDef_fvar]
+  | const c α =>
+    by_cases hc : c = n
+    · subst hc
+      simp only [applySubst, unfoldDef_const_self]
+      cases ty.matchTy α [] with
+      | none =>
+        simp [applySubst]
+      | some τ =>
+        simp [applySubst_of_not_freeIn _ _ (freeIn_instTy_false rhs τ hclosed)]
+    · simp [applySubst, unfoldDef_const_of_ne n ty rhs α hc]
+  | app f a ihf iha =>
+    simp [applySubst, unfoldDef, ihf, iha]
+  | lam α t ih =>
+    simp [applySubst, unfoldDef, ih]
+
+theorem unfoldDef_closeAt (n : Name) (ty : Ty) (rhs : Tm) (t : Tm)
+    (k : Nat) (x : Name) (α : Ty)
+    (hclosed : ∀ y β, rhs.freeIn y β = false) :
+    (t.closeAt k x α).unfoldDef n ty rhs =
+      (t.unfoldDef n ty rhs).closeAt k x α := by
+  induction t generalizing k with
+  | bvar i => rfl
+  | fvar y β =>
+    by_cases hy : y = x ∧ β = α
+    · simp [closeAt, hy, unfoldDef_fvar, unfoldDef_bvar]
+    · simp [closeAt, hy, unfoldDef_fvar]
+  | const c β =>
+    by_cases hc : c = n
+    · subst hc
+      simp only [closeAt, unfoldDef_const_self]
+      cases ty.matchTy β [] with
+      | none => simp [closeAt]
+      | some σ =>
+        have : (rhs.instTy σ).closeAt k x α = rhs.instTy σ :=
+          closeAt_fresh (freeIn_instTy_false rhs σ hclosed x α)
+        simp [this]
+    · simp [closeAt, unfoldDef_const_of_ne n ty rhs β hc]
+  | app f a ihf iha =>
+    simp [closeAt, unfoldDef, ihf, iha]
+  | lam β t ih =>
+    simp [closeAt, unfoldDef, ih]
+
+theorem unfoldDef_abstract (n : Name) (ty : Ty) (rhs : Tm) (t : Tm)
+    (x : Name) (α : Ty)
+    (hclosed : ∀ y β, rhs.freeIn y β = false) :
+    (t.abstract x α).unfoldDef n ty rhs =
+      (t.unfoldDef n ty rhs).abstract x α := by
+  simp [abstract, unfoldDef_lam, unfoldDef_closeAt n ty rhs t 0 x α hclosed]
+
+theorem LC_instTy (t : Tm) (θ : TySubst) (k : Nat) :
+    (t.instTy θ).LC k = t.LC k := by
+  induction t generalizing k with
+  | bvar i => rfl
+  | fvar _ _ => rfl
+  | const _ _ => rfl
+  | app f a ihf iha => simp [instTy, LC, ihf, iha]
+  | lam α t ih => simp [instTy, LC, ih]
+
+theorem unfoldDef_openAt (n : Name) (ty : Ty) (rhs : Tm) (t u : Tm) (k : Nat)
+    (_hclosed : ∀ y β, rhs.freeIn y β = false) (hLC : rhs.LC 0 = true) :
+    (t.openAt k u).unfoldDef n ty rhs =
+      (t.unfoldDef n ty rhs).openAt k (u.unfoldDef n ty rhs) := by
+  induction t generalizing k with
+  | bvar i =>
+    by_cases hi : i = k
+    · simp [openAt, hi, unfoldDef_bvar]
+    · simp [openAt, hi, unfoldDef_bvar]
+  | fvar y β => simp [openAt, unfoldDef_fvar]
+  | const c β =>
+    by_cases hc : c = n
+    · subst hc
+      simp only [openAt, unfoldDef_const_self]
+      cases ty.matchTy β [] with
+      | none => simp [openAt]
+      | some σ =>
+        have hLCσ : (rhs.instTy σ).LC k = true :=
+          LC_le (by simpa [LC_instTy] using hLC) (Nat.zero_le k)
+        have : (rhs.instTy σ).openAt k (u.unfoldDef c ty rhs) = rhs.instTy σ :=
+          openAt_of_LC hLCσ
+        simp [this]
+    · simp [openAt, unfoldDef_const_of_ne n ty rhs β hc]
+  | app f a ihf iha =>
+    simp [openAt, unfoldDef, ihf, iha]
+  | lam β t ih =>
+    simp [openAt, unfoldDef, ih]
+
+theorem unfoldDef_open' (n : Name) (ty : Ty) (rhs : Tm) (t u : Tm)
+    (hclosed : ∀ y β, rhs.freeIn y β = false) (hLC : rhs.LC 0 = true) :
+    (t.open' u).unfoldDef n ty rhs =
+      (t.unfoldDef n ty rhs).open' (u.unfoldDef n ty rhs) :=
+  unfoldDef_openAt n ty rhs t u 0 hclosed hLC
+
+theorem unfoldDef_const_generic (n : Name) (ty : Ty) (rhs : Tm)
+    (hvars : ∀ x ∈ rhs.tyvars, x ∈ ty.tyvars) :
+    (const n ty).unfoldDef n ty rhs = rhs := by
+  obtain ⟨σ, hσ, hag⟩ := Ty.matchTy_inst_agrees ty ([] : TySubst)
+  have hσ' : ty.matchTy ty [] = some σ := by simpa [Ty.inst_nil] using hσ
+  rw [unfoldDef_const_self, hσ']
+  exact (instTy_eq_of_match hvars hσ hag).trans (instTy_nil rhs)
+
+/-- Unfolding `const n` after type instantiation, when `inst` is already an
+instance of the generic type. -/
+theorem unfoldDef_const_instTy (n : Name) (ty : Ty) (rhs : Tm) (inst : Ty)
+    (θ : TySubst) (hinst : ty.instantiates inst)
+    (hvars : ∀ x ∈ rhs.tyvars, x ∈ ty.tyvars) :
+    (const n (inst.inst θ)).unfoldDef n ty rhs =
+      ((const n inst).unfoldDef n ty rhs).instTy θ := by
+  have hsome := Ty.matchTy_of_instantiates hinst
+  cases hm : ty.matchTy inst [] with
+  | none => simp [hm] at hsome
+  | some τ =>
+    have hsound : ty.inst τ = inst := Ty.matchTy_sound hm
+    obtain ⟨τ', hm', hag⟩ := Ty.matchTy_inst_agrees ty (τ.comp θ)
+    have heq : ty.inst (τ.comp θ) = inst.inst θ := by
+      rw [← Ty.inst_comp, hsound]
+    have hm'' : ty.matchTy (inst.inst θ) [] = some τ' := by
+      rwa [← heq]
+    simp [unfoldDef_const_self, hm, hm'', instTy_comp]
+    exact instTy_eq_of_match hvars hm' hag
 
 end Tm
 

@@ -93,28 +93,6 @@ theorem EnvInterp.addDef_interp_of_ne (n : Name) {m : Name} {ty : Ty} {rhs : Tm}
     (I.addDef (n := n) hρ hrhs).interp m inst = I.interp m inst := by
   simp [EnvInterp.addDef, hne]
 
-/-- Substitutions produced by matching `ty` against `ty.inst θ` agree with
-`θ` on every type variable of `ty`. -/
-theorem matchTy_inst_agrees (ty : Ty) (θ : TySubst) :
-    ∃ σ, ty.matchTy (ty.inst θ) [] = some σ ∧ Ty.agrees σ θ :=
-  Ty.matchTy_complete (Ty.agrees_nil θ)
-
-theorem instTy_eq_of_match {rhs : Tm} {ty : Ty} {θ σ : TySubst}
-    (hvars : ∀ x ∈ rhs.tyvars, x ∈ ty.tyvars)
-    (hm : ty.matchTy (ty.inst θ) [] = some σ)
-    (hag : Ty.agrees σ θ) :
-    rhs.instTy σ = rhs.instTy θ := by
-  apply Tm.instTy_eq_of
-  intro x hx
-  have hx' : x ∈ ty.tyvars := hvars x hx
-  have hsome : (σ.lookup x).isSome = true := (Ty.matchTy_spec hm).2.1 x hx'
-  cases hlook : σ.lookup x with
-  | none =>
-    simp [hlook] at hsome
-  | some α =>
-    have := hag x α hlook
-    simp [this]
-
 theorem EnvInterp.addDef_eq_ok [Env.HasEq env] (n : Name) {ty : Ty} {rhs : Tm}
     (I : EnvInterp env ρ) (hρ : ρ.Nonempty)
     (hrhs : HasType env [] rhs ty) (hne_eq : n ≠ eqName)
@@ -139,8 +117,8 @@ theorem interpDef_of_inst (I : EnvInterp env ρ) (hρ : ρ.Nonempty)
     (hvars : ∀ x ∈ rhs.tyvars, x ∈ ty.tyvars) :
     interpDef I hρ ty rhs (ty.inst θ) =
       (rhs.instTy θ).denote I (FVarVal.ofNonempty hρ) [] := by
-  obtain ⟨σ, hσ, hag⟩ := matchTy_inst_agrees ty θ
-  simp [interpDef, hσ, instTy_eq_of_match hvars hσ hag]
+  obtain ⟨σ, hσ, hag⟩ := Ty.matchTy_inst_agrees ty θ
+  simp [interpDef, hσ, Tm.instTy_eq_of_match hvars hσ hag]
 
 /-- After `INST_TYPE θ`, the new constant at its generic type is the
 interpretation of `rhs` at `ty.inst θ`. -/

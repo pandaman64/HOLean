@@ -9,5 +9,6 @@ import HOLean.Connective
 import HOLean.Kernel
 import HOLean.Derived
 import HOLean.Axiom
+import HOLean.DefExt
 import HOLean.Elab
 import HOLean.Model

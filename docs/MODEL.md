@@ -85,6 +85,9 @@ Defined constants are not a second semantic layer.  `addDef n ty rhs`
 extends `I` by `I n ty := ⟦rhs⟧`.  The new axiom `n = rhs` holds by
 construction.  That is why connectives can stay `addDef` and still have a
 model: interpret `holCore`, then transport along the `addDef` chain.
+Syntactic conservativity (`Provable.addDef_iff` / `addDef_conservative` in
+`DefExt`) is separate — it unfolds `n` in proofs and does not rely on
+completeness.
 
 | Environment | What `I` must provide |
 | --- | --- |
@@ -140,12 +143,14 @@ HOLean/Model/Const.lean   I for eq / select (later: connectives)
 HOLean/Model/Tm.lean      denote on raw terms; HasType.denote_mem
 HOLean/Model/Commute.lean open / close / instTy / subst commute with denote
 HOLean/Model/Sound.lean   EnvModel; Provable.sound; sound_holCore
-HOLean/Model/Def.lean     addDef transport; EnvModel.holLogic
+HOLean/Model/Def.lean     addDef transport; holLogic
 HOLean/Model/Logic.lean   connective truth tables
 HOLean/Model/Axiom.lean   holEnv axioms; consistency
+HOLean/DefExt.lean        syntactic conservativity of addDef
 ```
 
 `Basic` through `Axiom` (including `holEnv` and `¬ ⊢ ⊥`) are in this PR.
+Term-level definitional conservativity is `DefExt`; type definitions remain deferred.
 
 ## PR series (after this one)
 
@@ -156,9 +161,10 @@ Each slice should `lake build HOLean` and add theorems, not scaffolding alone.
    `holCore` (no axioms) is the first instance.  **Done in this PR.**
 3. **Definitions** — `addDef` preservation: if `I` models `env` and
    `HasType env [] rhs ty`, the extension models `env.addDef n ty rhs`.
-   Then `holLogic` is a model.  **Done in this PR.**
+   Then `holLogic` is a model.  Syntactic conservativity via `unfoldDef`
+   (`DefExt`).  **Done.**
 4. **Axioms and consistency** — η, SELECT, INFINITY in `holEnv`;
    `⟦falsum⟧ = zfFalse`; `¬ [] ⊩[holEnv] ⊥`.  **Done in this PR.**
 
 Type-level `new_basic_type_definition` remains deferred: it needs a
-conservation theorem about two signatures, not just one model.
+conservation theorem about two type signatures, not just term unfolding.

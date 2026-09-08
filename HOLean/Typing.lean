@@ -550,4 +550,67 @@ theorem Env.WF.addAxiom_infer (hwf : env.WF) (ax : Tm) (hinfer : ax.infer env []
     (env.addAxiom ax).WF :=
   hwf.addAxiom (HasType.of_infer hinfer)
 
+/-- Unfolding a definitional extension preserves typing in the old environment. -/
+theorem HasType.unfoldDef {n : Name} {ty : Ty} {rhs : Tm} {Γ t α}
+    (h : HasType (env.addDef n ty rhs) Γ t α)
+    (hrhs : HasType env [] rhs ty) :
+    HasType env Γ (t.unfoldDef n ty rhs) α := by
+  induction h with
+  | bvar hi =>
+    exact HasType.bvar hi
+  | fvar x α =>
+    exact HasType.fvar x α
+  | const hconst hinst =>
+    rename_i Γ' m inst gen
+    by_cases hm : m = n
+    · have hty : gen = ty := by
+        subst hm
+        have := hconst
+        simp [Env.addDef_constants_self] at this
+        exact this.symm
+      have hinst' : ty.instantiates inst := hty ▸ hinst
+      have hsome := Ty.matchTy_of_instantiates hinst'
+      cases hθ : ty.matchTy inst [] with
+      | none => simp [hθ] at hsome
+      | some σ =>
+        have hsound : ty.inst σ = inst := Ty.matchTy_sound hθ
+        have htyped : HasType env [] (rhs.instTy σ) (ty.inst σ) := hrhs.instTy σ
+        subst hm
+        simp [Tm.unfoldDef, hθ]
+        exact hsound ▸ htyped.of_closed
+    · have hconst' : env.lookup m = some gen := by
+        rwa [Env.addDef_constants_of_ne env ty rhs hm] at hconst
+      simpa [Tm.unfoldDef_const_of_ne (n := n) (ty := ty) (rhs := rhs) (α := inst) hm] using
+        HasType.const (env := env) hconst' hinst
+  | app _ _ ihf iha =>
+    exact HasType.app ihf iha
+  | lam _ ih =>
+    exact HasType.lam ih
+
+/-- `unfoldDef` commutes with `instTy` on well-typed terms of an `addDef` environment. -/
+theorem HasType.unfoldDef_instTy {n : Name} {ty : Ty} {rhs : Tm} {Γ t α}
+    (h : HasType (env.addDef n ty rhs) Γ t α)
+    (θ : TySubst)
+    (hvars : ∀ x ∈ rhs.tyvars, x ∈ ty.tyvars) :
+    (t.instTy θ).unfoldDef n ty rhs = (t.unfoldDef n ty rhs).instTy θ := by
+  induction h with
+  | bvar hi => rfl
+  | fvar x α => rfl
+  | const hconst hinst =>
+    rename_i Γ' m inst gen
+    by_cases hm : m = n
+    · have hty : gen = ty := by
+        subst hm
+        have := hconst
+        simp [Env.addDef_constants_self] at this
+        exact this.symm
+      have hinst' : ty.instantiates inst := hty ▸ hinst
+      rw [hm]
+      exact Tm.unfoldDef_const_instTy n ty rhs inst θ hinst' hvars
+    · simp [Tm.instTy, Tm.unfoldDef, hm]
+  | app _ _ ihf iha =>
+    simp [Tm.instTy, Tm.unfoldDef, ihf, iha]
+  | lam _ ih =>
+    simp [Tm.instTy, Tm.unfoldDef, ih]
+
 end HOLean

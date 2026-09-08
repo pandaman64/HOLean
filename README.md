@@ -47,6 +47,7 @@ HOLean/
   Kernel.lean          ten HOL Light rules plus `Provable.ax`
   Derived.lean         SYM, GEN, CONJ, projections, MP, weakening
   Axiom.lean           η / SELECT / INFINITY; `holEnv` over `holLogic`
+  DefExt.lean          conservativity of `addDef` via `Tm.unfoldDef`
   Elab/Translate.lean  `Lean.Expr` → `Ty` / `Tm`, filtered by sort
   Elab/State.lean      `EnvExtension` for user `hdef` / `htheorem`
   Elab/Term.lean       `hol_ty(…)` / `hol_tm(…)` / `hol_prop(…)` / `hol(…)`
@@ -60,7 +61,7 @@ HOLean/
   Model/Tm.lean        `Tm.denote`, `HasType.denote_mem`, `EnvInterp.holCore`
   Model/Commute.lean   denotation commutes with open / close / `instTy` / subst
   Model/Sound.lean     `EnvModel`, `Provable.sound`, `Provable.sound_holCore`
-  Model/Def.lean       `EnvModel.addDef`, `EnvModel.holLogic`
+  Model/Def.lean       `EnvModel.addDef`, restrict/uniqueness, `holLogic`
   Model/Logic.lean     connective truth tables in a `HasConnectives` model
   Model/Axiom.lean     `EnvModel.holEnv`, `¬ [] ⊩[holEnv] ⊥`
 ```
@@ -296,14 +297,16 @@ model are taken seriously.
 | --- | --- | --- | --- |
 | **Named witness** (`indSuc : ind ↝ ind` + injectivity / non-surjectivity axioms) | Grow the constant table (an *environment*) | `{eq, select, indSuc}` | Every later lemma about terms, substitution, and the model must case-split on the new constant.  This is the same mechanism as `new_constant`. |
 | **Existential axiom** (what we do) | Add one closed sentence | still `{eq, select}` plus defined connectives | The model only has to *satisfy* that `ω` is Dedekind-infinite (`succ` is a witness in the meta-theory).  No new primitive name. |
-| **Definitional extension** (`new_basic_definition` / `new_basic_type_definition`) | Extend the signature by a constant *equal* to an existing closed term, or carve out a new type from a predicate | grows, but conservatively | Needs a conservation theorem relating *two* signatures, two environments, and two `INST`/`INST_TYPE` regimes.  Infinity has no closed witness term unless we already built one, so this does not replace the axiom. |
+| **Definitional extension** (`new_basic_definition` / `new_basic_type_definition`) | Extend the signature by a constant *equal* to an existing closed term, or carve out a new type from a predicate | grows, but conservatively | Term-level `addDef` has a conservation theorem (`DefExt`: unfold the new name). Type-level `new_basic_type_definition` is still deferred. Infinity has no closed witness term unless we already built one, so this does not replace the axiom. |
 
 The environment is now explicit, so “add a constant” is `addConst` /
 `addDef` and “add a sentence” is `addAxiom`.  Infinity stays existential:
 a named `indSuc` would be a later `addConst` plus axioms, not a change of
-kernel.  `addDef` installs `c = t` as an axiom (no δ).  Conservation of
-definitional extensions, and type-level `new_basic_type_definition`, are
-theorems *about* `Env.LE` — still ahead of the `ZFSet` model.
+kernel.  `addDef` installs `c = t` as an axiom (no δ).  Conservativity of
+term-level definitional extensions is `Provable.addDef_conservative` in
+`DefExt.lean` (proof translation by `Tm.unfoldDef`); the model side has
+expansion uniqueness in `Model/Def.lean`.  Type-level
+`new_basic_type_definition` remains deferred.
 
 ### Phase 3 — Standard model in `ZFSet`
 
@@ -326,6 +329,7 @@ Fix a type valuation `ρ : Name → ZFSet`.
 - [x] `eq` / `select` as graphs; `EnvInterp.holCore`
 - [x] soundness of the ten rules (`Provable.sound` / `sound_holCore`)
 - [x] `addDef` preservation; model of `holLogic`
+- [x] Conservativity of `addDef` (`DefExt.unfoldDef` / `addDef_conservative`)
 - [x] `holEnv` axioms; `⟦⊥⟧ = zfFalse`; `¬ [] ⊩[holEnv] ⊥`
 
 **Soundness.**  If `Γ ⊩[env] p` and a valuation satisfies every hypothesis,
