@@ -42,6 +42,11 @@ htheorem' true_via_eqmp_fwd : True := do
 htheorem' true_eq_true_again : True = True :=
   Hol.thm "true_eq_true_fwd"
 
+hdef' myIdFwd {A : Type} (x : A) := x
+
+htheorem' myIdFwd_eq {A : Type} : (myIdFwd : A → A) = fun (x : A) => x :=
+  Hol.defn "myIdFwd"
+
 #check true_eq_true_fwd_hol_prov
 #check true_eq_true_trans_hol_prov
 #check true_intro_fwd_hol_prov
@@ -49,6 +54,7 @@ htheorem' true_eq_true_again : True = True :=
 #check tru_defn_eq_hol_prov
 #check true_via_eqmp_fwd_hol_prov
 #check true_eq_true_again_hol_prov
+#check myIdFwd_eq_hol_prov
 
 #print axioms true_eq_true_fwd_hol_prov
 #print axioms true_via_eqmp_fwd_hol_prov
