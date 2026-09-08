@@ -17,7 +17,7 @@ namespace Prove
 variable {env : Env}
 
 /-- Evidence that `env.addDef n ty rhs` is a legal extension. -/
-structure DefWitness (env : Env) (n : Name) (ty : Ty) (rhs : Tm) where
+structure DefWitness (env : Env) (n : Name) (ty : Ty) (rhs : Tm) : Type where
   fresh : env.lookup n = none
   typed : HasType env [] rhs ty
   closed : rhs.LC 0 = true
@@ -42,7 +42,7 @@ def certifyDef (n : Name) (ty : Ty) (rhs : Tm) :
     notFree := hfree
   }
 
-theorem extractDef {env : Env} (ctx : ProveCtx env) (n : Name) (ty : Ty) (rhs : Tm)
+def extractDef {env : Env} (ctx : ProveCtx env) (n : Name) (ty : Ty) (rhs : Tm)
     (hok : isOk ((certifyDef n ty rhs).run ctx) = true) :
     DefWitness env n ty rhs :=
   getOk ((certifyDef n ty rhs).run ctx) hok

@@ -54,6 +54,12 @@ def throw (msg : String) : ProveM env α :=
 def okProof {p : Prop} (h : p) : ProveM env (Proof p) :=
   pure ⟨h⟩
 
+/-- Install `HasConnectives` from the frozen context for derived rules. -/
+def withConn (m : ∀ [Env.HasConnectives env], ProveM env α) : ProveM env α :=
+  fun ctx =>
+    letI := ctx.conn
+    m ctx
+
 end ProveM
 
 /-- `true` iff the computation succeeded. -/
