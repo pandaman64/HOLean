@@ -10,5 +10,6 @@ import HOLean.Deduction
 import HOLean.Derived
 import HOLean.Axiom
 import HOLean.DefExt
+import HOLean.Prove
 import HOLean.Elab
 import HOLean.Model

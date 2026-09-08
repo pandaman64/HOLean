@@ -182,6 +182,49 @@ def destEq : Tm → Option (Ty × Tm × Tm)
     destEq (mkEq α s t) = some (α, s, t) := by
   simp [destEq, mkEq, eqConst]
 
+/-- Inverse of `destEq_mkEq`: a successful destructor recovers `mkEq`. -/
+theorem destEq_eq {e α s t} (h : destEq e = some (α, s, t)) : e = mkEq α s t := by
+  cases e with
+  | app f a =>
+    cases f with
+    | app g b =>
+      cases g with
+      | const n τ =>
+        cases τ with
+        | arrow α' rest =>
+          cases rest with
+          | arrow β γ =>
+            cases γ with
+            | bool =>
+              dsimp [destEq] at h
+              by_cases hcond : n = eqName ∧ α' = β
+              · simp [hcond] at h
+                obtain ⟨rfl, rfl⟩ := hcond
+                obtain ⟨rfl, rfl, rfl⟩ := h
+                simp [mkEq, eqConst]
+              · simp [hcond] at h
+            | var _ => simp [destEq] at h
+            | ind => simp [destEq] at h
+            | arrow _ _ => simp [destEq] at h
+          | var _ => simp [destEq] at h
+          | bool => simp [destEq] at h
+          | ind => simp [destEq] at h
+        | var _ => simp [destEq] at h
+        | bool => simp [destEq] at h
+        | ind => simp [destEq] at h
+      | bvar _ => simp [destEq] at h
+      | fvar _ _ => simp [destEq] at h
+      | app _ _ => simp [destEq] at h
+      | lam _ _ => simp [destEq] at h
+    | bvar _ => simp [destEq] at h
+    | fvar _ _ => simp [destEq] at h
+    | const _ _ => simp [destEq] at h
+    | lam _ _ => simp [destEq] at h
+  | bvar _ => simp [destEq] at h
+  | fvar _ _ => simp [destEq] at h
+  | const _ _ => simp [destEq] at h
+  | lam _ _ => simp [destEq] at h
+
 /-- Schematic type variables occurring in a term. -/
 def tyvars : Tm → List Name
   | bvar _ => []
