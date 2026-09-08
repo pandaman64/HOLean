@@ -215,17 +215,19 @@ def elabHTheoremPrime : CommandElab := fun stx => do
   let decls ← getHolDecls
   let envE := envExprFromDecls decls
   let (tel, closed) ← liftTermElabM do
-    let tel ← elabHolTelescope binders propStx decls
-    let expected :=
-      let ct := mkApp (mkConst ``HOLean.Prove.CertifiedThm) envE
-      mkApp2 (mkConst ``HOLean.Prove.ProveM) envE ct
-    let prf ← Term.elabTermAndSynthesize prfStx expected
-    let prf ← instantiateMVars prf
-    let closed ← liftMetaM do
-      mkAppOptM ``HOLean.Prove.Hol.closeTheorem
-        #[some envE, some (toExpr tel.stmt), some (toExpr tel.concl),
-          some (toExpr tel.hyps), some (toExpr tel.params), some prf]
-    pure (tel, closed)
+    Term.elabBinders binders fun xs => do
+      let e ← elabLean propStx (mkSort 0)
+      let tel ← elabHolTelescopeFromFVars xs e decls
+      let expected :=
+        let ct := mkApp (mkConst ``HOLean.Prove.CertifiedThm) envE
+        mkApp2 (mkConst ``HOLean.Prove.ProveM) envE ct
+      let prf ← Term.elabTermAndSynthesize prfStx expected
+      let prf ← instantiateMVars prf
+      let closed ← liftMetaM do
+        mkAppOptM ``HOLean.Prove.Hol.closeTheorem
+          #[some envE, some (toExpr tel.stmt), some (toExpr tel.concl),
+            some (toExpr tel.hyps), some (toExpr tel.params), some prf]
+      pure (tel, closed)
   let scriptN := holProveName leanN
   let proofTy :=
     mkApp (mkConst ``HOLean.Prove.Proof)

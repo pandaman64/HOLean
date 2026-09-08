@@ -7,6 +7,8 @@ import HOLean.Axiom
 import HOLean.Prove.Basic
 import HOLean.Prove.Typecheck
 import HOLean.Prove.Kernel
+import HOLean.Prove.Conv
+import HOLean.Prove.Logic
 import HOLean.Prove.Derived
 import HOLean.Prove.Def
 
