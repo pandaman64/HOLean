@@ -216,7 +216,7 @@ def elabHTheoremPrime : CommandElab := fun stx => do
   let envE := envExprFromDecls decls
   let (tel, closed) ← liftTermElabM do
     let tel ← elabHolTelescope binders propStx decls
-    let expected ← liftMetaM do
+    let expected :=
       let ct := mkApp (mkConst ``HOLean.Prove.CertifiedThm) envE
       mkApp2 (mkConst ``HOLean.Prove.ProveM) envE ct
     let prf ← Term.elabTermAndSynthesize prfStx expected
