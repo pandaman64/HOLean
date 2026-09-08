@@ -67,6 +67,11 @@ def isOk : Except ε α → Bool
   | .ok _ => true
   | .error _ => false
 
+/-- Error payload, or `""` on success. -/
+def errorString : Except String α → String
+  | .ok _ => ""
+  | .error m => m
+
 theorem isOk_ok {ε α} {a : α} : isOk (Except.ok a : Except ε α) = true :=
   rfl
 

@@ -55,8 +55,8 @@ def assertClosed (stmt : Tm) (ct : CertifiedThm env) :
     if hc : ct.concl = stmt then
       have pΓ : Provable env [] ct.concl := hΓ ▸ ct.proof
       return ⟨hc ▸ pΓ⟩
-    else ProveM.throw s!"proved {repr ct.concl}, expected {repr stmt}"
-  else ProveM.throw s!"theorem still has hypotheses {repr ct.hyps}"
+    else ProveM.throw "closeTheorem: conclusion does not match the statement"
+  else ProveM.throw "closeTheorem: theorem still has hypotheses"
 
 /-- Discharge telescope hypotheses and generalize parameters, then
 check the closed statement. -/
@@ -73,7 +73,7 @@ def closeTheorem (stmt concl : Tm) (hyps : List Tm) (params : List (Name × Ty))
       ct ← gen n α ct
     assertClosed stmt ct
   else
-    ProveM.throw s!"proved {repr ct.concl}, expected {repr concl} or {repr stmt}"
+    ProveM.throw "closeTheorem: conclusion does not match the goal"
 
 end Hol
 end Prove

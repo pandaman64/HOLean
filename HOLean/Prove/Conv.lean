@@ -71,16 +71,49 @@ def randBeta (th : CertifiedThm env) : ProveM env (CertifiedThm env) := do
   | some _ => ProveM.throw "RAND_BETA: rhs is not a redex"
   | none => ProveM.throw "RAND_BETA: expected an equation"
 
-/-- Reduce β-redexes on either side of an equation, up to `fuel` steps. -/
+/-- β-reduce the rator of a binary application on the lhs: `(λx. t) v a`. -/
+def ratorLandBeta (th : CertifiedThm env) : ProveM env (CertifiedThm env) := do
+  match Tm.destEq th.concl with
+  | some (_, .app (.app f v) a, _) =>
+    let hβ ← betaApp f v
+    trans (← sym (← apThm hβ a)) th
+  | some _ => ProveM.throw "RATOR_LAND_BETA: lhs is not a nested redex"
+  | none => ProveM.throw "RATOR_LAND_BETA: expected an equation"
+
+/-- β-reduce the rator of a binary application on the rhs. -/
+def ratorRandBeta (th : CertifiedThm env) : ProveM env (CertifiedThm env) := do
+  match Tm.destEq th.concl with
+  | some (_, _, .app (.app f v) a) =>
+    let hβ ← betaApp f v
+    trans th (← apThm hβ a)
+  | some _ => ProveM.throw "RATOR_RAND_BETA: rhs is not a nested redex"
+  | none => ProveM.throw "RATOR_RAND_BETA: expected an equation"
+
+def isRedex : Tm → Bool
+  | .app (.lam _ _) _ => true
+  | _ => false
+
+def isNestedRedex : Tm → Bool
+  | .app (.app (.lam _ _) _) _ => true
+  | _ => false
+
+/-- Reduce β-redexes on either side of an equation, including `(λx. t) v a`. -/
 def reduceBeta : Nat → CertifiedThm env → ProveM env (CertifiedThm env)
   | 0, th => return th
   | n + 1, th => do
     match Tm.destEq th.concl with
-    | some (_, .app (.lam _ _) _, _) =>
-      reduceBeta n (← landBeta th)
-    | some (_, _, .app (.lam _ _) _) =>
-      reduceBeta n (← randBeta th)
-    | _ =>
+    | some (_, lhs, rhs) =>
+      if isRedex lhs then
+        reduceBeta n (← landBeta th)
+      else if isRedex rhs then
+        reduceBeta n (← randBeta th)
+      else if isNestedRedex lhs then
+        reduceBeta n (← ratorLandBeta th)
+      else if isNestedRedex rhs then
+        reduceBeta n (← ratorRandBeta th)
+      else
+        return th
+    | none =>
       return th
 
 /-- `⊢ T`, by unfolding the definition of `tru`. -/
@@ -98,6 +131,46 @@ def eqtIntro (th : CertifiedThm env) : ProveM env (CertifiedThm env) := do
 /-- `EQT_ELIM`: from `Γ ⊢ p = T` conclude `Γ ⊢ p`. -/
 def eqtElim (th : CertifiedThm env) : ProveM env (CertifiedThm env) := do
   eqMp (← sym th) (← truth)
+
+/-- Combinator name used to open a λ while proving a β-equality. -/
+def freshConvName : Name := "_conv"
+
+/-- Prove `⊢ s = t` when `s` and `t` are β-convertible (fuel-bounded). -/
+def convBetaEq : Nat → Tm → Tm → ProveM env (CertifiedThm env)
+  | 0, _, _ =>
+    ProveM.throw "CONV: fuel exhausted"
+  | n + 1, s, t =>
+    if s == t then
+      refl s
+    else
+      match s, t with
+      | .app (.lam α b) u, _ => do
+        let hβ ← betaApp (.lam α b) u
+        let (_, _, s') ← destEqCert hβ
+        trans hβ (← convBetaEq n s' t)
+      | _, .app (.lam α b) u => do
+        let hβ ← betaApp (.lam α b) u
+        let (_, _, t') ← destEqCert hβ
+        trans (← convBetaEq n s t') (← sym hβ)
+      | .app f x, .app g y => do
+        mkComb (← convBetaEq n f g) (← convBetaEq n x y)
+      | .lam α s, .lam β t => do
+        if α != β then
+          ProveM.throw "CONV: lambda types differ"
+        else do
+          let x := freshConvName
+          if s.freeIn x α || t.freeIn x α then
+            ProveM.throw "CONV: combinator variable `_conv` is free"
+          abs x α (← convBetaEq n (s.open' (.fvar x α)) (t.open' (.fvar x α)))
+      | _, _ =>
+        ProveM.throw "CONV: not β-convertible"
+
+/-- Rewrite `Γ ⊢ p` to `Γ ⊢ q` when `p` and `q` are β-convertible. -/
+def convConcl (q : Tm) (th : CertifiedThm env) : ProveM env (CertifiedThm env) := do
+  if th.concl == q then
+    return th
+  else
+    eqMp (← convBetaEq 32 th.concl q) th
 
 end Hol
 end Prove

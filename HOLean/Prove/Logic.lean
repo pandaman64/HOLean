@@ -117,7 +117,7 @@ def conjunctProj (π : Tm) (th : CertifiedThm env) :
   | none => ProveM.throw "CONJUNCT: expected a conjunction"
   | some (p, q) =>
     let hexp ← eqMp (← unfoldAnd p q) th
-    eqtElim (← reduceBeta 8 (← mkComb hexp (← refl π)))
+    eqtElim (← reduceBeta 16 (← mkComb hexp (← refl π)))
 
 /-- `CONJUNCT1`: `Γ ⊢ p ∧ q` implies `Γ ⊢ p`. -/
 def conjunct1 (th : CertifiedThm env) : ProveM env (CertifiedThm env) :=
@@ -245,29 +245,38 @@ def disjElim (thor thpr thqr : CertifiedThm env) : ProveM env (CertifiedThm env)
 def freshExQ : Name := "_ex_q"
 def freshExX : Name := "_ex_x"
 
-/-- `EXISTS`: from `Γ ⊢ P t` conclude `Γ ⊢ ∃ P`. -/
-def existsIntro (α : Ty) (P t : Tm) (th : CertifiedThm env) :
+/-- `EXISTS`: from `Γ ⊢ P t` (up to β) conclude `Γ ⊢ ∃ P`.
+`exTm` is the existential (`∃ P` / `∃ x. P x`). -/
+def existsIntro (exTm t : Tm) (th : CertifiedThm env) :
     ProveM env (CertifiedThm env) := do
-  let q := Tm.fvar freshExQ .bool
-  let x := Tm.fvar freshExX α
-  if P.freeIn freshExQ .bool || P.freeIn freshExX α || t.freeIn freshExQ .bool
-      || t.freeIn freshExX α then
-    ProveM.throw "EXISTS: reserved variable is free"
-  unless th.concl == P.app t do
-    ProveM.throw "EXISTS: expected `P t`"
-  let hallx := Tm.all α ((Tm.imp (P.app x) q).abstract freshExX α)
-  let th1 ← spec t (← assume hallx)
-  let th2 ← mp th1 th
-  let th3 ← disch hallx th2
-  eqMp (← sym (← unfoldEx α P)) (← gen freshExQ .bool th3)
+  match destEx exTm with
+  | none => ProveM.throw "EXISTS: expected an existential term"
+  | some (α, P) =>
+    let q := Tm.fvar freshExQ .bool
+    let x := Tm.fvar freshExX α
+    if P.freeIn freshExQ .bool || P.freeIn freshExX α || t.freeIn freshExQ .bool
+        || t.freeIn freshExX α then
+      ProveM.throw "EXISTS: reserved variable is free"
+    let thPt ← convConcl (P.app t) th
+    let hallx := Tm.all α ((Tm.imp (P.app x) q).abstract freshExX α)
+    let th1 ← spec t (← assume hallx)
+    let th2 ← mp th1 thPt
+    let th3 ← disch hallx th2
+    eqMp (← sym (← unfoldEx α P)) (← gen freshExQ .bool th3)
 
-/-- `CHOOSE`: from `Γ ⊢ ∃ P` and `Δ ⊢ ∀ x. P x ⇒ q` conclude `Γ,Δ ⊢ q`. -/
+/-- `CHOOSE`: from `Γ ⊢ ∃ P` and `Δ ⊢ ∀ x. P x ⇒ q` conclude `Γ,Δ ⊢ q`.
+The ∀-premise may differ from the unfolded existential by β. -/
 def existsElim (q : Tm) (thex thall : CertifiedThm env) :
     ProveM env (CertifiedThm env) := do
   match destEx thex.concl with
   | none => ProveM.throw "CHOOSE: expected an existential"
   | some (α, P) =>
-    mp (← spec q (← eqMp (← unfoldEx α P) thex)) thall
+    let himp ← spec q (← eqMp (← unfoldEx α P) thex)
+    match destImp himp.concl with
+    | some (ant, _) =>
+      mp himp (← convConcl ant thall)
+    | none =>
+      ProveM.throw "CHOOSE: expected an implication after SPEC"
 
 end Hol
 end Prove

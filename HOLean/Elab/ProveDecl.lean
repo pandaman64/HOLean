@@ -54,7 +54,13 @@ def proveIsOk (runE : Expr) : TermElabM Expr := do
   let ty ← liftMetaM do
     let isOkE ← mkAppM ``HOLean.Prove.isOk #[runE]
     mkEqApp isOkE (mkConst ``Bool.true)
-  proveByRfl ty
+  try
+    proveByRfl ty
+  catch _ =>
+    let msgE ← liftMetaM do mkAppM ``HOLean.Prove.errorString #[runE]
+    let msgE ← instantiateMVars msgE
+    let msgE ← liftMetaM do reduce (skipTypes := false) msgE
+    throwError "HOLean: ProveM failed{indentExpr msgE}"
 
 def addProveScript (name : Lean.Name) (type value : Expr) : CommandElabM Unit := do
   let type ← liftTermElabM <| instantiateMVars type
