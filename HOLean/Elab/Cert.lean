@@ -12,7 +12,7 @@ import HOLean.Elab.State
 /-!
 # Soundness / consistency certificates for user environments
 
-Each `hdef` / `htheorem` (with a kernel `Provable` proof) extends the
+Each `hdef` / `htheorem` (with a `Provable` derivation) extends the
 current HOL environment and emits theorems witnessing WF, a standard
 `EnvModel`, consistency, and soundness for the cumulative environment.
 -/
@@ -273,9 +273,9 @@ def mkProvInEnvBefore (decls : Array HolDecl) (proof : Expr) : TermElabM Expr :=
       let hle ← mkHolEnvLeProof decls
       mkAppM ``HOLean.Elab.cert_prov_weaken #[hle, proof]
     else
-      throwError "HOLean: kernel proof is relative to a different environment than holEnv"
+      throwError "HOLean: `Provable` proof is relative to a different environment than holEnv"
   | none =>
-    throwError "HOLean: expected a kernel `Provable` proof for the certificate"
+    throwError "HOLean: expected a `Provable` proof for the certificate"
 
 def addCertThm (name : Lean.Name) (type value : Expr) : CommandElabM Unit := do
   let type ← liftTermElabM <| instantiateMVars type

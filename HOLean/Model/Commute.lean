@@ -4,10 +4,10 @@ Released under Apache 2.0 license as described in the file LICENSE.
 -/
 
 import HOLean.Model.Tm
-import HOLean.Kernel
+import HOLean.Deduction
 
 /-!
-# Denotation commutes with the kernel operations
+# Denotation commutes with the deduction operations
 
 These lemmas are the semantic counterparts of the operations the ten
 rules actually perform.  `Provable.sound` and `EnvModel.addDef` are the

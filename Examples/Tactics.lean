@@ -10,7 +10,7 @@ import HOLean.Elab.Decl
 # Backward HOL tactics (examples)
 
 `htheorem … := hby …` scripts rebuild LCF `Thm` values and assemble a
-`ProvTrace` into a kernel `Provable` proof (`buildProvable`).  Incomplete
+`ProvTrace` into a `Provable` derivation (`buildProvable`).  Incomplete
 scripts report remaining subgoals at the `hby` block (the cursor after
 the last tactic).
 -/
@@ -22,7 +22,7 @@ open HOLean.Elab
 open HOLean.Provable
 open Hol
 
-/-! ## Seed theorems via kernel `Provable` proofs -/
+/-! ## Seed theorems via `Provable` derivations -/
 
 private def folX : Name := "_hol_tac_conj_fresh"
 

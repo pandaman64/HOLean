@@ -4,13 +4,13 @@ Released under Apache 2.0 license as described in the file LICENSE.
 -/
 
 import HOLean.Connective
-import HOLean.Kernel
+import HOLean.Deduction
 import HOLean.Syntax.Logic
 
 /-!
 # Derived rules
 
-The HOL Light kernel is equality-based.  This module recovers the first
+The primitive deduction system is equality-based.  This module recovers the first
 useful layer: symmetry of `=`, `|- T`, `p` implies `p = T`, general β,
 conjunction, both projections, `MP`, hypothesis weakening, and
 generalization.
@@ -177,7 +177,7 @@ theorem eqt_intro_erase {Γ p} (h : Γ ⊩[env] p) :
 
 /-- `Γ ⊢ p` implies `Γ ⊢ p = T`.
 
-The kernel rule behind this is `DEDUCT_ANTISYM` with `⊢ T`, whose conclusion
+The primitive rule behind this is `DEDUCT_ANTISYM` with `⊢ T`, whose conclusion
 has hypotheses `Γ \ {T}`.  `T` is object-logic truth, not an assumption, so
 the side condition recovers the original list. -/
 theorem eqt_intro {Γ p} (h : Γ ⊩[env] p) (hT : Tm.tru ∉ Γ) :
@@ -661,7 +661,7 @@ theorem mp {Γ Δ p q} (x : Name)
   exact and_elim_right x hand hpTy hq hxp hxq hxpBool hxqBool
 
 /-- Hypothesis weakening: from `Γ ⊢ p` conclude `q :: Γ ⊢ p`.
-The kernel has no structural weakening; this is CONJ + right projection.
+The deduction system has no structural weakening; this is CONJ + right projection.
 `T ∉ q :: Γ` is the usual case (`T` is not an assumption). -/
 theorem add_assum {Γ p q} (x : Name)
     (hp : Γ ⊩[env] p) (hq : HasType env [] q .bool)

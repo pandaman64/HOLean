@@ -7,7 +7,7 @@ object logic in Mathlib's [`ZFSet`](https://leanprover-community.github.io/mathl
 and conclude `⊬ ⊥`.
 
 This repository currently defines the syntax, the type theory, and the
-inference system, interprets them in Mathlib's `ZFSet`, and proves that
+deduction system, interprets them in Mathlib's `ZFSet`, and proves that
 every `holEnv` theorem denotes `zfTrue`, so `⊬ ⊥`.
 
 ## Why this dialect
@@ -44,7 +44,7 @@ HOLean/
   Env.lean             `Env` (constants × axioms), `addDef`, `holCore`
   Typing.lean          `HasType env`, `Env.WF`, inference, substitution lemmas
   Connective.lean      T, ∧, ⇒, ∀, ⊥, ¬, ∨, ∃, ONE_ONE, ONTO as `addDef`
-  Kernel.lean          ten HOL Light rules plus `Provable.ax`
+  Deduction.lean       ten HOL Light rules plus `Provable.ax`
   Derived.lean         SYM, GEN, CONJ, projections, MP, weakening
   Axiom.lean           η / SELECT / INFINITY; `holEnv` over `holLogic`
   DefExt.lean          conservativity of `addDef` via `Tm.unfoldDef`
@@ -192,7 +192,7 @@ lambda on the RHS.  Later `hdef`s see earlier ones as Lean constants and
 as HOL constants in `hol_tm` / `hol_prop`.
 
 `htheorem` installs a closed boolean.  The proof may be a `HolM Thm`
-script, a kernel `Provable` term, or an `hby` tactic block (newline or
+script, a `Provable` derivation, or an `hby` tactic block (newline or
 `;`-separated, like Lean `by`).  Left binders are type variables,
 value parameters (`GEN`'d at the end), or hypotheses (`DISCH`'d).
 An unfinished `hby` reports the remaining sequents at that block
@@ -210,9 +210,9 @@ value lives at `name_hthm` (a `Thm`).  In proof scripts, `Hol.thm "…"` and
 
 `Provable env` stores hypotheses as `List Tm`.  The rules use `++` and
 `hypsErase`; validity does not depend on order or duplicates.  A later
-cleanup can switch to `Finset` once we import Mathlib in the kernel.
+cleanup can switch to `Finset` once we import Mathlib in the deduction system.
 
-## The inference system
+## The deduction system
 
 ```
 REFL                 ⊢ t = t
@@ -257,20 +257,20 @@ ONE_ONE f  ≔  ∀ x y. f x = f y ⇒ x = y
 ONTO f     ≔  ∀ y. ∃ x. y = f x
 ```
 
-The kernel has no structural weakening.  `Derived.add_assum` recovers it
+The deduction system has no structural weakening.  `Derived.add_assum` recovers it
 from `CONJ` + right projection, using a fresh name for the combinator
 variable (HOL free variables are `(name, type)` pairs).
 
 ## Roadmap
 
-### Phase 1 — Syntax, types, kernel (this slice)
+### Phase 1 — Syntax, types, deduction (this slice)
 
 - [x] Simple types + schematic instantiation
 - [x] Locally nameless terms
 - [x] Typing judgment, uniqueness, algorithmic inference
 - [x] Type / term substitution lemmas
-- [x] HOL Light kernel as `Provable`
-- [x] Kernel theorems are closed booleans
+- [x] HOL Light rules as `Provable`
+- [x] Derivations are closed booleans
 - [x] Equality-only connectives and closed axiom sentences (η, SELECT, INFINITY)
 
 ### Phase 2 — Deeper metatheory (this slice, up through infinity)
@@ -302,7 +302,7 @@ model are taken seriously.
 The environment is now explicit, so “add a constant” is `addConst` /
 `addDef` and “add a sentence” is `addAxiom`.  Infinity stays existential:
 a named `indSuc` would be a later `addConst` plus axioms, not a change of
-kernel.  `addDef` installs `c = t` as an axiom (no δ).  Conservativity of
+the deduction system.  `addDef` installs `c = t` as an axiom (no δ).  Conservativity of
 term-level definitional extensions is `Provable.addDef_conservative` in
 `DefExt.lean` (proof translation by `Tm.unfoldDef`); the model side has
 expansion uniqueness in `Model/Def.lean`.  Type-level
@@ -310,7 +310,7 @@ expansion uniqueness in `Model/Def.lean`.  Type-level
 
 ### Phase 3 — Standard model in `ZFSet`
 
-Plan: [`docs/MODEL.md`](docs/MODEL.md).  Types, terms, kernel soundness,
+Plan: [`docs/MODEL.md`](docs/MODEL.md).  Types, terms, deduction soundness,
 `addDef` transport through `holLogic`, the `holEnv` axioms, and `¬ ⊢ ⊥`
 are in.
 

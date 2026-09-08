@@ -7,7 +7,7 @@ import HOLean.Typing
 
 
 /-!
-# The HOL Light kernel
+# The HOL Deduction system
 
 Ten primitive inference rules, stated as an inductive predicate `Provable`.
 Hypotheses are lists treated as finite sets (order and duplicates are
@@ -46,7 +46,7 @@ theorem hypsErase_eq_of_not_mem {p : Tm} {Γ : List Tm} (h : p ∉ Γ) :
   intro x hx heq
   exact h (heq ▸ hx)
 
-/-- The HOL Light primitive inference system, relative to an environment. -/
+/-- The HOL Light primitive deduction system, relative to an environment. -/
 inductive Provable (env : Env) : List Tm → Tm → Prop where
   /-- `REFL t` gives `⊢ t = t`. -/
   | refl {t α} (ht : HasType env [] t α) :
@@ -115,7 +115,7 @@ private theorem hyps_append {Γ Δ : List Tm}
   | Or.inl h => exact hΓ q h
   | Or.inr h => exact hΔ q h
 
-/-- Growing the environment preserves kernel theorems. -/
+/-- Growing the environment preserves theorems. -/
 theorem weakenEnv {env env' : Env} {Γ p}
     (hle : env.LE env') (h : Provable env Γ p) :
     Provable env' Γ p := by
@@ -132,8 +132,8 @@ theorem weakenEnv {env env' : Env} {Γ p}
   | inst hσ _ ih => exact inst (hσ.weakenEnv hle) ih
   | ax hp hty => exact ax (hle.axioms _ hp) (hty.weakenEnv hle)
 
-/-- Every hypothesis and the conclusion of a kernel theorem is a closed
-boolean.  This is the first sanity theorem for the inference system. -/
+/-- Every hypothesis and the conclusion of a derivable sequent is a closed
+boolean.  This is the first sanity theorem for the deduction system. -/
 theorem bool_typed [Env.HasEq env] {Γ p} (h : Γ ⊩[env] p) :
     (∀ q ∈ Γ, HasType env [] q .bool) ∧ HasType env [] p .bool := by
   induction h with

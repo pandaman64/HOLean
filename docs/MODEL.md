@@ -12,7 +12,7 @@ Henkin completeness, an executable LCF kernel, and type-level
 
 HOL Light's consistency is usually shown by a set-theoretic interpretation
 (Harrison; Candle uses a similar story inside HOL itself).  We do it in Lean,
-against the kernel we already have:
+against the deduction system we already have:
 
 * schematic types, locally nameless terms, extrinsic `HasType env`
 * environments `constants × axioms`, definitions as `⊢ c = t` (no δ)
@@ -157,7 +157,7 @@ Term-level definitional conservativity is `DefExt`; type definitions remain defe
 Each slice should `lake build HOLean` and add theorems, not scaffolding alone.
 
 1. **Terms** — `denote` for `HasType`, application/λ lemmas, `eq` as a graph.
-2. **Kernel soundness** — the ten rules relative to any `I` that models `env`.
+2. **Deduction soundness** — the ten rules relative to any `I` that models `env`.
    `holCore` (no axioms) is the first instance.  **Done in this PR.**
 3. **Definitions** — `addDef` preservation: if `I` models `env` and
    `HasType env [] rhs ty`, the extension models `env.addDef n ty rhs`.

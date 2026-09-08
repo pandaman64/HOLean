@@ -7,7 +7,7 @@ import HOLean.Model.Commute
 import HOLean.Syntax.Logic
 
 /-!
-# Soundness of the HOL Light kernel
+# Soundness of the deduction system
 
 If `Γ ⊩[env] p`, `I` models `env`, and every hypothesis denotes `zfTrue`,
 then so does the conclusion.  This first instance is `holCore`, which
@@ -23,7 +23,7 @@ namespace HOLean
 right universes, `eq` is extensional equality, and every axiom (at every
 type instance) denotes `zfTrue`.
 
-The kernel treats `eq` specially (REFL / TRANS / MK_COMB / EQ_MP), so a
+The deduction system treats `eq` specially (REFL / TRANS / MK_COMB / EQ_MP), so a
 model must interpret it as graph-level extensional equality.  `select` is
 an ordinary constant: `interp` only has to land in `⟦(α ↝ bool) ↝ α⟧`,
 and Hilbert choice is the SELECT *axiom*, checked by `ax_ok` (see

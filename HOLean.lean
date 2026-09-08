@@ -6,7 +6,7 @@ import HOLean.Syntax.Logic
 import HOLean.Env
 import HOLean.Typing
 import HOLean.Connective
-import HOLean.Kernel
+import HOLean.Deduction
 import HOLean.Derived
 import HOLean.Axiom
 import HOLean.DefExt

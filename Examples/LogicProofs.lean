@@ -9,7 +9,7 @@ import HOLean.Elab.Decl
 /-!
 # `and` / `or` facts via `htheorem`
 
-Basic connective facts are proved in the kernel (`Provable`) and installed
+Basic connective facts are proved as `Provable` derivations and installed
 with `htheorem` by giving a `[] ⊩[holEnv] …` proof.  Use parentheses in
 statements: `∧` binds tighter than `=`, so write `(True ∧ True) = True`.
 -/
@@ -64,7 +64,7 @@ htheorem and_tt_left_again : and_tt_left :=
   Hol.thm "and_tt_left"
 
 /-! De Morgan (e.g. `¬(p ∧ q) = (¬p) ∨ (¬q)`) is not yet in `Derived`; concrete
-instances also do not follow from kernel `refl` alone because `∧`/`∨`/`¬` unfold
+instances also do not follow from `refl` alone because `∧`/`∨`/`¬` unfold
 to combinator definitions rather than truth-table values. -/
 
 end Examples.LogicProofs

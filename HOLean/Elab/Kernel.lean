@@ -11,12 +11,12 @@ import HOLean.Elab.ProvTrace
 # Executable LCF kernel
 
 `Provable` is a metatheoretic predicate.  Commands need something we can
-*run*: `Thm` is an LCF-style sequent, and `Hol.*` are the ten kernel
+*run*: `Thm` is an LCF-style sequent, and `Hol.*` are the ten primitive
 rules plus a few derived combinators, as Lean functions.
 
 Each `Hol.*` returns a `CertifiedThm`: the sequent together with a
-`ProvTrace` that `Replay.buildProvable` later turns into a kernel
-`Provable` proof for certificates.
+`ProvTrace` that `Replay.buildProvable` later turns into a `Provable`
+derivation for certificates.
 
 `htheorem` evaluates a `HolM CertifiedThm` script against the current
 environment.

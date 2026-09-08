@@ -18,8 +18,8 @@ Both commands extend the current HOL environment stored in
 `holStateExt`.
 
 * `hdef c binders : τ := rhs` — Lean-style left binders, then `Env.addDef`
-* `htheorem n binders : p := script` — a `HolM CertifiedThm` script or kernel
-  `Provable` proof
+* `htheorem n binders : p := script` — a `HolM CertifiedThm` script or a
+  `Provable` derivation
 * `htheorem n binders : p := hby tacs` — indented HOL tactic script
 -/
 
@@ -98,7 +98,7 @@ def addLeanThmVal (leanN : Lean.Name) (thm : Thm) : CommandElabM Unit := do
 
 /-- Shared finishing steps after a successful `htheorem` proof.
 
-When a kernel `Provable` proof is supplied it is stored as `{leanN}_hol_prov`
+When a `Provable` derivation is supplied it is stored as `{leanN}_hol_prov`
 and used to emit WF / model / consistency / soundness certificates. -/
 def finishHTheorem (leanN : Lean.Name) (holN : HOLean.Name) (stmt : Tm)
     (propType : Expr) (thm : Thm) (provProof? : Option Expr) : CommandElabM Unit := do

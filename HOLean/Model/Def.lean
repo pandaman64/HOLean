@@ -236,7 +236,7 @@ noncomputable def EnvModel.addDef [Env.HasEq env] (n : Name) {ty : Ty} {rhs : Tm
     | tail _ hold =>
       exact EnvModel.addDef_ax_old n M hρ hn hwf hrhs hold ξ
 
-/-- Transport a model along `addAxiom`, given a kernel proof of the new sentence. -/
+/-- Transport a model along `addAxiom`, given a deduction of the new sentence. -/
 noncomputable def EnvModel.addAxiom [Env.HasEq env] (M : EnvModel env ρ)
     (ax : Tm) (hax : [] ⊩[env] ax) : EnvModel (env.addAxiom ax) ρ where
   interp := M.interpAddAxiom ax

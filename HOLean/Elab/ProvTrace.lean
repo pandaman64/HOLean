@@ -10,13 +10,13 @@ import HOLean.Syntax.Tm
 # Derivation traces for HOL tactics
 
 A compact description of the LCF steps a forward script or tactic used.
-`HOLean.Elab.Replay.buildProvable` turns this into a kernel `Provable`
+`HOLean.Elab.Replay.buildProvable` turns this into a `Provable`
 term; the executable `Thm` checker does not consume it.
 -/
 
 namespace HOLean.Elab
 
-/-- Trace of kernel / derived steps producing `hyps ⊢ concl`.
+/-- Trace of primitive / derived steps producing `hyps ⊢ concl`.
 
 `named` stores the Lean name of the user `htheorem` (without `_hol_prov`);
 replay looks up `{leanN}_hol_prov`. -/

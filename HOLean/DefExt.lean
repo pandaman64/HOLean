@@ -3,7 +3,7 @@ Copyright (c) 2026 HOLean authors.
 Released under Apache 2.0 license as described in the file LICENSE.
 -/
 
-import HOLean.Kernel
+import HOLean.Deduction
 
 /-!
 # Conservativity of definitional extensions
@@ -75,7 +75,7 @@ private theorem exists_unfoldDef_append {n : Name} {ty : Ty} {rhs : Tm}
       | Or.inr hq2 => mem_map_unfoldDef_append (Or.inr (hΔ1 q hq2)),
       h h1' h2'⟩
 
-/-- Translate a kernel proof across `addDef` by unfolding the new constant.
+/-- Translate a deduction across `addDef` by unfolding the new constant.
 The resulting hypothesis list is a subset of the unfolded original hypotheses. -/
 theorem Provable.unfoldDef [Env.HasEq env] (n : Name) {ty : Ty} {rhs : Tm}
     (hn : env.lookup n = none) (hwf : env.WF)

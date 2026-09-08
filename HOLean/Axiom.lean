@@ -4,17 +4,17 @@ Released under Apache 2.0 license as described in the file LICENSE.
 -/
 
 import HOLean.Connective
-import HOLean.Kernel
+import HOLean.Deduction
 import HOLean.Elab.Term
 
 /-!
 # HOL axioms
 
-The ten kernel rules are the *inference* system.  Full HOL Light additionally
-postulates three closed sentences (after the connectives of `bool.ml` /
-`holLogic`):
+The ten primitive rules (`Provable`) are the *deduction* system.  Full HOL Light
+additionally postulates three closed sentences (after the connectives of
+`bool.ml` / `holLogic`):
 
-* **ETA** — `⊢ ∀ f. (λ x. f x) = f` (gives functional extensionality with the kernel)
+* **ETA** — `⊢ ∀ f. (λ x. f x) = f` (gives functional extensionality)
 * **SELECT** — Hilbert choice, `⊢ ∀ P x. P x ⇒ P (ε P)`
 * **INFINITY** — `ind` is Dedekind-infinite:
   `∃ f : ind ↝ ind. ONE_ONE f ∧ ¬ ONTO f`

@@ -11,7 +11,7 @@ import HOLean.Elab.ProvTrace
 /-!
 # Replay HOL traces into Lean `Provable` proofs
 
-`buildProvable` walks a `ProvTrace` and assembles a kernel `Provable` term
+`buildProvable` walks a `ProvTrace` and assembles a `Provable` term
 with `mkApp*` of LCF constructors / derived rules.  Side conditions use
 connective `HasType` lemmas (`HasType.tru`, `HasType.mkEq`, …), not
 `infer = some` reduction, `sorry`, extra axioms, or `native_decide`.
@@ -311,7 +311,7 @@ def weakenTraceProof (decls : Array HolDecl) (proof : Expr) : TermElabM Expr := 
     acc := acc.push d
   if ← liftMetaM do isDefEq (envExprFromDecls acc) proofEnv then
     return proof
-  throwError "HOLean: cannot weaken kernel proof into the current environment"
+  throwError "HOLean: cannot weaken `Provable` proof into the current environment"
 
 def holProvName (leanN : Lean.Name) : Lean.Name :=
   leanN.appendAfter "_hol_prov"

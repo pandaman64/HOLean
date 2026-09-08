@@ -245,7 +245,7 @@ A practical split used elsewhere:
 * **A** for the default sequent (Goals panel, cursor tracking)
 * **B** for optional views (trace of `ProvTrace`, term explorer)
 
-The HOL kernel proof stays on `ProvTrace`.  The widget, if any, should
+The HOL derivation stays on `ProvTrace`.  The widget, if any, should
 RPC the same sequents the delaborator already pretty-prints, not a
 second source of truth.
 
@@ -269,7 +269,7 @@ to SPred or BI.
    definitionally `True` (or some trivial `Prop`) *or* definitionally
    a Lean `Prop` encoding of the sequent if one exists.  The constant
    only needs to be a stable head symbol.  It must **not** be the
-   kernel `Provable` — that would force a Lean proof of the HOL
+   `Provable` predicate — that would force a Lean proof of the HOL
    sequent in the display path.
 3. **Encode hyps** as a nested pair / conjunction of `HolHypMarker`
    nodes with name metadata, analogous to `parseHyp?`.

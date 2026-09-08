@@ -9,7 +9,7 @@ import HOLean.Elab.Decl
 # Forward LCF scripts
 
 `htheorem … := HolM CertifiedThm` builds a sequent and a `ProvTrace` from
-kernel primitives.  Closed scripts emit `{name}_hol_prov` and the usual
+LCF primitives.  Closed scripts emit `{name}_hol_prov` and the usual
 WF / model / consistency certificates.
 -/
 
