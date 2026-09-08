@@ -8,7 +8,8 @@ specifies a parallel path (`hdef'` / `htheorem'`) whose trust story is
 when they succeed, and a *minimal* elaborator only turns that evidence
 into environment certificates.
 
-Implementation follows this note; it has not started.
+Implementation lives in `HOLean/Prove/` and `HOLean/Elab/ProveDecl.lean`
+(`hdef'` / `htheorem'`).  The old `HolM` path is unchanged.
 
 ## Why a new layer
 
@@ -178,7 +179,7 @@ hdef' / htheorem' ₁
   ctx₀ ← ProveCtx for env₀          -- wf / conn from HolCert.holEnv
   run script in ProveM env₀
   env₁ ← env₀.addDef …  or  env₀.addAxiom …
-  persist HolDecl; set HolCert for env₁
+  persist HolDecl (roster + apply to env); set HolCert for env₁
 
 hdef' / htheorem' ₂
   ctx₁ ← ProveCtx for env₁          -- wf / conn from the previous HolCert
@@ -363,6 +364,7 @@ flow*, but the return type carries `Provable`:
 | `instType θ th` | none | `Provable.instType` |
 | `inst σ th` | `checkSubst σ` | `Provable.inst` |
 | `ax p` | `checkMemAxioms p` | `Provable.of_axiom ctx.wf` |
+| `thm n` | roster lookup, then `ax` | `Provable.of_axiom ctx.wf` |
 
 `ax` is how a sentence **already in `env.axioms`** becomes a
 `CertifiedThm`.  Named recall is `thm`, which uses the roster then `ax`:

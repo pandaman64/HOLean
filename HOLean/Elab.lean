@@ -10,6 +10,7 @@ import HOLean.Elab.Kernel
 import HOLean.Elab.Tactic
 import HOLean.Elab.Replay
 import HOLean.Elab.Decl
+import HOLean.Elab.ProveDecl
 import HOLean.Elab.Cert
 import HOLean.Elab.Command
 import HOLean.Elab.Tests
