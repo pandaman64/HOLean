@@ -11,8 +11,9 @@ import HOLean.Deduction
 `Env.addDef n ty rhs` adds the axiom `⊢ n = rhs`.  Every theorem of the
 extended environment translates to a theorem of `env` by replacing each
 occurrence of `n` with the matching instance of `rhs` (`Tm.unfoldDef`).
-In particular, a closed theorem that never mentions `n` is already a
-theorem of `env`.
+A closed theorem that never mentions `n` is already a theorem of `env`
+(conservativity of the old language).  The same unfolding applies even
+when `p` mentions `n`: `[] ⊩[env.addDef] p` implies `[] ⊩[env] p.unfoldDef`.
 
 The induction invariant uses *hypothesis inclusion* rather than equality of
 hypothesis lists: `unfoldDef` is not injective, so `hypsErase` does not
@@ -188,14 +189,16 @@ theorem Provable.unfoldDef [Env.HasEq env] (n : Name) {ty : Ty} {rhs : Tm}
       rw [Tm.unfoldDef_of_not_hasConst n ty rhs _ hfresh]
       exact Provable.ax hold (hwf _ hold)
 
-/-- Closed theorems that avoid the new name are already theorems of `env`. -/
-theorem Provable.addDef_conservative [Env.HasEq env] (n : Name) {ty : Ty} {rhs : Tm}
+/-- Closed theorems of a definitional extension unfold to closed theorems
+of `env`.  The new name may occur in `p`: it is replaced by an instance of
+`rhs`, which is a true equation, so the unfolding stays a theorem. -/
+theorem Provable.unfoldDef_closed [Env.HasEq env] (n : Name) {ty : Ty} {rhs : Tm}
     (hn : env.lookup n = none) (hwf : env.WF)
     (hrhs : HasType env [] rhs ty)
     (hclosed : ∀ x α, rhs.freeIn x α = false)
     (hvars : ∀ x ∈ rhs.tyvars, x ∈ ty.tyvars)
-    {p} (h : [] ⊩[env.addDef n ty rhs] p) (hp : p.hasConst n = false) :
-    [] ⊩[env] p := by
+    {p} (h : [] ⊩[env.addDef n ty rhs] p) :
+    [] ⊩[env] p.unfoldDef n ty rhs := by
   obtain ⟨Γ', hΓ', h'⟩ := Provable.unfoldDef n hn hwf hrhs hclosed hvars h
   have hΓ'' : Γ' = [] := by
     cases Γ' with
@@ -204,6 +207,17 @@ theorem Provable.addDef_conservative [Env.HasEq env] (n : Name) {ty : Ty} {rhs :
       have := hΓ' q (List.Mem.head _)
       simp at this
   subst hΓ''
+  exact h'
+
+/-- Closed theorems that avoid the new name are already theorems of `env`. -/
+theorem Provable.addDef_conservative [Env.HasEq env] (n : Name) {ty : Ty} {rhs : Tm}
+    (hn : env.lookup n = none) (hwf : env.WF)
+    (hrhs : HasType env [] rhs ty)
+    (hclosed : ∀ x α, rhs.freeIn x α = false)
+    (hvars : ∀ x ∈ rhs.tyvars, x ∈ ty.tyvars)
+    {p} (h : [] ⊩[env.addDef n ty rhs] p) (hp : p.hasConst n = false) :
+    [] ⊩[env] p := by
+  have h' := Provable.unfoldDef_closed n hn hwf hrhs hclosed hvars h
   rwa [Tm.unfoldDef_of_not_hasConst n ty rhs p hp] at h'
 
 /-- Closed theorems that avoid the new name are provable in the extended
@@ -219,16 +233,17 @@ theorem Provable.addDef_iff [Env.HasEq env] (n : Name) {ty : Ty} {rhs : Tm}
     (fun h => Provable.addDef_conservative n hn hwf hrhs hclosed hvars h hp)
     (Provable.weakenEnv (Env.LE.addDef_of_fresh hn))
 
-/-- Relative consistency: a definitional extension cannot prove a false
-unless the base environment already could. -/
+/-- A definitional extension cannot prove `p` unless `env` already proves
+the unfolding of `p`.  The new name may occur in `p`; we add a true
+equation, so unfolding cannot manufacture `false`.
+If `p.hasConst n = false` this is the contrapositive of conservativity. -/
 theorem Provable.addDef_consistent [Env.HasEq env] (n : Name) {ty : Ty} {rhs : Tm}
     (hn : env.lookup n = none) (hwf : env.WF)
     (hrhs : HasType env [] rhs ty)
     (hclosed : ∀ x α, rhs.freeIn x α = false)
     (hvars : ∀ x ∈ rhs.tyvars, x ∈ ty.tyvars)
-    {p} (hp : p.hasConst n = false)
-    (hcons : ¬ [] ⊩[env] p) :
+    {p} (hcons : ¬ [] ⊩[env] p.unfoldDef n ty rhs) :
     ¬ [] ⊩[env.addDef n ty rhs] p :=
-  fun h => hcons (Provable.addDef_conservative n hn hwf hrhs hclosed hvars h hp)
+  fun h => hcons (Provable.unfoldDef_closed n hn hwf hrhs hclosed hvars h)
 
 end HOLean
