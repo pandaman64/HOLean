@@ -11,10 +11,9 @@ import HOLean.Deduction
 `Env.addDef n ty rhs` adds the axiom `⊢ n = rhs`.  Every theorem of the
 extended environment translates to a theorem of `env` by replacing each
 occurrence of `n` with the matching instance of `rhs` (`Tm.unfoldDef`).
-A closed theorem that never mentions `n` is already a theorem of `env`.
-The same unfolding shows the extension is unconditionally consistent:
-even a proposition that mentions `n` cannot be a new theorem unless its
-unfolding was already a theorem of `env`.
+A closed theorem that never mentions `n` is already a theorem of `env`
+(conservativity of the old language).  The same unfolding applies even
+when `p` mentions `n`: `[] ⊩[env.addDef] p` implies `[] ⊩[env] p.unfoldDef`.
 
 The induction invariant uses *hypothesis inclusion* rather than equality of
 hypothesis lists: `unfoldDef` is not injective, so `hypsErase` does not
@@ -234,11 +233,10 @@ theorem Provable.addDef_iff [Env.HasEq env] (n : Name) {ty : Ty} {rhs : Tm}
     (fun h => Provable.addDef_conservative n hn hwf hrhs hclosed hvars h hp)
     (Provable.weakenEnv (Env.LE.addDef_of_fresh hn))
 
-/-- Unconditional consistency: a definitional extension cannot prove `p`
-unless `env` already proves the unfolding of `p`.  The new name may occur
-in `p`; we add a true equation, so unfolding cannot manufacture `false`.
-When `p.hasConst n = false` this is relative consistency for the old
-language (`unfoldDef` is the identity). -/
+/-- A definitional extension cannot prove `p` unless `env` already proves
+the unfolding of `p`.  The new name may occur in `p`; we add a true
+equation, so unfolding cannot manufacture `false`.
+If `p.hasConst n = false` this is the contrapositive of conservativity. -/
 theorem Provable.addDef_consistent [Env.HasEq env] (n : Name) {ty : Ty} {rhs : Tm}
     (hn : env.lookup n = none) (hwf : env.WF)
     (hrhs : HasType env [] rhs ty)
